@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { analyzeDealEntry } from "@/lib/ai/analyzeDealEntry";
 import { saveRawEntryToDrive } from "@/lib/google/drive";
+import { createDerivative } from "@/lib/db/derivatives";
 import type { Deal } from "@/types";
 
 export async function POST(
@@ -100,6 +101,23 @@ export async function POST(
       // Drive save failure is non-fatal — entry is already in Supabase
       console.error("Drive save failed (non-fatal):", driveErr);
     }
+  }
+
+  // ── 2b. Create derivative row (extraction_status = 'pending') ────────────
+  //       Text entries are stored as file_type = 'text'. Phase 3 will update
+  //       this row with structured_fields extracted from the content.
+  try {
+    await createDerivative({
+      dealId,
+      userId: user.id,
+      dealSourceId: sourceId,
+      googleFileId: null,
+      googleFileName: null,
+      originalFileName: `entry_${sourceId}.txt`,
+      mimeType: "text/plain",
+    });
+  } catch (derivErr) {
+    console.error("createDerivative failed (non-fatal):", derivErr);
   }
 
   // ── 3. Run AI analysis (server-side only) ─────────────────────────────────

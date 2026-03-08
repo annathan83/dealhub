@@ -1,6 +1,7 @@
 import type {
   DealSourceAnalysis,
   DealChangeLogItem,
+  DealInsight,
   ExtractedFacts,
 } from "@/types";
 import ExtractedFactsCard from "./ExtractedFactsCard";
@@ -89,9 +90,13 @@ function mergeExtractedFacts(analyses: DealSourceAnalysis[]): ExtractedFacts {
 export default function DealIntelligencePanel({
   analyses,
   changeLog,
+  // latestInsight is fetched but not yet rendered — Phase 3 will wire it to DealScorePanel
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  latestInsight: _latestInsight,
 }: {
   analyses: DealSourceAnalysis[];
   changeLog: DealChangeLogItem[];
+  latestInsight?: DealInsight | null;
 }) {
   const hasData = analyses.length > 0;
   const latest = analyses[0] ?? null;

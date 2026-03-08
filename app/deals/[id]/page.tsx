@@ -11,12 +11,14 @@ import DealIntelligencePanel from "@/components/DealIntelligencePanel";
 import DownloadEntriesButton from "@/components/DownloadEntriesButton";
 import WorkspacePanel from "@/components/WorkspacePanel";
 import { syncAndListDealDriveFiles } from "@/lib/google/drive";
+import { getLatestInsight } from "@/lib/db/insights";
 import type {
   Deal,
   DealSource,
   DealSourceAnalysis,
   DealChangeLogItem,
   DealDriveFile,
+  DealInsight,
 } from "@/types";
 
 export default async function DealPage({
@@ -85,6 +87,9 @@ export default async function DealPage({
 
   const changeLog = (changeLogData ?? []) as DealChangeLogItem[];
 
+  // ── Latest AI insight (Phase 3 populates this; graceful null until then) ──
+  const latestInsight: DealInsight | null = await getLatestInsight(id, user.id).catch(() => null);
+
   // ── Google Drive ──────────────────────────────────────────────────────────
   const { data: tokenRow } = await supabase
     .from("google_oauth_tokens")
@@ -147,8 +152,14 @@ export default async function DealPage({
           </div>
 
           {/* Right column — sticky intelligence panel */}
+          {/* Phase 3: replace DealIntelligencePanel with DealScorePanel once
+              deal_insights rows exist. latestInsight is already fetched above. */}
           <div className="flex flex-col gap-5 lg:sticky lg:top-20">
-            <DealIntelligencePanel analyses={analyses} changeLog={changeLog} />
+            <DealIntelligencePanel
+              analyses={analyses}
+              changeLog={changeLog}
+              latestInsight={latestInsight}
+            />
           </div>
         </div>
       </main>

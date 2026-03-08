@@ -5,6 +5,7 @@ import { uploadFileToDealFolder, saveAIAssessmentToDrive } from "@/lib/google/dr
 import { analyzeAttachment, analyzeImageAttachment } from "@/lib/ai/analyzeAttachment";
 import { transcribeAudio, isAudioFile } from "@/lib/ai/transcribeAudio";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
+import { createDerivative } from "@/lib/db/derivatives";
 import type { Deal, ExtractedFacts } from "@/types";
 import type { AttachmentAnalysisResult } from "@/types";
 
@@ -328,6 +329,23 @@ export async function POST(
           missing_information: [],
           broker_questions: [],
         });
+      }
+
+      // 3b. Create derivative row (extraction_status = 'pending')
+      //     Phase 3 will update this row with extracted_text / structured_fields.
+      try {
+        await createDerivative({
+          dealId,
+          userId: user.id,
+          dealSourceId: sourceId,
+          googleFileId: driveMeta.googleFileId,
+          googleFileName: driveMeta.googleFileName,
+          originalFileName: file.name,
+          mimeType: mimeType,
+        });
+      } catch (derivErr) {
+        // Non-fatal — derivative row is best-effort at this stage
+        console.error("createDerivative failed (non-fatal):", derivErr);
       }
 
       // 4. Log the upload in deal_change_log (linked to entry when created)

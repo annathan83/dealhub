@@ -181,6 +181,108 @@ export type AttachmentAnalysisResult = {
   };
 };
 
+// ─── Incremental AI pipeline ──────────────────────────────────────────────────
+
+/** Extraction status of a single file derivative */
+export type DerivativeStatus = "pending" | "processing" | "done" | "failed";
+
+/** Broad category used to route extraction logic */
+export type DerivativeFileType =
+  | "pdf"
+  | "image"
+  | "audio"
+  | "text"
+  | "spreadsheet"
+  | "unknown";
+
+/**
+ * One row per uploaded file or pasted entry.
+ * Stores the extracted text / structured fields so the file is
+ * processed by AI exactly once (Phase 3 populates extracted_text
+ * and structured_fields; Phase 1/2 inserts with status = 'pending').
+ */
+export type DealFileDerivative = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  deal_source_id: string | null;
+  google_file_id: string | null;
+  google_file_name: string | null;
+  original_file_name: string;
+  mime_type: string | null;
+  file_type: DerivativeFileType;
+  extraction_status: DerivativeStatus;
+  extracted_text: string | null;       // populated in Phase 3
+  structured_fields: DealStructuredFields | null; // populated in Phase 3
+  extraction_model: string | null;
+  extraction_run_id: string | null;
+  confidence: AttachmentConfidence | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
+ * Structured financial/operational fields extracted from a file.
+ * Mirrors ExtractedFacts but is stored on the derivative, not the analysis.
+ */
+export type DealStructuredFields = {
+  asking_price: string | null;
+  revenue: string | null;
+  sde: string | null;
+  ebitda: string | null;
+  rent_monthly: string | null;
+  headcount: string | null;
+  capacity: string | null;
+  enrollment: string | null;
+  seller_role: string | null;
+  lease_expiry: string | null;
+  risks: string[];
+  missing_information: string[];
+  other_facts: string[];
+};
+
+/** Verdict label produced by deal-level AI analysis */
+export type AIDealVerdict =
+  | "Strong Buy"
+  | "Proceed with Caution"
+  | "Needs More Info"
+  | "Pass";
+
+/**
+ * One row per deal-level analysis run.
+ * The latest row for a deal_id is the current intelligence state.
+ * Phase 3 populates all AI fields; Phase 1/2 the table exists but stays empty.
+ */
+export type DealInsight = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  run_id: string;
+  ai_deal_score: number | null;         // 0–100
+  ai_verdict: AIDealVerdict | null;
+  verdict_reasoning: string | null;
+  risk_flags: DealRiskFlag[];
+  missing_information: string[];
+  broker_questions: string[];
+  running_summary: string | null;
+  valuation_context: DealValuationContext | null;
+  source_derivative_ids: string[];
+  created_at: string;
+};
+
+export type DealRiskFlag = {
+  flag: string;
+  severity: "high" | "medium" | "low";
+  source_derivative_id: string | null;
+};
+
+export type DealValuationContext = {
+  implied_multiple: string | null;
+  revenue_multiple: string | null;
+  sde_multiple: string | null;
+  notes: string | null;
+};
+
 // ─── AI helper return type ────────────────────────────────────────────────────
 
 export type AnalysisResult = {
