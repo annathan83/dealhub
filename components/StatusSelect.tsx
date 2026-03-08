@@ -14,12 +14,12 @@ const STATUS_OPTIONS: { value: DealStatus; label: string }[] = [
 ];
 
 const STATUS_STYLES: Record<DealStatus, string> = {
-  new: "bg-blue-50 text-blue-600 border-blue-100 hover:border-blue-300",
-  reviewing: "bg-amber-50 text-amber-600 border-amber-100 hover:border-amber-300",
-  due_diligence: "bg-purple-50 text-purple-600 border-purple-100 hover:border-purple-300",
-  offer: "bg-indigo-50 text-indigo-600 border-indigo-100 hover:border-indigo-300",
-  closed: "bg-green-50 text-green-600 border-green-100 hover:border-green-300",
-  passed: "bg-slate-50 text-slate-400 border-slate-200 hover:border-slate-300",
+  new: "bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300",
+  reviewing: "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300",
+  due_diligence: "bg-purple-50 text-purple-700 border-purple-100 hover:border-purple-300",
+  offer: "bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300",
+  closed: "bg-green-50 text-green-700 border-green-100 hover:border-green-300",
+  passed: "bg-red-50 text-red-600 border-red-100 hover:border-red-300",
 };
 
 type Props = {
