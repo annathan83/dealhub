@@ -3,8 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import DealHeader from "@/components/DealHeader";
-import IntakeSection from "@/components/IntakeSection";
-import TimelineSection from "@/components/TimelineSection";
+import DealPageTabs from "@/components/DealPageTabs";
 import { syncAndListDealDriveFiles } from "@/lib/google/drive";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
@@ -26,8 +25,13 @@ export default async function DealPage({
   const {
     deal,
     entityData,
+    kpiScorecard,
     triageSummary,
     triageSnapshot,
+    deepAnalysis,
+    deepAnalysisStale,
+    deepAnalysisRunAt,
+    latestSourceAt,
     entityEvents,
     entityFiles,
   } = vm;
@@ -81,23 +85,27 @@ export default async function DealPage({
           <span className="text-slate-600 font-medium truncate">{deal.name}</span>
         </div>
 
-        {/* ── 1. Compact deal header ──────────────────────────────────────────── */}
+        {/* ── Deal header (always visible) ─────────────────────────────── */}
         <DealHeader deal={deal} />
 
-        {/* ── 2. File workspace (includes add actions) ────────────────────────── */}
+        {/* ── 3-tab workspace ──────────────────────────────────────────── */}
         <div className="mt-4">
-          <IntakeSection
-            dealId={deal.id}
+          <DealPageTabs
+            deal={deal}
+            entityData={entityData}
+            syncedFiles={syncedFiles}
             isDriveConnected={isDriveConnected}
-            files={syncedFiles}
             triageSummaryExists={triageSummaryExists}
             newFilesAfterTriage={newFilesAfterTriage}
+            timelineItems={timelineItems}
+            entityEvents={entityEvents}
+            analysisSnapshots={entityData?.analysis_snapshots ?? []}
+            kpiScorecard={kpiScorecard}
+            deepAnalysis={deepAnalysis}
+            deepAnalysisStale={deepAnalysisStale}
+            deepAnalysisRunAt={deepAnalysisRunAt}
+            latestSourceAt={latestSourceAt}
           />
-        </div>
-
-        {/* ── 3. History timeline ─────────────────────────────────────────────── */}
-        <div className="mt-6 pb-4">
-          <TimelineSection items={timelineItems} />
         </div>
 
       </main>

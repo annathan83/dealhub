@@ -109,7 +109,7 @@ export async function POST(
   // ── Keep Investigating ────────────────────────────────────────────────────
   const { error: updateError } = await supabase
     .from("deals")
-    .update({ status: "investigating" })
+    .update({ status: "active" })
     .eq("id", dealId)
     .eq("user_id", user.id);
 

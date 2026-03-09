@@ -26,8 +26,18 @@ export async function POST(request: NextRequest) {
 
   let body: {
     name?: string;
+    // Structured industry
+    industry_category?: string | null;
     industry?: string | null;
+    // Structured location
+    state?: string | null;
+    county?: string | null;
+    city?: string | null;
+    /** Legacy single-field location */
     location?: string | null;
+    // Deal source
+    deal_source_category?: string | null;
+    deal_source_detail?: string | null;
     asking_price?: string | null;
     sde?: string | null;
     multiple?: string | null;
@@ -49,9 +59,15 @@ export async function POST(request: NextRequest) {
     .insert({
       user_id: user.id,
       name: body.name.trim(),
+      industry_category: body.industry_category?.trim() || null,
       industry: body.industry?.trim() || null,
+      state: body.state?.trim() || null,
+      county: body.county?.trim() || null,
+      city: body.city?.trim() || null,
       location: body.location?.trim() || null,
-      status: "new",
+      deal_source_category: body.deal_source_category?.trim() || null,
+      deal_source_detail: body.deal_source_detail?.trim() || null,
+      status: "active",
       asking_price: body.asking_price?.trim() || null,
       sde: body.sde?.trim() || null,
       multiple: body.multiple?.trim() || null,

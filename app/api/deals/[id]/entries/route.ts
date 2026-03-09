@@ -1,9 +1,58 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import OpenAI from "openai";
 import { saveRawEntryToDrive } from "@/lib/google/drive";
 import { ingestFromDealEntry } from "@/lib/services/entity/entityFileService";
 import type { Deal } from "@/types";
+
+// ─── AI title generation for pasted text ─────────────────────────────────────
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+/**
+ * Generates a short, descriptive title for a pasted text entry.
+ * The title is used as both the display name and the .txt file name.
+ * Falls back to a timestamp-based name if AI is unavailable.
+ */
+async function generateNoteTitle(content: string, dealName: string): Promise<string> {
+  try {
+    const preview = content.slice(0, 800);
+    const response = await openai.chat.completions.create({
+      model: process.env.DEALHUB_OPENAI_MODEL ?? "gpt-4o-mini",
+      max_tokens: 20,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You generate short file names for deal-related text notes. " +
+            "Respond with ONLY the file name, no extension, no quotes, no explanation. " +
+            "Max 6 words. Use title case. Be specific and descriptive.",
+        },
+        {
+          role: "user",
+          content: `Deal: ${dealName}\n\nText:\n${preview}\n\nFile name:`,
+        },
+      ],
+    });
+    const raw = response.choices[0]?.message?.content?.trim() ?? "";
+    // Sanitise: strip quotes, limit length, replace unsafe chars
+    const clean = raw
+      .replace(/^["']|["']$/g, "")
+      .replace(/[/\\:*?"<>|]/g, "-")
+      .slice(0, 60)
+      .trim();
+    return clean || fallbackTitle();
+  } catch {
+    return fallbackTitle();
+  }
+}
+
+function fallbackTitle(): string {
+  const now = new Date();
+  return `Note ${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+}
 
 export async function POST(
   request: NextRequest,
@@ -66,14 +115,17 @@ export async function POST(
       .catch((err) => console.error("Drive save failed (non-fatal):", err));
   }
 
-  // ── 2. Entity pipeline: text → triage facts → triage summary ─────────────
+  // ── 2. Generate AI title for the note (used as display name + .txt filename)
+  const noteTitle = await generateNoteTitle(content, deal.name).catch(() => fallbackTitle());
+
+  // ── 3. Entity pipeline: text → triage facts → triage summary ─────────────
   // Deep analysis is user-triggered only — never runs automatically on intake.
   ingestFromDealEntry({
     dealId,
     userId: user.id,
     entryContent: content,
-    entryTitle: null,
+    entryTitle: noteTitle,
   }).catch((err) => console.error("[entity pipeline] ingestFromDealEntry failed:", err));
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  return NextResponse.json({ ok: true, title: noteTitle }, { status: 201 });
 }

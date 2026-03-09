@@ -3,33 +3,19 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Deal, DealStatus } from "@/types";
+import DealMetadataFields, { type DealMetadataValues } from "@/components/DealMetadataFields";
+import { formatLocation } from "@/lib/config/dealMetadata";
 
 const STATUS_OPTIONS: { value: DealStatus; label: string }[] = [
-  { value: "new",           label: "New" },
-  { value: "triaged",       label: "Triaged" },
-  { value: "investigating", label: "Investigating" },
-  { value: "loi",           label: "LOI" },
-  { value: "acquired",      label: "Acquired" },
-  { value: "passed",        label: "Passed" },
-  { value: "archived",      label: "Archived" },
-  { value: "reviewing",     label: "Reviewing" },
-  { value: "due_diligence", label: "Due Diligence" },
-  { value: "offer",         label: "Offer" },
-  { value: "closed",        label: "Closed" },
+  { value: "active", label: "Active" },
+  { value: "closed", label: "Closed" },
+  { value: "passed", label: "Passed" },
 ];
 
-const STATUS_COLORS: Record<DealStatus, string> = {
-  new:           "bg-slate-100 text-slate-600",
-  triaged:       "bg-blue-50 text-blue-700",
-  investigating: "bg-indigo-50 text-indigo-700",
-  loi:           "bg-violet-50 text-violet-700",
-  acquired:      "bg-emerald-50 text-emerald-700",
-  passed:        "bg-red-50 text-red-600",
-  archived:      "bg-slate-50 text-slate-500",
-  reviewing:     "bg-blue-50 text-blue-700",
-  due_diligence: "bg-purple-50 text-purple-700",
-  offer:         "bg-indigo-50 text-indigo-700",
-  closed:        "bg-green-50 text-green-700",
+const STATUS_DOT: Record<DealStatus, string> = {
+  active: "bg-indigo-500",
+  closed: "bg-emerald-500",
+  passed: "bg-slate-400",
 };
 
 type Props = {
@@ -40,8 +26,6 @@ type Props = {
 type FormState = {
   name: string;
   description: string;
-  industry: string;
-  location: string;
   status: DealStatus;
   asking_price: string;
   sde: string;
@@ -115,12 +99,24 @@ export default function EditDealModal({ deal, onClose }: Props) {
   const [form, setForm] = useState<FormState>({
     name: deal.name,
     description: deal.description ?? "",
-    industry: deal.industry ?? "",
-    location: deal.location ?? "",
     status: deal.status,
     asking_price: deal.asking_price ?? "",
     sde: deal.sde ?? "",
   });
+
+  const [metadata, setMetadata] = useState<DealMetadataValues>({
+    deal_source_category: deal.deal_source_category ?? "",
+    deal_source_detail: deal.deal_source_detail ?? "",
+    industry_category: deal.industry_category ?? "",
+    industry: deal.industry ?? "",
+    state: deal.state ?? "",
+    county: deal.county ?? "",
+    city: deal.city ?? "",
+  });
+
+  function setMeta(field: keyof DealMetadataValues, value: string) {
+    setMetadata((prev) => ({ ...prev, [field]: value }));
+  }
 
   // Track which currency fields are focused to show raw vs formatted
   const [focusedField, setFocusedField] = useState<"asking_price" | "sde" | null>(null);
@@ -182,11 +178,17 @@ export default function EditDealModal({ deal, onClose }: Props) {
         body: JSON.stringify({
           name: form.name,
           description: form.description,
-          industry: form.industry,
-          location: form.location,
           status: form.status,
           asking_price: form.asking_price,
           sde: form.sde,
+          industry_category: metadata.industry_category || null,
+          industry: metadata.industry || null,
+          state: metadata.state || null,
+          county: metadata.county || null,
+          city: metadata.city || null,
+          location: formatLocation(metadata.city, metadata.county, metadata.state) || null,
+          deal_source_category: metadata.deal_source_category || null,
+          deal_source_detail: metadata.deal_source_detail || null,
         }),
       });
 
@@ -271,8 +273,8 @@ export default function EditDealModal({ deal, onClose }: Props) {
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
-                  {/* Status color dot */}
-                  <span className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ${STATUS_COLORS[form.status]}`} />
+                  {/* Status dot */}
+                  <span className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ${STATUS_DOT[form.status]}`} />
                   {/* Chevron */}
                   <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -335,30 +337,14 @@ export default function EditDealModal({ deal, onClose }: Props) {
 
           {/* ── Section: Details ──────────────────────────── */}
           <div>
-            <SectionHeader title="Details" description="Additional context about the business" />
+            <SectionHeader title="Details" description="Source, industry, and location" />
             <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Industry" optional>
-                  <input
-                    type="text"
-                    value={form.industry}
-                    onChange={(e) => set("industry", e.target.value)}
-                    disabled={loading}
-                    className={INPUT}
-                    placeholder="e.g. HVAC, Retail"
-                  />
-                </Field>
-                <Field label="Location" optional>
-                  <input
-                    type="text"
-                    value={form.location}
-                    onChange={(e) => set("location", e.target.value)}
-                    disabled={loading}
-                    className={INPUT}
-                    placeholder="e.g. Denver, CO"
-                  />
-                </Field>
-              </div>
+
+              <DealMetadataFields
+                values={metadata}
+                onChange={setMeta}
+                disabled={loading}
+              />
 
               <Field label="Description" optional>
                 <textarea

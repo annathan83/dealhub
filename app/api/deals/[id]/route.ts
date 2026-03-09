@@ -5,11 +5,7 @@ import { saveTextNoteToDrive } from "@/lib/google/drive";
 import { logDealEdited } from "@/lib/services/entity/entityEventService";
 import type { Deal } from "@/types";
 
-const VALID_STATUSES = [
-  "new", "triaged", "investigating", "passed", "loi", "acquired", "archived",
-  // legacy statuses kept for backwards compatibility
-  "reviewing", "due_diligence", "offer", "closed",
-];
+const VALID_STATUSES = ["active", "closed", "passed"];
 
 function parseMoney(raw: string | null): number | null {
   if (!raw) return null;
@@ -29,8 +25,14 @@ function computeMultiple(asking_price: string | null, sde: string | null): strin
 const FIELD_LABELS: Record<string, string> = {
   name: "Deal Name",
   description: "Description",
+  industry_category: "Industry Category",
   industry: "Industry",
+  state: "State",
+  county: "County",
+  city: "City",
   location: "Location",
+  deal_source_category: "Deal Source",
+  deal_source_detail: "Source Detail",
   status: "Status",
   asking_price: "Asking Price",
   sde: "SDE",
@@ -38,17 +40,9 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  new: "New",
-  triaged: "Triaged",
-  investigating: "Investigating",
-  passed: "Passed",
-  loi: "LOI",
-  acquired: "Acquired",
-  archived: "Archived",
-  reviewing: "Reviewing",
-  due_diligence: "Due Diligence",
-  offer: "Offer",
+  active: "Active",
   closed: "Closed",
+  passed: "Passed",
 };
 
 function formatValue(field: string, value: string | null): string {
@@ -106,7 +100,10 @@ export async function PATCH(
 
   // ── Build update payload ──────────────────────────────────────────────────
   const editableFields = [
-    "name", "description", "industry", "location",
+    "name", "description",
+    "industry_category", "industry",
+    "state", "county", "city", "location",
+    "deal_source_category", "deal_source_detail",
     "status", "asking_price", "sde", "multiple",
   ] as const;
 

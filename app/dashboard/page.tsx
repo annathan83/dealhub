@@ -3,10 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
-import type { Deal, DealStatus } from "@/types";
-
-// Statuses that count as "active" (not terminal)
-const ACTIVE_STATUSES: DealStatus[] = ["new", "reviewing", "due_diligence", "offer"];
+import type { Deal } from "@/types";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -38,14 +35,10 @@ export default async function DashboardPage() {
   const isDriveConnected = !!driveResult.data;
 
   // Compute summary stats
-  const totalDeals = dealList.length;
-  const activeDeals = dealList.filter((d) => (ACTIVE_STATUSES as string[]).includes(d.status)).length;
-  const offerDeals = dealList.filter((d) => d.status === "offer").length;
-
-  const statusCounts = dealList.reduce<Record<string, number>>((acc, d) => {
-    acc[d.status] = (acc[d.status] ?? 0) + 1;
-    return acc;
-  }, {});
+  const totalDeals   = dealList.length;
+  const activeDeals  = dealList.filter((d) => d.status === "active").length;
+  const closedDeals  = dealList.filter((d) => d.status === "closed").length;
+  const passedDeals  = dealList.filter((d) => d.status === "passed").length;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -113,56 +106,40 @@ export default async function DashboardPage() {
 
             {/* Active */}
             <Link
-              href="/dashboard?status=reviewing"
-              className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-blue-200 transition-colors"
+              href="/dashboard?status=active"
+              className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-indigo-200 transition-colors"
             >
-              <span className="text-lg font-bold text-blue-600 tabular-nums leading-none">{activeDeals}</span>
+              <span className="text-lg font-bold text-indigo-600 tabular-nums leading-none">{activeDeals}</span>
               <span className="text-xs text-slate-400 font-medium">Active</span>
             </Link>
 
-            {/* Offer — only show if there are any */}
-            {offerDeals > 0 && (
+            {/* Closed — only show if there are any */}
+            {closedDeals > 0 && (
               <>
                 <div className="w-px h-6 bg-slate-100 shrink-0" />
                 <Link
-                  href="/dashboard?status=offer"
-                  className="shrink-0 flex items-center gap-2 rounded-xl bg-indigo-50 border border-indigo-100 px-3.5 py-2.5 shadow-sm hover:border-indigo-200 transition-colors"
+                  href="/dashboard?status=closed"
+                  className="shrink-0 flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-3.5 py-2.5 shadow-sm hover:border-emerald-200 transition-colors"
                 >
-                  <span className="text-lg font-bold text-indigo-600 tabular-nums leading-none">{offerDeals}</span>
-                  <span className="text-xs text-indigo-400 font-medium">Offer</span>
+                  <span className="text-lg font-bold text-emerald-600 tabular-nums leading-none">{closedDeals}</span>
+                  <span className="text-xs text-emerald-500 font-medium">Closed</span>
                 </Link>
               </>
             )}
 
-            {/* Per-status quick links — only show stages with deals */}
-            {(["due_diligence", "closed", "passed"] as DealStatus[])
-              .filter((s) => (statusCounts[s] ?? 0) > 0)
-              .map((s) => {
-                const colors: Record<string, string> = {
-                  due_diligence: "text-violet-600",
-                  closed: "text-emerald-600",
-                  passed: "text-red-400",
-                };
-                const labels: Record<string, string> = {
-                  due_diligence: "DD",
-                  closed: "Closed",
-                  passed: "Passed",
-                };
-                return (
-                  <div key={s} className="flex items-center gap-2">
-                    <div className="w-px h-6 bg-slate-100 shrink-0" />
-                    <Link
-                      href={`/dashboard?status=${s}`}
-                      className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-slate-200 transition-colors"
-                    >
-                      <span className={`text-lg font-bold tabular-nums leading-none ${colors[s]}`}>
-                        {statusCounts[s]}
-                      </span>
-                      <span className="text-xs text-slate-400 font-medium">{labels[s]}</span>
-                    </Link>
-                  </div>
-                );
-              })}
+            {/* Passed — only show if there are any */}
+            {passedDeals > 0 && (
+              <>
+                <div className="w-px h-6 bg-slate-100 shrink-0" />
+                <Link
+                  href="/dashboard?status=passed"
+                  className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-slate-200 transition-colors"
+                >
+                  <span className="text-lg font-bold text-slate-500 tabular-nums leading-none">{passedDeals}</span>
+                  <span className="text-xs text-slate-400 font-medium">Passed</span>
+                </Link>
+              </>
+            )}
           </div>
         )}
 

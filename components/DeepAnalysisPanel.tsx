@@ -66,8 +66,8 @@ function NeverRunState({
   loading: boolean;
   error: string | null;
 }) {
-  const isBlocked = dealStatus === "passed" || dealStatus === "archived";
-  const isNew = dealStatus === "new";
+  const isBlocked = dealStatus === "passed";
+  const isNew = false;
 
   if (isBlocked) {
     return (
@@ -439,7 +439,7 @@ export default function DeepAnalysisPanel({
     );
   }
 
-  const canRerun = dealStatus !== "passed" && dealStatus !== "archived";
+  const canRerun = dealStatus !== "passed";
   const highRiskCount = analysis.key_risks.filter((r) => r.severity === "high").length;
   const highPriorityQCount = analysis.broker_questions.filter((q) => q.priority === "high").length;
 

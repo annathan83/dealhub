@@ -200,9 +200,7 @@ export default function TriageReviewPanel({ deal, triage, isProcessing }: Props)
 
   const isAlreadyDecided =
     deal.status === "passed" ||
-    deal.status === "investigating" ||
-    deal.status === "loi" ||
-    deal.status === "acquired";
+    deal.status === "closed";
 
   return (
     <>
@@ -308,17 +306,10 @@ export default function TriageReviewPanel({ deal, triage, isProcessing }: Props)
             </p>
           </div>
         )}
-        {isAlreadyDecided && deal.status === "investigating" && (
-          <div className="px-5 py-3 bg-indigo-50 border-t border-indigo-100">
-            <p className="text-xs text-indigo-700 font-medium text-center">
-              Marked for further investigation
-            </p>
-          </div>
-        )}
-        {isAlreadyDecided && (deal.status === "loi" || deal.status === "acquired") && (
+        {isAlreadyDecided && deal.status === "closed" && (
           <div className="px-5 py-3 bg-emerald-50 border-t border-emerald-100">
-            <p className="text-xs text-emerald-700 font-medium text-center capitalize">
-              {deal.status.replace(/_/g, " ")}
+            <p className="text-xs text-emerald-700 font-medium text-center">
+              Deal closed
             </p>
           </div>
         )}

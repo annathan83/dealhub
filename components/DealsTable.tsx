@@ -4,76 +4,39 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Deal, DealStatus } from "@/types";
-import StatusSelect from "./StatusSelect";
+import { US_STATES, INDUSTRY_CATEGORIES, DEAL_SOURCE_CATEGORIES } from "@/lib/config/dealMetadata";
+import { formatLocation } from "@/lib/config/dealMetadata";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<DealStatus, string> = {
-  new:           "New",
-  triaged:       "Triaged",
-  investigating: "Investigating",
-  loi:           "LOI",
-  acquired:      "Acquired",
-  passed:        "Passed",
-  archived:      "Archived",
-  reviewing:     "Reviewing",
-  due_diligence: "Due Diligence",
-  offer:         "Offer",
-  closed:        "Closed",
+  active: "Active",
+  closed: "Closed",
+  passed: "Passed",
 };
 
 const STATUS_DOT: Record<DealStatus, string> = {
-  new:           "bg-slate-400",
-  triaged:       "bg-blue-500",
-  investigating: "bg-indigo-500",
-  loi:           "bg-violet-500",
-  acquired:      "bg-emerald-500",
-  passed:        "bg-red-400",
-  archived:      "bg-slate-300",
-  reviewing:     "bg-blue-400",
-  due_diligence: "bg-violet-500",
-  offer:         "bg-indigo-500",
-  closed:        "bg-emerald-500",
+  active: "bg-indigo-500",
+  closed: "bg-emerald-500",
+  passed: "bg-slate-400",
 };
 
 const STATUS_BADGE: Record<DealStatus, string> = {
-  new:           "bg-slate-100 text-slate-600",
-  triaged:       "bg-blue-50 text-blue-700",
-  investigating: "bg-indigo-50 text-indigo-700",
-  loi:           "bg-violet-50 text-violet-700",
-  acquired:      "bg-emerald-50 text-emerald-700",
-  passed:        "bg-red-50 text-red-600",
-  archived:      "bg-slate-50 text-slate-500",
-  reviewing:     "bg-blue-50 text-blue-700",
-  due_diligence: "bg-violet-50 text-violet-700",
-  offer:         "bg-indigo-50 text-indigo-700",
-  closed:        "bg-emerald-50 text-emerald-700",
+  active: "bg-indigo-50 text-indigo-700",
+  closed: "bg-emerald-50 text-emerald-700",
+  passed: "bg-slate-100 text-slate-500",
 };
 
-// Desktop table badge (with border)
-const STATUS_BADGE_BORDER: Record<DealStatus, string> = {
-  new:           "bg-slate-100 text-slate-600 border-slate-200",
-  triaged:       "bg-blue-50 text-blue-700 border-blue-100",
-  investigating: "bg-indigo-50 text-indigo-700 border-indigo-100",
-  loi:           "bg-violet-50 text-violet-700 border-violet-100",
-  acquired:      "bg-emerald-50 text-emerald-700 border-emerald-100",
-  passed:        "bg-red-50 text-red-600 border-red-100",
-  archived:      "bg-slate-50 text-slate-500 border-slate-200",
-  reviewing:     "bg-blue-50 text-blue-700 border-blue-100",
-  due_diligence: "bg-violet-50 text-violet-700 border-violet-100",
-  offer:         "bg-indigo-50 text-indigo-700 border-indigo-100",
-  closed:        "bg-emerald-50 text-emerald-700 border-emerald-100",
-};
-
-const ALL_STATUSES: DealStatus[] = [
-  "new", "triaged", "investigating", "loi", "acquired", "passed", "archived",
-  "reviewing", "due_diligence", "offer", "closed",
-];
-
+const ALL_STATUSES: DealStatus[] = ["active", "closed", "passed"];
 const VALID_STATUSES: DealStatus[] = ALL_STATUSES;
 
 type SortKey = "name" | "asking_price" | "sde" | "multiple" | "status" | "created_at" | "updated_at";
 type SortDir = "asc" | "desc";
+
+// Build state abbr → name map for display
+const STATE_NAME: Record<string, string> = Object.fromEntries(
+  US_STATES.map((s) => [s.abbr, s.name])
+);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,7 +73,10 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
 function DealCard({ deal }: { deal: Deal }) {
   const router = useRouter();
   const hasFinancials = deal.asking_price || deal.sde || deal.multiple;
-  const meta = [deal.industry, deal.location].filter(Boolean).join(" · ");
+  // Prefer structured fields, fall back to legacy location string
+  const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
+  const displayIndustry = deal.industry ?? deal.industry_category;
+  const meta = [displayIndustry, displayLocation].filter(Boolean).join(" · ");
 
   return (
     <div
@@ -170,12 +136,8 @@ function DealCard({ deal }: { deal: Deal }) {
       </div>
 
       {/* Subtle bottom accent line for active deals */}
-      {(deal.status === "investigating" || deal.status === "loi" || deal.status === "triaged" || deal.status === "reviewing" || deal.status === "due_diligence" || deal.status === "offer") && (
-        <div className={`h-0.5 ${
-          deal.status === "loi" || deal.status === "offer" ? "bg-violet-400" :
-          deal.status === "investigating" || deal.status === "due_diligence" ? "bg-indigo-400" :
-          "bg-blue-300"
-        }`} />
+      {deal.status === "active" && (
+        <div className="h-0.5 bg-indigo-400" />
       )}
     </div>
   );
@@ -190,6 +152,9 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DealStatus | "all">("all");
+  const [industryFilter, setIndustryFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -215,13 +180,23 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
   const filtered = useMemo(() => {
     let list = deals.filter((deal) => {
       const q = search.trim().toLowerCase();
+      const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location || "";
+      const displayIndustry = deal.industry ?? deal.industry_category ?? "";
       const matchesSearch =
         !q ||
         deal.name.toLowerCase().includes(q) ||
-        deal.industry?.toLowerCase().includes(q) ||
-        deal.location?.toLowerCase().includes(q);
+        displayIndustry.toLowerCase().includes(q) ||
+        displayLocation.toLowerCase().includes(q) ||
+        deal.deal_source_category?.toLowerCase().includes(q) ||
+        deal.deal_source_detail?.toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || deal.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesIndustry =
+        !industryFilter ||
+        deal.industry_category === industryFilter ||
+        deal.industry === industryFilter;
+      const matchesState = !stateFilter || deal.state === stateFilter;
+      const matchesSource = !sourceFilter || deal.deal_source_category === sourceFilter;
+      return matchesSearch && matchesStatus && matchesIndustry && matchesState && matchesSource;
     });
 
     list = [...list].sort((a, b) => {
@@ -257,7 +232,10 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
     );
   }
 
-  const isFiltered = search || statusFilter !== "all";
+  const isFiltered = search || statusFilter !== "all" || industryFilter || stateFilter || sourceFilter;
+
+  const SELECT_FILTER =
+    "rounded-lg border border-slate-200 bg-white pl-3 pr-8 py-2 text-xs text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition appearance-none cursor-pointer";
 
   return (
     <div className="flex flex-col gap-3">
@@ -289,43 +267,108 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
         )}
       </div>
 
-      {/* ── Scrollable filter chips ──────────────────────────────────────── */}
+      {/* ── Filter row ───────────────────────────────────────────────────── */}
       <div
         ref={filterScrollRef}
-        className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-hide -mx-0.5 px-0.5"
+        className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-0.5 px-0.5"
         style={{ scrollbarWidth: "none" }}
       >
-        {(["all", ...ALL_STATUSES] as (DealStatus | "all")[]).map((s) => {
-          const isActive = statusFilter === s;
-          return (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-                isActive
-                  ? s === "all"
+        {/* Status chips */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {(["all", ...ALL_STATUSES] as (DealStatus | "all")[]).map((s) => {
+            const isActive = statusFilter === s;
+            return (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
+                  isActive
                     ? "bg-slate-900 text-white"
-                    : "bg-slate-900 text-white"
-                  : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-800"
-              }`}
-            >
-              {s !== "all" && isActive && (
-                <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[s as DealStatus]}`} />
-              )}
-              {s === "all" ? "All" : STATUS_LABELS[s]}
-              {s !== "all" && deals.filter(d => d.status === s).length > 0 && !isActive && (
-                <span className="text-[10px] text-slate-400 tabular-nums">
-                  {deals.filter(d => d.status === s).length}
-                </span>
-              )}
-            </button>
-          );
-        })}
+                    : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-800"
+                }`}
+              >
+                {s !== "all" && isActive && (
+                  <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[s as DealStatus]}`} />
+                )}
+                {s === "all" ? "All" : STATUS_LABELS[s]}
+                {s !== "all" && deals.filter(d => d.status === s).length > 0 && !isActive && (
+                  <span className="text-[10px] text-slate-400 tabular-nums">
+                    {deals.filter(d => d.status === s).length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
+        {/* Divider */}
+        <div className="h-5 w-px bg-slate-200 shrink-0" />
+
+        {/* Industry filter */}
+        <div className="relative shrink-0">
+          <select
+            value={industryFilter}
+            onChange={(e) => setIndustryFilter(e.target.value)}
+            className={`${SELECT_FILTER} ${industryFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+          >
+            <option value="">All industries</option>
+            {INDUSTRY_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        {/* State filter */}
+        <div className="relative shrink-0">
+          <select
+            value={stateFilter}
+            onChange={(e) => setStateFilter(e.target.value)}
+            className={`${SELECT_FILTER} ${stateFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+          >
+            <option value="">All states</option>
+            {US_STATES.map((s) => (
+              <option key={s.abbr} value={s.abbr}>{s.name}</option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        {/* Source filter */}
+        <div className="relative shrink-0">
+          <select
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            className={`${SELECT_FILTER} ${sourceFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+          >
+            <option value="">All sources</option>
+            {DEAL_SOURCE_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+
+        {/* Clear all filters */}
         {isFiltered && (
-          <span className="ml-auto shrink-0 text-xs text-slate-400 tabular-nums pl-2">
-            {filtered.length}/{deals.length}
-          </span>
+          <button
+            onClick={() => {
+              setSearch("");
+              setStatusFilter("all");
+              setIndustryFilter("");
+              setStateFilter("");
+              setSourceFilter("");
+            }}
+            className="ml-auto shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors whitespace-nowrap pl-2"
+          >
+            Clear filters · {filtered.length}/{deals.length}
+          </button>
         )}
       </div>
 
@@ -397,8 +440,15 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                         {deal.name}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{deal.industry ?? <Dash />}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs max-w-[140px] truncate">{deal.location ?? <Dash />}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs max-w-[140px] truncate">
+                      {deal.industry ?? deal.industry_category ?? <Dash />}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 text-xs max-w-[140px] truncate">
+                      {(() => {
+                        const loc = formatLocation(deal.city, deal.county, deal.state) || deal.location;
+                        return loc ?? <Dash />;
+                      })()}
+                    </td>
                     <td className="px-4 py-3 text-right font-bold text-slate-800 tabular-nums whitespace-nowrap text-xs">
                       {deal.sde ?? <Dash />}
                     </td>
@@ -408,8 +458,11 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                     <td className="px-4 py-3 text-right text-slate-500 tabular-nums whitespace-nowrap text-xs">
                       {deal.multiple ?? <Dash />}
                     </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <StatusSelect dealId={deal.id} currentStatus={deal.status} variant="row" />
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGE[deal.status]}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[deal.status]}`} />
+                        {STATUS_LABELS[deal.status]}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-slate-400 whitespace-nowrap tabular-nums text-xs" title={`Added ${formatDate(deal.created_at)}`}>
                       {formatDate(deal.updated_at)}

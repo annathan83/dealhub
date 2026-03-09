@@ -6,42 +6,26 @@ import EditDealModal from "./EditDealModal";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
+const STATUSES: DealStatus[] = ["active", "closed", "passed"];
+
 const STATUS_LABELS: Record<DealStatus, string> = {
-  new:           "New",
-  triaged:       "Triaged",
-  investigating: "Investigating",
-  loi:           "LOI",
-  acquired:      "Acquired",
-  passed:        "Passed",
-  archived:      "Archived",
-  reviewing:     "Reviewing",
-  due_diligence: "Due Diligence",
-  offer:         "Offer",
-  closed:        "Closed",
+  active: "Active",
+  closed: "Closed",
+  passed: "Passed",
 };
 
-const STATUS_STYLES: Record<DealStatus, { badge: string; dot: string }> = {
-  new:           { badge: "bg-slate-100 text-slate-600",    dot: "bg-slate-400" },
-  triaged:       { badge: "bg-blue-50 text-blue-700",       dot: "bg-blue-500" },
-  investigating: { badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500" },
-  loi:           { badge: "bg-violet-50 text-violet-700",   dot: "bg-violet-500" },
-  acquired:      { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-  passed:        { badge: "bg-red-50 text-red-600",         dot: "bg-red-400" },
-  archived:      { badge: "bg-slate-50 text-slate-500",     dot: "bg-slate-300" },
-  reviewing:     { badge: "bg-blue-50 text-blue-700",       dot: "bg-blue-400" },
-  due_diligence: { badge: "bg-violet-50 text-violet-700",   dot: "bg-violet-500" },
-  offer:         { badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500" },
-  closed:        { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+// Segmented control styles per option (active = selected)
+const SEGMENT_ACTIVE: Record<DealStatus, string> = {
+  active: "bg-indigo-600 text-white shadow-sm",
+  closed: "bg-emerald-600 text-white shadow-sm",
+  passed: "bg-slate-500 text-white shadow-sm",
 };
 
-const STATUS_OPTIONS: DealStatus[] = [
-  "new", "triaged", "investigating", "loi", "acquired", "passed", "archived",
-  "reviewing", "due_diligence", "offer", "closed",
-];
+const SEGMENT_INACTIVE = "text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors";
 
-// ─── Inline status select ─────────────────────────────────────────────────────
+// ─── Segmented status control ─────────────────────────────────────────────────
 
-function InlineStatusSelect({
+function StatusSegmentedControl({
   dealId,
   status,
 }: {
@@ -50,10 +34,9 @@ function InlineStatusSelect({
 }) {
   const [current, setCurrent] = useState<DealStatus>(status);
   const [saving, setSaving] = useState(false);
-  const style = STATUS_STYLES[current];
 
   async function handleChange(next: DealStatus) {
-    if (next === current) return;
+    if (next === current || saving) return;
     const prev = current;
     setCurrent(next);
     setSaving(true);
@@ -72,27 +55,23 @@ function InlineStatusSelect({
   }
 
   return (
-    <div className="relative inline-flex">
-      <select
-        value={current}
-        onChange={(e) => handleChange(e.target.value as DealStatus)}
-        disabled={saving}
-        className={`appearance-none cursor-pointer rounded-full pl-7 pr-7 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-300 disabled:opacity-60 ${style.badge}`}
-        style={{ minHeight: 32 }}
-      >
-        {STATUS_OPTIONS.map((s) => (
-          <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-        ))}
-      </select>
-      {/* Dot */}
-      <span className={`pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full ${style.dot}`} />
-      {/* Chevron */}
-      <svg
-        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 opacity-50"
-        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-      </svg>
+    <div
+      className={`inline-flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5 transition-opacity ${saving ? "opacity-60 pointer-events-none" : ""}`}
+      role="group"
+      aria-label="Deal status"
+    >
+      {STATUSES.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => handleChange(s)}
+          className={`rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+            current === s ? SEGMENT_ACTIVE[s] : SEGMENT_INACTIVE
+          }`}
+        >
+          {STATUS_LABELS[s]}
+        </button>
+      ))}
     </div>
   );
 }
@@ -180,7 +159,7 @@ export default function DealHeader({ deal }: { deal: Deal }) {
 
           {/* Status + metadata row */}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mt-2">
-            <InlineStatusSelect dealId={deal.id} status={deal.status} />
+            <StatusSegmentedControl dealId={deal.id} status={deal.status} />
 
             {deal.industry && (
               <span className="inline-flex items-center gap-1 text-xs text-slate-400">

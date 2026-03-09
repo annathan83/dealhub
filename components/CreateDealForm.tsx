@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import DealMetadataFields, { type DealMetadataValues } from "@/components/DealMetadataFields";
+import { formatLocation } from "@/lib/config/dealMetadata";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -100,10 +102,23 @@ export default function CreateDealForm() {
   // Deal fields
   const [name, setName] = useState("");
   const [initialNotes, setInitialNotes] = useState("");
-  const [industry, setIndustry] = useState("");
-  const [location, setLocation] = useState("");
   const [askingPrice, setAskingPrice] = useState("");
   const [sde, setSde] = useState("");
+
+  // Structured metadata
+  const [metadata, setMetadata] = useState<DealMetadataValues>({
+    deal_source_category: "",
+    deal_source_detail: "",
+    industry_category: "",
+    industry: "",
+    state: "",
+    county: "",
+    city: "",
+  });
+
+  function setMeta(field: keyof DealMetadataValues, value: string) {
+    setMetadata((prev) => ({ ...prev, [field]: value }));
+  }
 
   // File staging
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
@@ -164,8 +179,15 @@ export default function CreateDealForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          industry: industry.trim() || null,
-          location: location.trim() || null,
+          industry_category: metadata.industry_category || null,
+          industry: metadata.industry || null,
+          state: metadata.state || null,
+          county: metadata.county || null,
+          city: metadata.city || null,
+          // Derive legacy location string for backward compat
+          location: formatLocation(metadata.city, metadata.county, metadata.state) || null,
+          deal_source_category: metadata.deal_source_category || null,
+          deal_source_detail: metadata.deal_source_detail || null,
           asking_price: askingPrice.trim() || null,
           sde: sde.trim() || null,
           multiple: multiple || null,
@@ -288,37 +310,13 @@ export default function CreateDealForm() {
         </div>
       </div>
 
-      {/* Industry + Location */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="industry" className="text-sm font-semibold text-slate-700">
-            Industry <span className="text-slate-400 font-normal text-xs">(optional)</span>
-          </label>
-          <input
-            id="industry"
-            type="text"
-            value={industry}
-            onChange={(e) => setIndustry(e.target.value)}
-            placeholder="e.g. HVAC, SaaS, Retail"
-            disabled={loading}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition disabled:opacity-60"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="location" className="text-sm font-semibold text-slate-700">
-            Location <span className="text-slate-400 font-normal text-xs">(optional)</span>
-          </label>
-          <input
-            id="location"
-            type="text"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Denver, CO"
-            disabled={loading}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition disabled:opacity-60"
-          />
-        </div>
-      </div>
+      {/* Source / Industry / Location — structured dropdowns */}
+      <DealMetadataFields
+        values={metadata}
+        onChange={setMeta}
+        disabled={loading}
+        compact
+      />
 
       {/* ── Intake section ──────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">

@@ -1,19 +1,6 @@
 // ─── Deal ────────────────────────────────────────────────────────────────────
 
-export type DealStatus =
-  // New triage lifecycle
-  | "new"
-  | "triaged"
-  | "investigating"
-  | "passed"
-  | "loi"
-  | "acquired"
-  | "archived"
-  // Legacy statuses (kept for backwards compatibility)
-  | "reviewing"
-  | "due_diligence"
-  | "offer"
-  | "closed";
+export type DealStatus = "active" | "closed" | "passed";
 
 export type PassReason =
   | "price_too_high"
@@ -31,8 +18,18 @@ export type Deal = {
   deal_number: number;
   name: string;
   description: string | null;
+  // Structured industry (two-level)
+  industry_category: string | null;
   industry: string | null;
+  // Structured location (three-level)
+  state: string | null;
+  county: string | null;
+  city: string | null;
+  /** Legacy single-field location — kept for backward compat, prefer state/county/city */
   location: string | null;
+  // Deal source
+  deal_source_category: string | null;
+  deal_source_detail: string | null;
   status: DealStatus;
   asking_price: string | null;
   sde: string | null;
