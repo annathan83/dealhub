@@ -4,10 +4,10 @@ import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import DealHeader from "@/components/DealHeader";
 import IntakeSection from "@/components/IntakeSection";
-import TriageReviewPanel from "@/components/TriageReviewPanel";
-import DealDetailTabs from "@/components/DealDetailTabs";
+import TimelineSection from "@/components/TimelineSection";
 import { syncAndListDealDriveFiles } from "@/lib/google/drive";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
+import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
 
 export default async function DealPage({
   params,
@@ -24,10 +24,12 @@ export default async function DealPage({
   if (!vm) notFound();
 
   const {
-    deal, entityData, kpiScorecard,
-    triageSummary, triageSnapshot,
-    deepAnalysis, deepAnalysisStale, deepAnalysisRunAt, latestSourceAt,
-    entityEvents, entityFiles,
+    deal,
+    entityData,
+    triageSummary,
+    triageSnapshot,
+    entityEvents,
+    entityFiles,
   } = vm;
 
   const { data: tokenRow } = await supabase
@@ -42,11 +44,6 @@ export default async function DealPage({
     ? await syncAndListDealDriveFiles(user.id, id).catch(() => entityFiles)
     : entityFiles;
 
-  const isTriageProcessing =
-    syncedFiles.length > 0 &&
-    !triageSummary &&
-    (deal.status === "new" || deal.status === "reviewing");
-
   // Detect if new files were added after the last triage summary
   const triageSummaryExists = !!triageSummary;
   const triageRunAt = triageSnapshot?.created_at ?? null;
@@ -54,11 +51,18 @@ export default async function DealPage({
     ? syncedFiles.some((f) => new Date(f.uploaded_at) > new Date(triageRunAt))
     : false;
 
+  // Assemble timeline items from raw events
+  const timelineItems = assembleTimeline(
+    entityEvents,
+    syncedFiles,
+    entityData?.analysis_snapshots ?? []
+  );
+
   return (
     <div className="min-h-screen bg-slate-50">
       <AppHeader />
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-5 pt-4 pb-32">
+      <main className="max-w-2xl mx-auto px-4 sm:px-5 pt-4 pb-24">
 
         {/* Breadcrumb */}
         <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
@@ -77,58 +81,26 @@ export default async function DealPage({
           <span className="text-slate-600 font-medium truncate">{deal.name}</span>
         </div>
 
-        {/* ── 1. Deal Header ────────────────────────────────────────────────── */}
+        {/* ── 1. Compact deal header ──────────────────────────────────────────── */}
         <DealHeader deal={deal} />
 
-        {/* ── 2. Intake ─────────────────────────────────────────────────────── */}
-        <SectionLabel label="Intake" />
-        <IntakeSection
-          dealId={deal.id}
-          isDriveConnected={isDriveConnected}
-          files={syncedFiles}
-          triageSummaryExists={triageSummaryExists}
-          newFilesAfterTriage={newFilesAfterTriage}
-        />
+        {/* ── 2. File workspace (includes add actions) ────────────────────────── */}
+        <div className="mt-4">
+          <IntakeSection
+            dealId={deal.id}
+            isDriveConnected={isDriveConnected}
+            files={syncedFiles}
+            triageSummaryExists={triageSummaryExists}
+            newFilesAfterTriage={newFilesAfterTriage}
+          />
+        </div>
 
-        {/* ── 3. Initial Review ─────────────────────────────────────────────── */}
-        <SectionLabel label="Initial Review" />
-        <TriageReviewPanel
-          deal={deal}
-          triage={triageSummary}
-          isProcessing={isTriageProcessing}
-        />
-
-        {/* ── 4. Deep Analysis + All Facts + History tabs ───────────────────── */}
-        {entityData && (
-          <>
-            <SectionLabel label="Analysis" />
-            <DealDetailTabs
-              data={entityData}
-              scorecard={kpiScorecard}
-              dealId={deal.id}
-              dealStatus={deal.status}
-              deepAnalysis={deepAnalysis}
-              deepAnalysisStale={deepAnalysisStale}
-              deepAnalysisRunAt={deepAnalysisRunAt}
-              latestSourceAt={latestSourceAt}
-            />
-          </>
-        )}
+        {/* ── 3. History timeline ─────────────────────────────────────────────── */}
+        <div className="mt-4">
+          <TimelineSection items={timelineItems} />
+        </div>
 
       </main>
-    </div>
-  );
-}
-
-// ─── Section label ────────────────────────────────────────────────────────────
-
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 mt-6 mb-2">
-      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
-        {label}
-      </p>
-      <div className="flex-1 h-px bg-slate-200" />
     </div>
   );
 }

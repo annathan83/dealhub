@@ -606,14 +606,13 @@ export default function IntakeSection({
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (!isDriveConnected) return;
     if (e.dataTransfer.files.length > 0) uploadFiles(e.dataTransfer.files, "file");
-  }, [isDriveConnected]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (isDriveConnected) setIsDragOver(true);
-  }, [isDriveConnected]);
+    setIsDragOver(true);
+  }, []);
 
   const handleDragLeave = useCallback(() => setIsDragOver(false), []);
 
@@ -657,28 +656,19 @@ export default function IntakeSection({
             )}
           </div>
 
-          {/* Actions */}
-          {isDriveConnected ? (
-            <AddMenu
-              onNote={() => setShowNote((v) => !v)}
-              onUpload={() => uploadInputRef.current?.click()}
-              onPhoto={() => isMobile ? cameraInputRef.current?.click() : setShowWebcam(true)}
-              onAudio={() => setShowAudio(true)}
-              uploading={uploading}
-              isMobile={isMobile}
-              uploadInputRef={uploadInputRef}
-              cameraInputRef={cameraInputRef}
-              onFileChange={(e) => uploadFiles(e.target.files, "file")}
-              onCameraChange={(e) => uploadFiles(e.target.files, "camera")}
-            />
-          ) : (
-            <Link
-              href="/settings/integrations"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors"
-            >
-              Connect Drive
-            </Link>
-          )}
+          {/* Actions — always available; Drive is optional, Supabase Storage is the fallback */}
+          <AddMenu
+            onNote={() => setShowNote((v) => !v)}
+            onUpload={() => uploadInputRef.current?.click()}
+            onPhoto={() => isMobile ? cameraInputRef.current?.click() : setShowWebcam(true)}
+            onAudio={() => setShowAudio(true)}
+            uploading={uploading}
+            isMobile={isMobile}
+            uploadInputRef={uploadInputRef}
+            cameraInputRef={cameraInputRef}
+            onFileChange={(e) => uploadFiles(e.target.files, "file")}
+            onCameraChange={(e) => uploadFiles(e.target.files, "camera")}
+          />
         </div>
 
         {/* ── Error banner ──────────────────────────────────────────────────── */}
@@ -724,9 +714,7 @@ export default function IntakeSection({
             </div>
             <p className="text-sm font-medium text-slate-600 mb-1">No files yet</p>
             <p className="text-xs text-slate-400">
-              {isDriveConnected
-                ? "Upload a file, add a note, or record audio to get started."
-                : "Connect Google Drive to upload files and start intake."}
+              Upload a file, add a note, or record audio to get started.
             </p>
             {isDragOver && (
               <p className="mt-2 text-xs font-semibold text-indigo-600 animate-pulse">Drop to upload…</p>
