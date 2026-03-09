@@ -215,7 +215,7 @@ export async function ensureDealFolder(
   const drive = await getAuthorizedDriveClient(userId);
   const rootFolderId = await ensureDealHubRootFolder(userId);
 
-  const folderName = `${sanitizeName(dealName)}__${dealId}`;
+  const folderName = `${dealId}_${sanitizeName(dealName)}`;
   let folderId = await findFolder(drive, folderName, rootFolderId);
   if (!folderId) folderId = await createFolder(drive, folderName, rootFolderId);
 
