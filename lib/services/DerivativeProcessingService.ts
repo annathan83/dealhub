@@ -18,6 +18,7 @@ import { downloadDriveFile } from "@/lib/google/drive";
 import { analyzeImageAttachment } from "@/lib/ai/analyzeAttachment";
 import { transcribeAudio } from "@/lib/ai/transcribeAudio";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
+import { analyzePdfAttachment } from "@/lib/ai/analyzeAttachment";
 import type { DealFileDerivative, DerivativeFileType } from "@/types";
 
 // ─── Extractor stubs ──────────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ async function extractText(
   }
 }
 
-/** Download PDF from Drive and extract text with pdf-parse. */
+/** Download PDF from Drive and extract text. Falls back to Vision for scanned PDFs. */
 async function extractPdf(
   derivative: DealFileDerivative
 ): Promise<ExtractorResult> {
@@ -66,9 +67,36 @@ async function extractPdf(
   // extractTextFromBuffer never throws — returns a diagnostic note on failure
   const text = await extractTextFromBuffer(buffer, derivative.original_file_name);
   const isNote = text.startsWith("[Text extraction note:");
+  const isScanned = isNote && text.includes("scanned");
+
+  if (isScanned) {
+    // Scanned/image-only PDF — send to the Responses API for visual analysis
+    try {
+      const result = await analyzePdfAttachment({
+        dealName: "",
+        originalFileName: derivative.original_file_name,
+        pdfBuffer: buffer,
+      });
+      const summary = result.summary;
+      return {
+        extractedText: summary,
+        structuredFields: {
+          detected_kind: result.detected_kind,
+          generated_title: result.generated_title,
+          confidence: result.confidence,
+          keywords: result.extracted_signals.keywords,
+          scanned_pdf: true,
+        },
+        model: "gpt-4o-mini-responses",
+      };
+    } catch (err) {
+      console.error("[extractPdf] Responses API fallback failed:", err);
+      return { extractedText: text, structuredFields: { extraction_note: text }, model: null };
+    }
+  }
 
   return {
-    extractedText: text || null,
+    extractedText: isNote ? null : text,
     structuredFields: {
       char_count: isNote ? 0 : text.length,
       word_count: isNote ? 0 : text.split(/\s+/).filter(Boolean).length,

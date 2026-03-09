@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { uploadFileToDealFolder, saveAIAssessmentToDrive } from "@/lib/google/drive";
-import { analyzeAttachment, analyzeImageAttachment } from "@/lib/ai/analyzeAttachment";
+import { analyzeAttachment, analyzeImageAttachment, analyzePdfAttachment } from "@/lib/ai/analyzeAttachment";
 import { transcribeAudio, isAudioFile } from "@/lib/ai/transcribeAudio";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
 import { ingestFile } from "@/lib/services/DealFileIngestionService";
@@ -262,17 +262,28 @@ export async function POST(
             };
           }
         } else {
-          // extractTextFromBuffer never throws — returns a diagnostic note on failure.
-          // Passing that note to the AI lets it still classify from filename + MIME type
-          // and include the extraction issue in the summary.
+          const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
           const contentPreview = await extractTextFromBuffer(buffer, file.name);
-          const result = await analyzeAttachment({
-            dealName: deal.name,
-            driveFileName: driveMeta.googleFileName,
-            originalFileName: file.name,
-            mimeType,
-            contentPreview,
-          });
+          const isScannedPdf =
+            ext === "pdf" && contentPreview.startsWith("[Text extraction note:") &&
+            contentPreview.includes("scanned");
+
+          // Scanned PDFs: send the raw PDF to the Responses API — GPT-4o reads
+          // both the embedded images and any text on each page (true OCR-like analysis).
+          // All other documents: use the text-based analyzeAttachment path.
+          const result = isScannedPdf
+            ? await analyzePdfAttachment({
+                dealName: deal.name,
+                originalFileName: file.name,
+                pdfBuffer: buffer,
+              })
+            : await analyzeAttachment({
+                dealName: deal.name,
+                driveFileName: driveMeta.googleFileName,
+                originalFileName: file.name,
+                mimeType,
+                contentPreview,
+              });
           analysis = {
             title: result.change_log_item.title,
             description: result.change_log_item.description,

@@ -225,6 +225,112 @@ export async function analyzeAttachment(params: {
   }
 }
 
+const PDF_SCAN_SYSTEM_PROMPT = `You are a document analysis engine for DealHub, a business acquisition workspace.
+
+You are analyzing a PDF that may be a scanned document, a printed form, or a mix of text and images.
+
+Your job:
+1. Extract ALL readable text and numbers from every page — treat it like OCR
+2. Classify the document: pnl | tax_return | balance_sheet | lease | broker_listing | broker_email_export | payroll | bank_statement | marketing_material | spreadsheet | document | unknown
+3. Generate a short title (max 8 words) and a 2-3 sentence summary of the key financial or business information
+4. Extract key signals: revenue, SDE/profit, asking price, dates, business name, any notable numbers
+5. Return ONLY valid JSON — no markdown, no explanation`;
+
+const MAX_PDF_BYTES = 32 * 1024 * 1024; // 32 MB — OpenAI Responses API limit
+
+/**
+ * Analyze a scanned or image-only PDF using the OpenAI Responses API.
+ * The Responses API sends both text and page images to the model, making it
+ * ideal for scanned PDFs where pdf-parse returns no extractable text.
+ */
+export async function analyzePdfAttachment(params: {
+  dealName: string;
+  originalFileName: string;
+  pdfBuffer: Buffer;
+}): Promise<AttachmentAnalysisResult> {
+  const { dealName, originalFileName, pdfBuffer } = params;
+
+  if (pdfBuffer.length > MAX_PDF_BYTES) {
+    // Too large for the Responses API — fall back to metadata-only classification
+    return analyzeAttachment({
+      dealName,
+      driveFileName: originalFileName,
+      originalFileName,
+      mimeType: "application/pdf",
+      contentPreview: `[Text extraction note: PDF is ${(pdfBuffer.length / 1024 / 1024).toFixed(1)} MB — too large for visual analysis. Upload a smaller file or extract key pages.]`,
+    });
+  }
+
+  try {
+    const pdfBase64 = pdfBuffer.toString("base64");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const response = await (openai as any).responses.create({
+      model: "gpt-4o-mini",
+      input: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: [
+                `Deal: ${dealName}`,
+                `File: ${originalFileName}`,
+                ``,
+                `Analyze this PDF document. Extract all text, numbers, and financial data visible on every page.`,
+                ``,
+                `Return a JSON object with this exact structure:`,
+                `{`,
+                `  "detected_kind": "pnl | tax_return | balance_sheet | lease | broker_listing | broker_email_export | payroll | bank_statement | marketing_material | spreadsheet | document | unknown",`,
+                `  "generated_title": "string (max 8 words)",`,
+                `  "summary": "string (2-3 sentences with key financial figures)",`,
+                `  "confidence": "high | medium | low",`,
+                `  "extracted_signals": {`,
+                `    "extension": "pdf",`,
+                `    "mime_type": "application/pdf",`,
+                `    "keywords": ["string"]`,
+                `  },`,
+                `  "change_log_item": {`,
+                `    "change_type": "file_uploaded",`,
+                `    "title": "string",`,
+                `    "description": "string (one sentence with key numbers/facts from the document)"`,
+                `  }`,
+                `}`,
+              ].join("\n"),
+            },
+            {
+              type: "input_file",
+              filename: originalFileName,
+              file_data: `data:application/pdf;base64,${pdfBase64}`,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Responses API returns output_text directly
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw: string = (response as any).output_text ?? "";
+    const cleaned = raw
+      .replace(/^```(?:json)?\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+    return normalize(parsed, originalFileName, "application/pdf");
+  } catch (err) {
+    console.error("analyzePdfAttachment (Responses API) failed:", err);
+    // Fall back to text-only classification
+    return analyzeAttachment({
+      dealName,
+      driveFileName: originalFileName,
+      originalFileName,
+      mimeType: "application/pdf",
+      contentPreview: null,
+    });
+  }
+}
+
 const PHOTO_SYSTEM_PROMPT = `You are an attachment classification engine for DealHub, a business acquisition workspace.
 
 You are analyzing a PHOTO that was captured or uploaded for a deal.
