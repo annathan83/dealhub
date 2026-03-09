@@ -5,6 +5,43 @@ import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
 import type { Deal } from "@/types";
 
+// ─── Stat card ────────────────────────────────────────────────────────────────
+
+function StatCard({
+  href,
+  count,
+  label,
+  accent,
+  countColor,
+  labelColor,
+  borderColor,
+}: {
+  href: string;
+  count: number;
+  label: string;
+  accent: string;
+  countColor: string;
+  labelColor: string;
+  borderColor: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group shrink-0 flex flex-col gap-1 rounded-2xl bg-white border ${borderColor} px-5 py-4 shadow-sm hover:shadow-md transition-all min-w-[100px]`}
+    >
+      <span className={`text-2xl font-extrabold tabular-nums leading-none ${countColor}`}>
+        {count}
+      </span>
+      <span className={`text-xs font-semibold ${labelColor} flex items-center gap-1.5`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${accent}`} />
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -34,21 +71,20 @@ export default async function DashboardPage() {
   const dealList = (dealsResult.data ?? []) as Deal[];
   const isDriveConnected = !!driveResult.data;
 
-  // Compute summary stats
-  const totalDeals   = dealList.length;
-  const activeDeals  = dealList.filter((d) => d.status === "active").length;
-  const closedDeals  = dealList.filter((d) => d.status === "closed").length;
-  const passedDeals  = dealList.filter((d) => d.status === "passed").length;
+  const totalDeals  = dealList.length;
+  const activeDeals = dealList.filter((d) => d.status === "active").length;
+  const closedDeals = dealList.filter((d) => d.status === "closed").length;
+  const passedDeals = dealList.filter((d) => d.status === "passed").length;
 
   return (
     <div className="min-h-screen bg-slate-50">
       <AppHeader />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-safe">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-safe">
 
         {/* ── Google Drive onboarding banner ───────────────────────────── */}
         {!isDriveConnected && (
-          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 flex items-start gap-3">
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 flex items-start gap-3">
             <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
               <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -70,18 +106,20 @@ export default async function DashboardPage() {
         )}
 
         {/* ── Page header ──────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between gap-3 mb-5">
+        <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Pipeline</h1>
-            {totalDeals > 0 && (
-              <p className="text-sm text-slate-400 mt-0.5">
-                {totalDeals} deal{totalDeals !== 1 ? "s" : ""}
-              </p>
-            )}
+            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">
+              Pipeline
+            </h1>
+            <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">
+              {totalDeals === 0
+                ? "Track and evaluate acquisition opportunities."
+                : `${activeDeals} active · ${totalDeals} total deal${totalDeals !== 1 ? "s" : ""}`}
+            </p>
           </div>
           <Link
             href="/deals/new"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors shadow-sm shadow-indigo-200"
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors shadow-sm shadow-indigo-200"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -90,60 +128,53 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        {/* ── Compact summary stats ─────────────────────────────────────── */}
+        {/* ── Summary stat cards ────────────────────────────────────────── */}
         {totalDeals > 0 && (
-          <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
-            {/* Total */}
-            <Link
+          <div className="flex items-stretch gap-3 mb-7 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+            <StatCard
               href="/dashboard"
-              className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-slate-200 transition-colors"
-            >
-              <span className="text-lg font-bold text-slate-900 tabular-nums leading-none">{totalDeals}</span>
-              <span className="text-xs text-slate-400 font-medium">Total</span>
-            </Link>
-
-            <div className="w-px h-6 bg-slate-100 shrink-0" />
-
-            {/* Active */}
-            <Link
+              count={totalDeals}
+              label="Total"
+              accent="bg-slate-400"
+              countColor="text-slate-900"
+              labelColor="text-slate-500"
+              borderColor="border-slate-100 hover:border-slate-200"
+            />
+            <StatCard
               href="/dashboard?status=active"
-              className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-indigo-200 transition-colors"
-            >
-              <span className="text-lg font-bold text-indigo-600 tabular-nums leading-none">{activeDeals}</span>
-              <span className="text-xs text-slate-400 font-medium">Active</span>
-            </Link>
-
-            {/* Closed — only show if there are any */}
+              count={activeDeals}
+              label="Active"
+              accent="bg-indigo-500"
+              countColor="text-indigo-600"
+              labelColor="text-indigo-500"
+              borderColor="border-indigo-100 hover:border-indigo-200"
+            />
             {closedDeals > 0 && (
-              <>
-                <div className="w-px h-6 bg-slate-100 shrink-0" />
-                <Link
-                  href="/dashboard?status=closed"
-                  className="shrink-0 flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-3.5 py-2.5 shadow-sm hover:border-emerald-200 transition-colors"
-                >
-                  <span className="text-lg font-bold text-emerald-600 tabular-nums leading-none">{closedDeals}</span>
-                  <span className="text-xs text-emerald-500 font-medium">Closed</span>
-                </Link>
-              </>
+              <StatCard
+                href="/dashboard?status=closed"
+                count={closedDeals}
+                label="Closed"
+                accent="bg-emerald-500"
+                countColor="text-emerald-600"
+                labelColor="text-emerald-500"
+                borderColor="border-emerald-100 hover:border-emerald-200"
+              />
             )}
-
-            {/* Passed — only show if there are any */}
             {passedDeals > 0 && (
-              <>
-                <div className="w-px h-6 bg-slate-100 shrink-0" />
-                <Link
-                  href="/dashboard?status=passed"
-                  className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-slate-200 transition-colors"
-                >
-                  <span className="text-lg font-bold text-slate-500 tabular-nums leading-none">{passedDeals}</span>
-                  <span className="text-xs text-slate-400 font-medium">Passed</span>
-                </Link>
-              </>
+              <StatCard
+                href="/dashboard?status=passed"
+                count={passedDeals}
+                label="Passed"
+                accent="bg-slate-400"
+                countColor="text-slate-500"
+                labelColor="text-slate-400"
+                borderColor="border-slate-100 hover:border-slate-200"
+              />
             )}
           </div>
         )}
 
-        {/* ── Deals list ────────────────────────────────────────────────── */}
+        {/* ── Deals pipeline ────────────────────────────────────────────── */}
         <DealsTable deals={dealList} />
 
       </main>
