@@ -84,8 +84,14 @@ function buildPrompt(params: {
     `MIME type: ${params.mimeType}`,
   ];
 
-  if (params.contentPreview?.trim()) {
-    lines.push(`\nContent preview (first ~2000 chars):\n---\n${params.contentPreview.slice(0, 2000)}\n---`);
+  const preview = params.contentPreview?.trim() ?? "";
+  if (preview.startsWith("[Text extraction note:")) {
+    // Extraction produced a diagnostic note (e.g. scanned PDF, password-protected, corrupted).
+    // Include it so the AI can mention it in the summary.
+    lines.push(`\nExtraction note: ${preview}`);
+    lines.push(`Classify from filename and MIME type only. Mention the extraction issue in your summary.`);
+  } else if (preview) {
+    lines.push(`\nContent preview (first ~2000 chars):\n---\n${preview.slice(0, 2000)}\n---`);
   } else {
     lines.push(`\nNo text content available — classify from metadata only.`);
   }

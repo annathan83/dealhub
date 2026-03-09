@@ -63,13 +63,16 @@ async function extractPdf(
   }
 
   const buffer = await downloadDriveFile(derivative.user_id, derivative.google_file_id);
+  // extractTextFromBuffer never throws — returns a diagnostic note on failure
   const text = await extractTextFromBuffer(buffer, derivative.original_file_name);
+  const isNote = text.startsWith("[Text extraction note:");
 
   return {
     extractedText: text || null,
     structuredFields: {
-      char_count: text?.length ?? 0,
-      word_count: text ? text.split(/\s+/).filter(Boolean).length : 0,
+      char_count: isNote ? 0 : text.length,
+      word_count: isNote ? 0 : text.split(/\s+/).filter(Boolean).length,
+      extraction_note: isNote ? text : null,
     },
     model: "pdf-parse",
   };
@@ -168,13 +171,16 @@ async function extractSpreadsheet(
   }
 
   const buffer = await downloadDriveFile(derivative.user_id, derivative.google_file_id);
+  // extractTextFromBuffer never throws — returns a diagnostic note on failure
   const text = await extractTextFromBuffer(buffer, derivative.original_file_name);
+  const isNote = text.startsWith("[Text extraction note:");
 
   return {
     extractedText: text || null,
     structuredFields: {
-      char_count: text?.length ?? 0,
-      row_count: text ? text.split("\n").filter(Boolean).length : 0,
+      char_count: isNote ? 0 : text.length,
+      row_count: isNote ? 0 : text.split("\n").filter(Boolean).length,
+      extraction_note: isNote ? text : null,
     },
     model: "xlsx",
   };

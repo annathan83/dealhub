@@ -262,12 +262,10 @@ export async function POST(
             };
           }
         } else {
-          let contentPreview: string | null = null;
-          try {
-            contentPreview = await extractTextFromBuffer(buffer, file.name);
-          } catch {
-            // Unsupported type or extraction failed
-          }
+          // extractTextFromBuffer never throws — returns a diagnostic note on failure.
+          // Passing that note to the AI lets it still classify from filename + MIME type
+          // and include the extraction issue in the summary.
+          const contentPreview = await extractTextFromBuffer(buffer, file.name);
           const result = await analyzeAttachment({
             dealName: deal.name,
             driveFileName: driveMeta.googleFileName,
