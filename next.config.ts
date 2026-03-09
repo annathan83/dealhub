@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // pdfjs-dist/legacy is a large ESM package — keep it in Node.js runtime,
-  // not bundled by webpack, to avoid DOMMatrix / canvas issues.
-  serverExternalPackages: ["pdfjs-dist"],
+  // Keep heavy Node.js-only packages out of the webpack bundle.
+  // pdf-parse uses the file system at import time (test fixtures), so it must
+  // run in the Node.js runtime, not be bundled by webpack.
+  serverExternalPackages: ["pdf-parse", "mammoth", "xlsx"],
 };
 
 export default nextConfig;

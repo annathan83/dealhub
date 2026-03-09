@@ -28,7 +28,7 @@ export function validateFile(file: { size: number; type: string; name: string })
 
 /**
  * Extract plain text from a file buffer.
- * Returns the extracted text string.
+ * Returns the extracted text string, or throws if the type is unsupported.
  */
 export async function extractTextFromBuffer(
   buffer: Buffer,
@@ -41,28 +41,17 @@ export async function extractTextFromBuffer(
     return buffer.toString("utf-8");
   }
 
-  // ── PDF ───────────────────────────────────────────────────────────────────
+  // ── PDF — uses pdf-parse (works in Node.js serverless) ───────────────────
   if (ext === "pdf") {
-    // pdfjs-dist/legacy is the Node.js-compatible build of PDF.js
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const data = new Uint8Array(buffer);
-    const doc = await pdfjsLib.getDocument({
-      data,
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-    }).promise;
-
-    const pageTexts: string[] = [];
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ");
-      pageTexts.push(pageText);
-    }
-    return pageTexts.join("\n");
+    // Dynamic import keeps it out of the client bundle.
+    // pdf-parse is a lightweight wrapper around pdf.js that works in Node.js
+    // without requiring a worker thread or canvas/DOM APIs.
+    // pdf-parse v1 is a CJS module; cast to any to handle the default export shape
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfParse = (await import("pdf-parse")) as any;
+    const parse = pdfParse.default ?? pdfParse;
+    const result = await parse(buffer);
+    return result.text ?? "";
   }
 
   // ── Word (.docx) ──────────────────────────────────────────────────────────
@@ -74,7 +63,6 @@ export async function extractTextFromBuffer(
 
   // ── Word (.doc) — extract what we can as raw text ─────────────────────────
   if (ext === "doc") {
-    // .doc is a binary format; mammoth handles some .doc files too
     try {
       const mammoth = await import("mammoth");
       const result = await mammoth.extractRawText({ buffer });
@@ -82,7 +70,6 @@ export async function extractTextFromBuffer(
     } catch {
       // fall through to raw text attempt
     }
-    // Last resort: strip binary noise and return printable chars
     return buffer
       .toString("latin1")
       .replace(/[^\x20-\x7E\n\r\t]/g, " ")
@@ -90,7 +77,7 @@ export async function extractTextFromBuffer(
       .trim();
   }
 
-  // ── Excel (.xlsx) ─────────────────────────────────────────────────────────
+  // ── Excel (.xlsx / .xls) ──────────────────────────────────────────────────
   if (ext === "xlsx" || ext === "xls") {
     const XLSX = await import("xlsx");
     const workbook = XLSX.read(buffer, { type: "buffer" });
