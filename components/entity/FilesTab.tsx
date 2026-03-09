@@ -1,9 +1,12 @@
 "use client";
 
-import type { EntityFileWithText } from "@/types/entity";
+import type { Entity, EntityFileWithText } from "@/types/entity";
+import DeepScanPanel from "./DeepScanPanel";
 
 type Props = {
   files: EntityFileWithText[];
+  entity: Entity;
+  dealId: string;
 };
 
 function formatDate(iso: string): string {
@@ -96,25 +99,28 @@ function ExtractionStatusBadge({ file }: { file: EntityFileWithText }) {
   return null;
 }
 
-export default function FilesTab({ files }: Props) {
+export default function FilesTab({ files, entity, dealId }: Props) {
+  const uploadedFiles = files.filter((f) => f.source_type !== "pasted_text");
+  const textEntries = files.filter((f) => f.source_type === "pasted_text");
+
   if (files.length === 0) {
     return (
-      <div className="text-center py-16">
-        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center">
-          <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
+      <div className="space-y-4">
+        <div className="text-center py-12">
+          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center">
+            <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <p className="text-slate-500 text-sm font-medium">No files yet</p>
+          <p className="text-slate-400 text-xs mt-1">
+            Uploaded files will appear here with extraction status.
+          </p>
         </div>
-        <p className="text-slate-500 text-sm font-medium">No files yet</p>
-        <p className="text-slate-400 text-xs mt-1">
-          Uploaded files will appear here with extraction status.
-        </p>
+        <DeepScanPanel entity={entity} dealId={dealId} />
       </div>
     );
   }
-
-  const uploadedFiles = files.filter((f) => f.source_type !== "pasted_text");
-  const textEntries = files.filter((f) => f.source_type === "pasted_text");
 
   return (
     <div className="space-y-4">
@@ -175,6 +181,9 @@ export default function FilesTab({ files }: Props) {
           </div>
         </div>
       )}
+
+      {/* Deep Scan panel — always visible at the bottom of the Files tab */}
+      <DeepScanPanel entity={entity} dealId={dealId} />
     </div>
   );
 }

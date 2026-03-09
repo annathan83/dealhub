@@ -101,6 +101,62 @@ const EVENT_CONFIGS: Record<string, EventConfig> = {
     dotClass: "bg-purple-500",
     label: () => "AI analysis refreshed",
   },
+  fact_manually_confirmed: {
+    icon: (
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    dotClass: "bg-emerald-600",
+    label: (ev, factDefs) => {
+      const fd = ev.fact_definition_id ? factDefs.get(ev.fact_definition_id) : null;
+      const note = ev.metadata_json.note as string | undefined;
+      return `Confirmed: ${fd?.label ?? "fact"}${note ? ` — "${note}"` : ""}`;
+    },
+  },
+  fact_manually_edited: {
+    icon: (
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+    dotClass: "bg-indigo-600",
+    label: (ev, factDefs) => {
+      const fd = ev.fact_definition_id ? factDefs.get(ev.fact_definition_id) : null;
+      const changeType = ev.metadata_json.change_type as string | undefined;
+      const newVal = ev.metadata_json.new_value as string | undefined;
+      const note = ev.metadata_json.note as string | undefined;
+      const action = changeType === "override" ? "Overridden" : changeType === "mark_missing" ? "Marked missing" : changeType === "mark_conflict" ? "Marked conflict" : "Edited";
+      return `${action}: ${fd?.label ?? "fact"}${newVal ? ` → ${newVal}` : ""}${note ? ` — "${note}"` : ""}`;
+    },
+  },
+  deep_scan_started: {
+    icon: (
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    ),
+    dotClass: "bg-slate-500",
+    label: () => "Deep scan started",
+  },
+  deep_scan_completed: {
+    icon: (
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    ),
+    dotClass: "bg-teal-500",
+    label: (ev) => {
+      const added = ev.metadata_json.facts_inserted as number | undefined;
+      const updated = ev.metadata_json.facts_updated as number | undefined;
+      const conflicts = ev.metadata_json.conflicts_found as number | undefined;
+      const parts = [];
+      if (added) parts.push(`${added} added`);
+      if (updated) parts.push(`${updated} updated`);
+      if (conflicts) parts.push(`${conflicts} conflicts`);
+      return `Deep scan completed${parts.length ? ` (${parts.join(", ")})` : ""}`;
+    },
+  },
 };
 
 const DEFAULT_CONFIG: EventConfig = {

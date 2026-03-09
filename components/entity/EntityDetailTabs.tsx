@@ -162,6 +162,7 @@ export default function EntityDetailTabs({ data, scorecard, dealId }: Props) {
           factValues={data.fact_values}
           factEvidence={data.fact_evidence}
           files={data.files}
+          dealId={dealId}
         />
       )}
       {activeTab === "kpi" && (
@@ -173,7 +174,7 @@ export default function EntityDetailTabs({ data, scorecard, dealId }: Props) {
         />
       )}
       {activeTab === "files" && (
-        <FilesTab files={data.files} />
+        <FilesTab files={data.files} entity={data.entity} dealId={dealId} />
       )}
       {activeTab === "history" && (
         <HistoryTab
