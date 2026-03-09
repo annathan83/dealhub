@@ -16,17 +16,25 @@ export default async function DashboardPage() {
     redirect("/signin");
   }
 
-  const { data: deals, error } = await supabase
-    .from("deals")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const [dealsResult, driveResult] = await Promise.all([
+    supabase
+      .from("deals")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("google_oauth_tokens")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
 
-  if (error) {
-    console.error("Failed to fetch deals:", error.message);
+  if (dealsResult.error) {
+    console.error("Failed to fetch deals:", dealsResult.error.message);
   }
 
-  const dealList = (deals ?? []) as Deal[];
+  const dealList = (dealsResult.data ?? []) as Deal[];
+  const isDriveConnected = !!driveResult.data;
 
   const statusCounts = dealList.reduce<Record<string, number>>((acc, d) => {
     acc[d.status] = (acc[d.status] ?? 0) + 1;
@@ -38,6 +46,33 @@ export default async function DashboardPage() {
       <AppHeader />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+
+        {/* ── Google Drive onboarding banner ── */}
+        {!isDriveConnected && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-900">Connect Google Drive to get started</p>
+              <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                DealHub stores all your files, photos, and recordings in your own Google Drive. You need to connect it before you can add deals or upload files.
+              </p>
+            </div>
+            <Link
+              href="/settings/integrations"
+              className="flex-shrink-0 inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 px-4 py-2 text-sm font-semibold text-white transition-colors shadow-sm"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              Connect Google Drive
+            </Link>
+          </div>
+        )}
+
         {/* Page header */}
         <div className="flex items-start justify-between gap-4 mb-8">
           <div>

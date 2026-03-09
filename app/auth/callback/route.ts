@@ -30,6 +30,23 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // For new users (no Google Drive connected yet) send them straight to
+      // the integrations page so they connect Drive before doing anything else.
+      if (next === "/dashboard") {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: token } = await supabase
+            .from("google_oauth_tokens")
+            .select("id")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (!token) {
+            return NextResponse.redirect(`${origin}/settings/integrations`);
+          }
+        }
+      }
+
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
