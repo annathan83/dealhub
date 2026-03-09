@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Deal name is required." }, { status: 422 });
   }
 
-  // ── 1. Insert the deal row ────────────────────────────────────────────────
+  // ── 1. Insert the deal row (deal_number assigned automatically by DB trigger) ─
   const { data: deal, error: insertError } = await supabase
     .from("deals")
     .insert({
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       sde: body.sde?.trim() || null,
       multiple: body.multiple?.trim() || null,
     })
-    .select("id, name")
+    .select("id, name, deal_number")
     .single();
 
   if (insertError || !deal) {
@@ -67,11 +67,16 @@ export async function POST(request: NextRequest) {
   }
 
   // ── 2. Provision Drive folder + subfolders (non-fatal if Drive not connected) ─
-  // Creates: DealHub/{name}__{id}/raw/, /derived/, /intelligence/
+  // Creates: DealHub/00001_Deal-Name/raw/, /derived/, /intelligence/
   // If Drive isn't connected yet the folders are created lazily on first upload.
   let driveFolderError: string | null = null;
   try {
-    await ensureDealSubfolders(user.id, deal.id as string, deal.name as string);
+    await ensureDealSubfolders(
+      user.id,
+      deal.id as string,
+      deal.name as string,
+      deal.deal_number as number
+    );
   } catch (err) {
     // Non-fatal — folders will be created lazily on first upload if this fails.
     driveFolderError = err instanceof Error ? err.message : "Drive folders could not be created.";
@@ -79,7 +84,7 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(
-    { id: deal.id, name: deal.name, driveFolderError },
+    { id: deal.id, name: deal.name, deal_number: deal.deal_number, driveFolderError },
     { status: 201 }
   );
 }

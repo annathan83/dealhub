@@ -11,6 +11,7 @@ export type DealStatus =
 export type Deal = {
   id: string;
   user_id: string;
+  deal_number: number;
   name: string;
   description: string | null;
   industry: string | null;

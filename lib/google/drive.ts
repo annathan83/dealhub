@@ -191,31 +191,47 @@ export async function ensureDealHubRootFolder(userId: string): Promise<string> {
   return folderId;
 }
 
+/** Format a deal number as a zero-padded 5-digit string, e.g. 1 → "00001" */
+export function formatDealNumber(n: number): string {
+  return String(n).padStart(5, "0");
+}
+
+/**
+ * Build the canonical Drive folder name for a deal.
+ * Format: 00001_Deal-Name
+ */
+export function buildDealFolderName(dealNumber: number, dealName: string): string {
+  return `${formatDealNumber(dealNumber)}_${sanitizeName(dealName)}`;
+}
+
 /**
  * Ensure a deal-specific folder exists inside the DealHub root folder.
  * Stores the folder ID on the deal row.
+ * Folder name format: 00001_Deal-Name
  */
 export async function ensureDealFolder(
   userId: string,
   dealId: string,
-  dealName: string
+  dealName: string,
+  dealNumber?: number
 ): Promise<string> {
   const supabase = await createClient();
 
   // Check if deal already has a folder
   const { data: dealRow } = await supabase
     .from("deals")
-    .select("google_drive_folder_id")
+    .select("google_drive_folder_id, deal_number")
     .eq("id", dealId)
     .eq("user_id", userId)
     .single();
 
-  if (dealRow?.google_drive_folder_id) return dealRow.google_drive_folder_id;
+  if (dealRow?.google_drive_folder_id) return dealRow.google_drive_folder_id as string;
 
   const drive = await getAuthorizedDriveClient(userId);
   const rootFolderId = await ensureDealHubRootFolder(userId);
 
-  const folderName = `${dealId}_${sanitizeName(dealName)}`;
+  const num = dealNumber ?? (dealRow?.deal_number as number | null) ?? 0;
+  const folderName = buildDealFolderName(num, dealName);
   let folderId = await findFolder(drive, folderName, rootFolderId);
   if (!folderId) folderId = await createFolder(drive, folderName, rootFolderId);
 
@@ -239,10 +255,11 @@ export async function ensureDealFolder(
 export async function ensureDealSubfolders(
   userId: string,
   dealId: string,
-  dealName: string
+  dealName: string,
+  dealNumber?: number
 ): Promise<Record<DealSubfolder, string>> {
   const drive = await getAuthorizedDriveClient(userId);
-  const dealFolderId = await ensureDealFolder(userId, dealId, dealName);
+  const dealFolderId = await ensureDealFolder(userId, dealId, dealName, dealNumber);
 
   const subfolderNames: DealSubfolder[] = ["raw", "derived", "intelligence"];
   const result = {} as Record<DealSubfolder, string>;
@@ -266,9 +283,10 @@ export async function getDealSubfolderId(
   userId: string,
   dealId: string,
   dealName: string,
-  subfolder: DealSubfolder
+  subfolder: DealSubfolder,
+  dealNumber?: number
 ): Promise<string> {
-  const subfolders = await ensureDealSubfolders(userId, dealId, dealName);
+  const subfolders = await ensureDealSubfolders(userId, dealId, dealName, dealNumber);
   return subfolders[subfolder];
 }
 

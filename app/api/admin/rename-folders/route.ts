@@ -8,7 +8,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { getAuthorizedDriveClient, sanitizeName } from "@/lib/google/drive";
+import { getAuthorizedDriveClient, buildDealFolderName } from "@/lib/google/drive";
 
 export async function GET(request: NextRequest) {
   const secret = request.nextUrl.searchParams.get("secret");
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   // Fetch all deals belonging to this user that have a Drive folder
   const { data: deals, error } = await supabase
     .from("deals")
-    .select("id, name, google_drive_folder_id")
+    .select("id, name, deal_number, google_drive_folder_id")
     .eq("user_id", user.id)
     .not("google_drive_folder_id", "is", null);
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   const results = [];
 
   for (const deal of deals ?? []) {
-    const newName = `${deal.id}_${sanitizeName(deal.name)}`;
+    const newName = buildDealFolderName(deal.deal_number as number, deal.name as string);
     try {
       const { data: file } = await drive.files.get({
         fileId: deal.google_drive_folder_id as string,
