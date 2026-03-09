@@ -41,28 +41,30 @@ export default function AddDealEntryForm({ dealId }: { dealId: string }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       {error && (
-        <div className="rounded-md bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-600">
+        <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5 text-xs text-red-600">
           {error}
         </div>
       )}
 
-      <p className="text-xs text-slate-500 leading-relaxed">
-        Paste listing text, broker emails, financial details, or your own notes.
+      <p className="text-xs text-slate-400 leading-relaxed">
+        Paste a listing, broker email, financial summary, or your own notes.
       </p>
 
       <textarea
-        rows={8}
+        rows={6}
         value={content}
         onChange={(e) => setContent(e.target.value)}
         placeholder="Paste or type anything relevant to this deal…"
         disabled={loading}
-        className="w-full rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition resize-y disabled:opacity-60 min-h-[140px]"
+        className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition resize-y disabled:opacity-60 min-h-[120px]"
       />
 
+      {/* Full-width on mobile for easy tap, auto-width on sm+ */}
       <button
         type="submit"
         disabled={loading || !content.trim()}
-        className="self-start inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="w-full sm:w-auto sm:self-start inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        style={{ minHeight: 48 }}
       >
         {loading ? (
           <>
