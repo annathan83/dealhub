@@ -65,6 +65,10 @@ function normalizeEntityFile(row: Record<string, unknown>): EntityFile {
     uploaded_by: (row.uploaded_by as string | null) ?? null,
     uploaded_at: row.uploaded_at as string,
     metadata_json: (row.metadata_json as Record<string, unknown>) ?? {},
+    web_view_link: (row.web_view_link as string | null) ?? null,
+    drive_created_time: (row.drive_created_time as string | null) ?? null,
+    title: (row.title as string | null) ?? null,
+    summary: (row.summary as string | null) ?? null,
   };
 }
 
@@ -422,6 +426,10 @@ export async function insertEntityFile(params: {
   document_type?: string | null;
   uploaded_by?: string | null;
   metadata_json?: Record<string, unknown>;
+  title?: string | null;
+  summary?: string | null;
+  web_view_link?: string | null;
+  drive_created_time?: string | null;
 }): Promise<EntityFile | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -437,6 +445,10 @@ export async function insertEntityFile(params: {
       document_type: params.document_type ?? null,
       uploaded_by: params.uploaded_by ?? null,
       metadata_json: params.metadata_json ?? {},
+      title: params.title ?? null,
+      summary: params.summary ?? null,
+      web_view_link: params.web_view_link ?? null,
+      drive_created_time: params.drive_created_time ?? null,
     })
     .select("*")
     .single();

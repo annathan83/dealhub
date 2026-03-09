@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 export default function DealSourceForm({ dealId }: { dealId: string }) {
   const router = useRouter();
@@ -19,33 +18,27 @@ export default function DealSourceForm({ dealId }: { dealId: string }) {
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const res = await fetch(`/api/deals/${dealId}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: content.trim() }),
+      });
 
-    if (!user) {
-      setError("You must be signed in.");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data as { error?: string }).error ?? "Failed to save entry.");
+        setLoading(false);
+        return;
+      }
+
+      setContent("");
       setLoading(false);
-      return;
-    }
-
-    const { error: insertError } = await supabase.from("deal_sources").insert({
-      deal_id: dealId,
-      user_id: user.id,
-      content: content.trim(),
-      // title and source_type are omitted — populated later by AI analysis
-    });
-
-    if (insertError) {
-      setError(insertError.message);
+      router.refresh();
+    } catch {
+      setError("Network error. Please try again.");
       setLoading(false);
-      return;
     }
-
-    setContent("");
-    setLoading(false);
-    router.refresh();
   }
 
   return (

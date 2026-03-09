@@ -204,32 +204,7 @@ export async function POST(
         analysis = { ...fallback, summary: fallback.description };
       }
 
-      // ── 3. Create timeline entry (deal_sources + deal_source_analyses) ────
-      const entryContent = `[File: ${driveMeta.googleFileName}]\n${analysis.description}`;
-      const { data: sourceData } = await supabase
-        .from("deal_sources")
-        .insert({ deal_id: dealId, user_id: user.id, content: entryContent, title: analysis.title, source_type: "file" })
-        .select("id")
-        .single();
-
-      const sourceId = sourceData?.id as string | null ?? null;
-
-      if (sourceId) {
-        supabase.from("deal_source_analyses").insert({
-          deal_source_id: sourceId, deal_id: dealId, user_id: user.id,
-          generated_title: analysis.title, detected_type: "file",
-          summary: analysis.summary, extracted_facts: {}, red_flags: [], missing_information: [], broker_questions: [],
-        }).then(({ error }) => { if (error) console.error("deal_source_analyses insert failed:", error.message); });
-      }
-
-      // ── 4. Log to deal_change_log ─────────────────────────────────────────
-      supabase.from("deal_change_log").insert({
-        deal_id: dealId, user_id: user.id, deal_source_id: sourceId,
-        related_google_file_id: driveMeta.googleFileId,
-        change_type: "file_uploaded", title: analysis.title, description: analysis.description,
-      }).then(({ error }) => { if (error) console.error("deal_change_log insert failed:", error.message); });
-
-      // ── 5. Entity pipeline: text → facts → KPI scoring (non-fatal) ────────
+      // ── 3. Entity pipeline: text → facts → triage summary ────────────────
       const sourceType = isImage
         ? (captureSource === "camera" ? "webcam_photo" : "uploaded_image")
         : isAudio ? "audio_recording" : "uploaded_file";
@@ -243,6 +218,10 @@ export async function POST(
         originalFileName: file.name,
         mimeType, fileSizeBytes: file.size,
         sourceType, extractedText: extractedText ?? null, extractionMethod,
+        title: analysis.title,
+        summary: analysis.summary,
+        webViewLink: driveMeta.webViewLink ?? null,
+        driveCreatedTime: driveMeta.createdTime ?? null,
       }).catch((err) => console.error("[entity pipeline] ingestFromDealUpload failed:", err));
 
       results.push({ fileName: file.name, success: true, googleFileId: driveMeta.googleFileId });

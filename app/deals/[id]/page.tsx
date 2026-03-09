@@ -30,14 +30,11 @@ export default async function DealPage({
   if (!vm) notFound();
 
   const {
-    deal, sources, analyses, changeLog, driveFiles,
-    entityData, kpiScorecard,
+    deal, entityData, kpiScorecard,
     triageSummary,
     deepAnalysis, deepAnalysisStale, deepAnalysisRunAt, latestSourceAt,
+    entityEvents, entityFiles,
   } = vm;
-
-  const analysisMap = new Map(analyses.map((a) => [a.deal_source_id, a]));
-  const sourcesWithAnalysis = sources.map((s) => ({ ...s, analysis: analysisMap.get(s.id) ?? null }));
 
   const { data: tokenRow } = await supabase
     .from("google_oauth_tokens")
@@ -47,15 +44,22 @@ export default async function DealPage({
 
   const isDriveConnected = !!tokenRow;
 
-  const syncedDriveFiles = isDriveConnected
-    ? await syncAndListDealDriveFiles(user.id, id).catch(() => driveFiles)
-    : driveFiles;
+  // Sync Drive files and get merged list (entity_files with Drive metadata)
+  const syncedFiles = isDriveConnected
+    ? await syncAndListDealDriveFiles(user.id, id).catch(() => entityFiles)
+    : entityFiles;
 
   // Show "processing" spinner if text has been added but triage hasn't completed yet
   const isTriageProcessing =
-    sources.length > 0 &&
+    entityFiles.length > 0 &&
     !triageSummary &&
     (deal.status === "new" || deal.status === "reviewing");
+
+  // Split files: text entries for the timeline, all files for the files panel
+  const textEntries = syncedFiles.filter(
+    (f) => f.source_type === "pasted_text" || f.metadata_json?.is_text_entry === true
+  );
+  const allFiles = syncedFiles;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -125,23 +129,23 @@ export default async function DealPage({
 
             <WorkspacePanel
               title="Timeline"
-              subtitle={sources.length > 0 ? `${sources.length} entr${sources.length === 1 ? "y" : "ies"}` : undefined}
-              action={sources.length > 0 ? <DownloadEntriesButton dealName={deal.name} sources={sourcesWithAnalysis} /> : undefined}
+              subtitle={textEntries.length > 0 ? `${textEntries.length} entr${textEntries.length === 1 ? "y" : "ies"}` : undefined}
+              action={textEntries.length > 0 ? <DownloadEntriesButton dealName={deal.name} files={textEntries} /> : undefined}
             >
-              <DealEntriesList sources={sourcesWithAnalysis} dealId={deal.id} />
+              <DealEntriesList files={textEntries} dealId={deal.id} />
             </WorkspacePanel>
 
             <DealFilesPanel
               isConnected={isDriveConnected}
               dealFolderId={deal.google_drive_folder_id}
-              files={syncedDriveFiles}
+              files={allFiles}
               dealId={deal.id}
             />
           </div>
 
           {/* Right column — activity log */}
           <div className="flex flex-col gap-4 lg:sticky lg:top-20 order-1 lg:order-2">
-            <ChangeLogPanel changeLog={changeLog} />
+            <ChangeLogPanel events={entityEvents} />
           </div>
         </div>
       </main>

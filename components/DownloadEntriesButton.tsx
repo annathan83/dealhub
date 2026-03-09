@@ -1,26 +1,18 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import type { DealSource, DealSourceAnalysis } from "@/types";
+import type { EntityFile } from "@/types/entity";
 
-const TYPE_LABELS: Record<string, string> = {
-  listing: "Listing",
-  broker_email: "Broker Email",
-  financial_summary: "Financial",
-  note: "Note",
-  unknown: "Entry",
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  pasted_text:    "Note",
+  uploaded_file:  "File",
+  uploaded_image: "Image",
+  webcam_photo:   "Photo",
+  audio_recording:"Audio",
+  broker_listing: "Listing",
+  broker_email:   "Email",
+  manual:         "File",
 };
-
-function extractFileName(content: string): string | null {
-  const match = content.match(/^\[File:\s*(.+?)\]/);
-  return match ? match[1].trim() : null;
-}
-
-function contentFallback(content: string): string {
-  const stripped = content.replace(/^\[File:[^\]]+\]\s*/i, "").trim();
-  if (!stripped) return "";
-  return stripped.length > 200 ? stripped.slice(0, 200).trimEnd() + "…" : stripped;
-}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -32,31 +24,21 @@ function formatDate(iso: string) {
   });
 }
 
-type SourceWithAnalysis = DealSource & { analysis: DealSourceAnalysis | null };
-
 type Props = {
   dealName: string;
-  sources: SourceWithAnalysis[];
+  files: EntityFile[];
 };
 
-export default function DownloadEntriesButton({ dealName, sources }: Props) {
-  if (sources.length === 0) return null;
+export default function DownloadEntriesButton({ dealName, files }: Props) {
+  if (files.length === 0) return null;
 
   function handleDownload() {
-    const rows = sources.map((source) => {
-      const fileName = extractFileName(source.content);
-      const isFileEntry = !!fileName;
-      const type = isFileEntry ? "New File" : (TYPE_LABELS[source.analysis?.detected_type ?? "unknown"] ?? "Entry");
-      const title = isFileEntry ? fileName : (source.analysis?.generated_title ?? source.title ?? "Untitled Entry");
-      const summary = isFileEntry ? "" : (source.analysis?.summary ?? contentFallback(source.content));
-
-      return {
-        Type: type,
-        Title: title,
-        Summary: summary,
-        Date: formatDate(source.created_at),
-      };
-    });
+    const rows = files.map((file) => ({
+      Type: SOURCE_TYPE_LABELS[file.source_type ?? ""] ?? "Entry",
+      Title: file.title ?? file.file_name ?? "Untitled",
+      Summary: file.summary ?? "",
+      Date: formatDate(file.uploaded_at),
+    }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();

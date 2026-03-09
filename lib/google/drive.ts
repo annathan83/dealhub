@@ -336,19 +336,6 @@ export async function saveRawEntryToDrive(params: {
     createdTime: file.createdTime ?? null,
   };
 
-  // Persist metadata in Supabase
-  await supabase.from("deal_drive_files").insert({
-    user_id: userId,
-    deal_id: dealId,
-    google_file_id: metadata.googleFileId,
-    google_file_name: metadata.googleFileName,
-    original_file_name: null,
-    mime_type: metadata.mimeType,
-    web_view_link: metadata.webViewLink,
-    created_time: metadata.createdTime,
-    source_kind: "raw_entry",
-  });
-
   return metadata;
 }
 
@@ -411,18 +398,6 @@ export async function uploadFileToDealFolder(params: {
     webViewLink: file.webViewLink ?? null,
     createdTime: file.createdTime ?? null,
   };
-
-  await supabase.from("deal_drive_files").insert({
-    user_id: userId,
-    deal_id: dealId,
-    google_file_id: metadata.googleFileId,
-    google_file_name: metadata.googleFileName,
-    original_file_name: originalFileName,
-    mime_type: metadata.mimeType,
-    web_view_link: metadata.webViewLink,
-    created_time: metadata.createdTime,
-    source_kind: sourceKind,
-  });
 
   return metadata;
 }
@@ -508,121 +483,138 @@ export async function saveTextNoteToDrive(params: {
 }
 
 /**
- * Sync the deal's Google Drive folder contents into Supabase, then return
+ * Sync the deal's Google Drive folder contents into entity_files, then return
  * the full merged list ordered newest first.
  *
- * - Files already tracked in Supabase are left untouched.
- * - Files present in Drive but missing from Supabase (e.g. manually dropped
- *   into the folder) are upserted with source_kind = "manual".
- * - Files in Supabase but no longer in Drive are NOT deleted (preserve history).
+ * - Files already tracked (by storage_path = googleFileId) are left untouched.
+ * - Files present in Drive but missing from entity_files (e.g. manually dropped
+ *   into the folder) are inserted with source_type = "manual".
+ * - Files in entity_files but no longer in Drive are NOT deleted (preserve history).
  * - If Drive is not connected or the folder doesn't exist yet, falls back to
- *   the Supabase-only list silently.
+ *   the entity_files-only list silently.
  */
-export async function syncAndListDealDriveFiles(userId: string, dealId: string): Promise<import("@/types").DealDriveFile[]> {
+export async function syncAndListDealDriveFiles(userId: string, dealId: string): Promise<import("@/types/entity").EntityFile[]> {
   const supabase = await createClient();
 
-  // ── 1. Try to fetch live file list from Drive ─────────────────────────────
-  try {
-    // Need the folder ID — read from the deal row
-    const { data: dealRow } = await supabase
-      .from("deals")
-      .select("google_drive_folder_id")
-      .eq("id", dealId)
-      .eq("user_id", userId)
-      .single();
+  // ── 1. Resolve entity for this deal ──────────────────────────────────────
+  const { data: entityRow } = await supabase
+    .from("entities")
+    .select("id")
+    .eq("legacy_deal_id", dealId)
+    .eq("owner_user_id", userId)
+    .maybeSingle();
 
-    const folderId = dealRow?.google_drive_folder_id as string | null;
+  const entityId = entityRow?.id as string | null;
 
-    if (folderId) {
-      const drive = await getAuthorizedDriveClient(userId);
+  // ── 2. Try to fetch live file list from Drive ─────────────────────────────
+  if (entityId) {
+    try {
+      const { data: dealRow } = await supabase
+        .from("deals")
+        .select("google_drive_folder_id")
+        .eq("id", dealId)
+        .eq("user_id", userId)
+        .single();
 
-      // List all non-trashed, non-folder files in the deal folder
-      const res = await drive.files.list({
-        q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
-        fields: "files(id,name,mimeType,webViewLink,createdTime)",
-        spaces: "drive",
-        pageSize: 200,
-      });
+      const folderId = dealRow?.google_drive_folder_id as string | null;
 
-      const driveFiles = res.data.files ?? [];
+      if (folderId) {
+        const drive = await getAuthorizedDriveClient(userId);
 
-      if (driveFiles.length > 0) {
-        // Fetch the google_file_ids we already know about for this deal
-        const { data: existing } = await supabase
-          .from("deal_drive_files")
-          .select("google_file_id")
-          .eq("deal_id", dealId)
-          .eq("user_id", userId);
+        const res = await drive.files.list({
+          q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
+          fields: "files(id,name,mimeType,webViewLink,createdTime)",
+          spaces: "drive",
+          pageSize: 200,
+        });
 
-        const knownIds = new Set((existing ?? []).map((r) => r.google_file_id as string));
+        const driveFiles = res.data.files ?? [];
 
-        // Upsert any Drive files not yet in Supabase
-        const newFiles = driveFiles.filter((f) => f.id && !knownIds.has(f.id));
+        if (driveFiles.length > 0) {
+          // Fetch storage_paths (= googleFileId) we already know about
+          const { data: existing } = await supabase
+            .from("entity_files")
+            .select("storage_path")
+            .eq("entity_id", entityId);
 
-        if (newFiles.length > 0) {
-          const rows = newFiles.map((f) => ({
-            user_id: userId,
-            deal_id: dealId,
-            google_file_id: f.id!,
-            google_file_name: f.name ?? f.id!,
-            // original_file_name intentionally omitted for sync rows — unknown for Drive-only files
-            mime_type: f.mimeType ?? null,
-            web_view_link: f.webViewLink ?? null,
-            created_time: f.createdTime ?? null,
-            source_kind: "manual",
-          }));
+          const knownPaths = new Set((existing ?? []).map((r) => r.storage_path as string));
 
-          const { error: insertErr } = await supabase
-            .from("deal_drive_files")
-            .insert(rows);
+          const newFiles = driveFiles.filter((f) => f.id && !knownPaths.has(f.id));
 
-          if (insertErr) {
-            console.error("Drive sync insert failed:", insertErr.message);
+          if (newFiles.length > 0) {
+            const rows = newFiles.map((f) => ({
+              entity_id: entityId,
+              legacy_deal_id: dealId,
+              storage_path: f.id!,
+              file_name: f.name ?? f.id!,
+              mime_type: f.mimeType ?? null,
+              source_type: "manual",
+              uploaded_by: userId,
+              metadata_json: { google_file_id: f.id! },
+              web_view_link: f.webViewLink ?? null,
+              drive_created_time: f.createdTime ?? null,
+            }));
+
+            const { error: insertErr } = await supabase
+              .from("entity_files")
+              .insert(rows);
+
+            if (insertErr) {
+              console.error("Drive sync insert failed:", insertErr.message);
+            }
           }
         }
       }
+    } catch (syncErr) {
+      console.warn("Drive sync skipped:", (syncErr as Error).message);
     }
-  } catch (syncErr) {
-    // Non-fatal — Drive may not be connected, token may be expired, etc.
-    console.warn("Drive sync skipped:", (syncErr as Error).message);
   }
 
-  // ── 2. Return the full Supabase list (now includes any newly synced files) ─
+  // ── 3. Return the full entity_files list for this deal ────────────────────
+  if (!entityId) return [];
+
   const { data, error } = await supabase
-    .from("deal_drive_files")
+    .from("entity_files")
     .select("*")
-    .eq("deal_id", dealId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .eq("entity_id", entityId)
+    .order("uploaded_at", { ascending: false });
 
   if (error) {
-    console.error("listDealDriveFiles error:", error.message);
+    console.error("syncAndListDealDriveFiles error:", error.message);
     return [];
   }
 
-  return data ?? [];
+  return (data ?? []) as import("@/types/entity").EntityFile[];
 }
 
 /**
  * Return the deal's Drive files from Supabase metadata only, newest first.
  * Use syncAndListDealDriveFiles when you need a live-synced list.
  */
-export async function listDealDriveFiles(userId: string, dealId: string) {
+export async function listDealDriveFiles(userId: string, dealId: string): Promise<import("@/types/entity").EntityFile[]> {
   const supabase = await createClient();
 
+  const { data: entityRow } = await supabase
+    .from("entities")
+    .select("id")
+    .eq("legacy_deal_id", dealId)
+    .eq("owner_user_id", userId)
+    .maybeSingle();
+
+  if (!entityRow?.id) return [];
+
   const { data, error } = await supabase
-    .from("deal_drive_files")
+    .from("entity_files")
     .select("*")
-    .eq("deal_id", dealId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .eq("entity_id", entityRow.id as string)
+    .order("uploaded_at", { ascending: false });
 
   if (error) {
     console.error("listDealDriveFiles error:", error.message);
     return [];
   }
 
-  return data ?? [];
+  return (data ?? []) as import("@/types/entity").EntityFile[];
 }
 
 /**

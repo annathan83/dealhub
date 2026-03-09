@@ -36,6 +36,10 @@ export type IngestFromDealUploadParams = {
   documentType?: string | null;
   extractedText?: string | null;
   extractionMethod?: string;
+  title?: string | null;
+  summary?: string | null;
+  webViewLink?: string | null;
+  driveCreatedTime?: string | null;
 };
 
 export type IngestFromDealEntryParams = {
@@ -43,6 +47,7 @@ export type IngestFromDealEntryParams = {
   userId: string;
   entryContent: string;
   entryTitle?: string | null;
+  entrySummary?: string | null;
 };
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -157,6 +162,10 @@ export async function ingestFromDealUpload(
       document_type: params.documentType ?? null,
       uploaded_by: params.userId,
       metadata_json: { google_file_id: params.googleFileId },
+      title: params.title ?? null,
+      summary: params.summary ?? null,
+      web_view_link: params.webViewLink ?? null,
+      drive_created_time: params.driveCreatedTime ?? null,
     });
 
     if (!entityFile) return;
@@ -235,6 +244,10 @@ export async function ingestFromDealEntry(
       document_type: null,
       uploaded_by: params.userId,
       metadata_json: { is_text_entry: true },
+      title: params.entryTitle ?? null,
+      summary: params.entrySummary ?? null,
+      web_view_link: null,
+      drive_created_time: null,
     });
 
     if (!entityFile) return;

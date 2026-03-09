@@ -2,9 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { saveTextNoteToDrive } from "@/lib/google/drive";
+import { logDealEdited } from "@/lib/services/entity/entityEventService";
 import type { Deal } from "@/types";
 
-const VALID_STATUSES = ["new", "reviewing", "due_diligence", "offer", "closed", "passed"];
+const VALID_STATUSES = [
+  "new", "triaged", "investigating", "passed", "loi", "acquired", "archived",
+  // legacy statuses kept for backwards compatibility
+  "reviewing", "due_diligence", "offer", "closed",
+];
 
 function parseMoney(raw: string | null): number | null {
   if (!raw) return null;
@@ -21,7 +26,6 @@ function computeMultiple(asking_price: string | null, sde: string | null): strin
   return `${(price / sdeVal).toFixed(1)}x`;
 }
 
-// Human-readable labels for diff output
 const FIELD_LABELS: Record<string, string> = {
   name: "Deal Name",
   description: "Description",
@@ -35,11 +39,16 @@ const FIELD_LABELS: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   new: "New",
+  triaged: "Triaged",
+  investigating: "Investigating",
+  passed: "Passed",
+  loi: "LOI",
+  acquired: "Acquired",
+  archived: "Archived",
   reviewing: "Reviewing",
   due_diligence: "Due Diligence",
   offer: "Offer",
   closed: "Closed",
-  passed: "Passed",
 };
 
 function formatValue(field: string, value: string | null): string {
@@ -96,7 +105,6 @@ export async function PATCH(
   const deal = current as Deal;
 
   // ── Build update payload ──────────────────────────────────────────────────
-  // Accept only known editable fields
   const editableFields = [
     "name", "description", "industry", "location",
     "status", "asking_price", "sde", "multiple",
@@ -126,7 +134,6 @@ export async function PATCH(
   }
 
   // ── Auto-compute multiple ─────────────────────────────────────────────────
-  // Use the incoming value if provided, otherwise fall back to the current stored value
   const effectivePrice = "asking_price" in updates ? updates.asking_price : deal.asking_price;
   const effectiveSde = "sde" in updates ? updates.sde : deal.sde;
   updates.multiple = computeMultiple(effectivePrice ?? null, effectiveSde ?? null);
@@ -151,7 +158,6 @@ export async function PATCH(
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  // Nothing actually changed — return early, no log needed
   if (changes.length === 0) {
     return NextResponse.json({ ok: true, changes: [] });
   }
@@ -167,20 +173,23 @@ export async function PATCH(
       ? `${FIELD_LABELS[changes[0].field] ?? changes[0].field} updated`
       : `${changes.length} fields updated`;
 
-  const logDescription = changeLines.join("\n");
-
   const dealName = (updates.name ?? deal.name) as string;
 
-  // ── Write change-log entry ────────────────────────────────────────────────
-  await supabase.from("deal_change_log").insert({
-    deal_id: dealId,
-    user_id: user.id,
-    deal_source_id: null,
-    related_google_file_id: null,
-    change_type: "deal_edited",
-    title: logTitle,
-    description: logDescription,
-  });
+  // ── Log to entity_events (non-fatal) ─────────────────────────────────────
+  const { data: entityRow } = await supabase
+    .from("entities")
+    .select("id")
+    .eq("legacy_deal_id", dealId)
+    .eq("owner_user_id", user.id)
+    .maybeSingle();
+
+  if (entityRow?.id) {
+    logDealEdited(entityRow.id as string, {
+      title: logTitle,
+      description: changeLines.join("\n"),
+      changes: changes.map(({ field, from, to }) => ({ field, from, to })),
+    }).catch(() => {});
+  }
 
   // ── Save Drive note (non-fatal) ───────────────────────────────────────────
   const { data: tokenRow } = await supabase

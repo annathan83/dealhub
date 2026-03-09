@@ -1,4 +1,4 @@
-import type { DealDriveFile } from "@/types";
+import type { EntityFile } from "@/types/entity";
 import { getDriveFolderUrl } from "@/lib/google/drive";
 import FileUploadForm from "./FileUploadForm";
 
@@ -98,7 +98,7 @@ function FileIcon({ name }: { name: string }) {
 type Props = {
   isConnected: boolean;
   dealFolderId: string | null;
-  files: DealDriveFile[];
+  files: EntityFile[];
   dealId: string;
 };
 
@@ -181,8 +181,8 @@ export default function DealFilesPanel({
             </thead>
             <tbody className="divide-y divide-slate-50">
               {files.map((file) => {
-                const displayName = file.google_file_name;
-                const isManual = file.source_kind === "manual" && !file.original_file_name;
+                const displayName = file.file_name;
+                const isManual = file.source_type === "manual";
 
                 return (
                   <tr key={file.id} className="hover:bg-slate-50/60 transition-colors group">
@@ -200,7 +200,7 @@ export default function DealFilesPanel({
                       </div>
                     </td>
                     <td className="px-5 py-3 text-xs text-slate-400 whitespace-nowrap">
-                      {formatDate(file.created_time ?? file.created_at)}
+                      {formatDate(file.drive_created_time ?? file.uploaded_at)}
                     </td>
                     <td className="px-5 py-3 text-right">
                       {file.web_view_link ? (

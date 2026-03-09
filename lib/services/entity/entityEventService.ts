@@ -114,6 +114,30 @@ export async function logFactManuallyConfirmed(
   }).catch((err) => console.error("[entityEventService] logFactManuallyConfirmed:", err));
 }
 
+export async function logDealEdited(
+  entityId: string,
+  meta: EventMeta = {}
+): Promise<void> {
+  await insertEntityEvent({
+    entity_id: entityId,
+    event_type: "deal_edited",
+    metadata_json: meta,
+  }).catch((err) => console.error("[entityEventService] logDealEdited:", err));
+}
+
+export async function logEntryAdded(
+  entityId: string,
+  fileId: string | null,
+  meta: EventMeta = {}
+): Promise<void> {
+  await insertEntityEvent({
+    entity_id: entityId,
+    event_type: "entry_added",
+    file_id: fileId,
+    metadata_json: meta,
+  }).catch((err) => console.error("[entityEventService] logEntryAdded:", err));
+}
+
 /** Generic event logger for any event type */
 export async function logEntityEvent(
   entityId: string,

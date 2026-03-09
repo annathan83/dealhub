@@ -28,12 +28,23 @@ export async function DELETE(
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Verify the entity_file belongs to this user's deal via the entity bridge
+  const { data: entityRow } = await supabase
+    .from("entities")
+    .select("id")
+    .eq("legacy_deal_id", dealId)
+    .eq("owner_user_id", user.id)
+    .maybeSingle();
+
+  if (!entityRow?.id) {
+    return NextResponse.json({ error: "Deal not found" }, { status: 404 });
+  }
+
   const { error } = await supabase
-    .from("deal_sources")
+    .from("entity_files")
     .delete()
     .eq("id", entryId)
-    .eq("deal_id", dealId)
-    .eq("user_id", user.id);
+    .eq("entity_id", entityRow.id as string);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

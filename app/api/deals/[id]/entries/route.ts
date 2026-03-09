@@ -54,21 +54,7 @@ export async function POST(
 
   const deal = dealData as Pick<Deal, "id" | "name" | "description">;
 
-  // ── 1. Save raw entry ─────────────────────────────────────────────────────
-  const { data: sourceData, error: sourceError } = await supabase
-    .from("deal_sources")
-    .insert({ deal_id: dealId, user_id: user.id, content })
-    .select("id")
-    .single();
-
-  if (sourceError || !sourceData) {
-    console.error("Failed to insert deal_source:", sourceError?.message);
-    return NextResponse.json({ error: "Failed to save entry" }, { status: 500 });
-  }
-
-  const sourceId = sourceData.id as string;
-
-  // ── 2. Save to Google Drive (non-fatal) ───────────────────────────────────
+  // ── 1. Save to Google Drive (non-fatal) ───────────────────────────────────
   const { data: tokenRow } = await supabase
     .from("google_oauth_tokens")
     .select("id")
@@ -80,9 +66,8 @@ export async function POST(
       .catch((err) => console.error("Drive save failed (non-fatal):", err));
   }
 
-  // ── 3. Entity pipeline: text → triage facts → triage summary ─────────────
-  // Deep analysis (KPI scoring, deal assessment, broker questions) is
-  // user-triggered only — never runs automatically on intake.
+  // ── 2. Entity pipeline: text → triage facts → triage summary ─────────────
+  // Deep analysis is user-triggered only — never runs automatically on intake.
   ingestFromDealEntry({
     dealId,
     userId: user.id,
@@ -90,5 +75,5 @@ export async function POST(
     entryTitle: null,
   }).catch((err) => console.error("[entity pipeline] ingestFromDealEntry failed:", err));
 
-  return NextResponse.json({ sourceId }, { status: 201 });
+  return NextResponse.json({ ok: true }, { status: 201 });
 }

@@ -51,6 +51,10 @@ export type EntityFile = {
   uploaded_by: string | null;
   uploaded_at: string;
   metadata_json: Record<string, unknown>;
+  web_view_link: string | null;
+  drive_created_time: string | null;
+  title: string | null;
+  summary: string | null;
 };
 
 export type FileExtractionStatus = "pending" | "done" | "failed" | "skipped";
@@ -193,7 +197,9 @@ export type EntityEventType =
   | "deep_scan_completed"
   | "triage_completed"
   | "deep_analysis_started"
-  | "deep_analysis_completed";
+  | "deep_analysis_completed"
+  | "deal_edited"
+  | "entry_added";
 
 export type EntityEvent = {
   id: string;

@@ -2,74 +2,91 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { DealSource, DealSourceAnalysis } from "@/types";
+import type { EntityFile } from "@/types/entity";
 
-const TYPE_LABELS: Record<string, string> = {
-  listing: "Listing",
-  broker_email: "Broker Email",
-  financial_summary: "Financial",
-  note: "Note",
-  file: "File",
-  unknown: "Entry",
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  pasted_text:    "Note",
+  uploaded_file:  "File",
+  uploaded_image: "Image",
+  webcam_photo:   "Photo",
+  audio_recording:"Audio",
+  broker_listing: "Listing",
+  broker_email:   "Email",
+  manual:         "File",
 };
 
-const TYPE_STYLES: Record<string, string> = {
-  listing: "bg-blue-50 text-blue-600 border-blue-100",
-  broker_email: "bg-amber-50 text-amber-700 border-amber-100",
-  financial_summary: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  note: "bg-slate-100 text-slate-500 border-slate-200",
-  file: "bg-violet-50 text-violet-700 border-violet-100",
-  unknown: "bg-slate-100 text-slate-500 border-slate-200",
+const SOURCE_TYPE_STYLES: Record<string, string> = {
+  pasted_text:    "bg-slate-100 text-slate-500 border-slate-200",
+  uploaded_file:  "bg-violet-50 text-violet-700 border-violet-100",
+  uploaded_image: "bg-purple-50 text-purple-700 border-purple-100",
+  webcam_photo:   "bg-purple-50 text-purple-700 border-purple-100",
+  audio_recording:"bg-teal-50 text-teal-700 border-teal-100",
+  broker_listing: "bg-blue-50 text-blue-600 border-blue-100",
+  broker_email:   "bg-amber-50 text-amber-700 border-amber-100",
+  manual:         "bg-violet-50 text-violet-700 border-violet-100",
 };
 
-const TYPE_ICON_BG: Record<string, string> = {
-  listing: "bg-blue-100",
-  broker_email: "bg-amber-100",
-  financial_summary: "bg-emerald-100",
-  note: "bg-slate-100",
-  file: "bg-violet-100",
-  unknown: "bg-slate-100",
+const SOURCE_TYPE_ICON_BG: Record<string, string> = {
+  pasted_text:    "bg-slate-100",
+  uploaded_file:  "bg-violet-100",
+  uploaded_image: "bg-purple-100",
+  webcam_photo:   "bg-purple-100",
+  audio_recording:"bg-teal-100",
+  broker_listing: "bg-blue-100",
+  broker_email:   "bg-amber-100",
+  manual:         "bg-violet-100",
 };
 
-const TYPE_ICON_COLOR: Record<string, string> = {
-  listing: "text-blue-600",
-  broker_email: "text-amber-600",
-  financial_summary: "text-emerald-600",
-  note: "text-slate-500",
-  file: "text-violet-600",
-  unknown: "text-slate-500",
+const SOURCE_TYPE_ICON_COLOR: Record<string, string> = {
+  pasted_text:    "text-slate-500",
+  uploaded_file:  "text-violet-600",
+  uploaded_image: "text-purple-600",
+  webcam_photo:   "text-purple-600",
+  audio_recording:"text-teal-600",
+  broker_listing: "text-blue-600",
+  broker_email:   "text-amber-600",
+  manual:         "text-violet-600",
 };
 
-function TypeIcon({ type }: { type: string }) {
-  if (type === "listing") {
+function TypeIcon({ sourceType }: { sourceType: string | null }) {
+  const t = sourceType ?? "pasted_text";
+
+  if (t === "broker_listing") {
     return (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     );
   }
-  if (type === "broker_email") {
+  if (t === "broker_email") {
     return (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     );
   }
-  if (type === "financial_summary") {
-    return (
-      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-      </svg>
-    );
-  }
-  if (type === "file") {
+  if (t === "uploaded_file" || t === "manual") {
     return (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
       </svg>
     );
   }
-  // note / unknown
+  if (t === "uploaded_image" || t === "webcam_photo") {
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    );
+  }
+  if (t === "audio_recording") {
+    return (
+      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-4a4 4 0 01-8 0V9a4 4 0 018 0z" />
+      </svg>
+    );
+  }
+  // pasted_text / default
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -84,32 +101,17 @@ function formatDate(iso: string) {
   });
 }
 
-function extractFileName(content: string): string | null {
-  const match = content.match(/^\[File:\s*(.+?)\]/);
-  return match ? match[1].trim() : null;
-}
-
-function contentFallback(content: string): string {
-  const stripped = content.replace(/^\[File:[^\]]+\]\s*/i, "").trim();
-  if (!stripped) return "";
-  return stripped.length > 200 ? stripped.slice(0, 200).trimEnd() + "…" : stripped;
-}
-
-type SourceWithAnalysis = DealSource & {
-  analysis: DealSourceAnalysis | null;
-};
-
 type Props = {
-  sources: SourceWithAnalysis[];
+  files: EntityFile[];
   dealId: string;
 };
 
 function EntryCard({
-  source,
+  file,
   dealId,
   isLast,
 }: {
-  source: SourceWithAnalysis;
+  file: EntityFile;
   dealId: string;
   isLast: boolean;
 }) {
@@ -117,21 +119,19 @@ function EntryCard({
   const [isPending, startTransition] = useTransition();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const analysis = source.analysis;
-  const title = analysis?.generated_title ?? source.title ?? null;
-  const detectedType = analysis?.detected_type ?? source.source_type ?? "unknown";
-  const typeLabel = TYPE_LABELS[detectedType] ?? "Entry";
-  const typeStyle = TYPE_STYLES[detectedType] ?? TYPE_STYLES.unknown;
-  const iconBg = TYPE_ICON_BG[detectedType] ?? TYPE_ICON_BG.unknown;
-  const iconColor = TYPE_ICON_COLOR[detectedType] ?? TYPE_ICON_COLOR.unknown;
+  const sourceType = file.source_type ?? "pasted_text";
+  const typeLabel = SOURCE_TYPE_LABELS[sourceType] ?? "Entry";
+  const typeStyle = SOURCE_TYPE_STYLES[sourceType] ?? SOURCE_TYPE_STYLES.pasted_text;
+  const iconBg = SOURCE_TYPE_ICON_BG[sourceType] ?? SOURCE_TYPE_ICON_BG.pasted_text;
+  const iconColor = SOURCE_TYPE_ICON_COLOR[sourceType] ?? SOURCE_TYPE_ICON_COLOR.pasted_text;
 
-  const fileName = extractFileName(source.content);
-  const isFileEntry = !!fileName;
-  const bodyText = analysis?.summary ?? contentFallback(source.content) ?? null;
+  const isTextEntry = file.metadata_json?.is_text_entry === true || sourceType === "pasted_text";
+  const displayTitle = file.title ?? file.file_name;
+  const bodyText = file.summary ?? null;
 
   function handleDelete() {
     startTransition(async () => {
-      await fetch(`/api/deals/${dealId}/entries/${source.id}`, { method: "DELETE" });
+      await fetch(`/api/deals/${dealId}/entries/${file.id}`, { method: "DELETE" });
       router.refresh();
     });
   }
@@ -141,7 +141,7 @@ function EntryCard({
       {/* Timeline dot / icon + connecting line */}
       <div className="relative flex-shrink-0 flex flex-col items-center">
         <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center border-2 border-white shadow-sm ${iconBg} ${iconColor}`}>
-          <TypeIcon type={detectedType} />
+          <TypeIcon sourceType={sourceType} />
         </div>
         {!isLast && (
           <div className="flex-1 w-px bg-slate-100 mt-1" />
@@ -156,10 +156,8 @@ function EntryCard({
               {typeLabel}
             </span>
             <span className="text-sm font-semibold text-slate-800 leading-snug truncate">
-              {title ? (
-                title
-              ) : isFileEntry ? (
-                <span className="text-slate-400 font-normal text-xs">{fileName}</span>
+              {displayTitle ? (
+                displayTitle
               ) : (
                 <span className="text-slate-400 font-normal italic text-xs">Untitled Entry</span>
               )}
@@ -167,37 +165,39 @@ function EntryCard({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-[11px] text-slate-400 whitespace-nowrap pt-px tabular-nums">
-              {formatDate(source.created_at)}
+              {formatDate(file.uploaded_at)}
             </span>
-            {/* Delete button */}
-            {!confirmDelete ? (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                disabled={isPending}
-                className="p-1 rounded text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors disabled:opacity-40"
-                title="Delete entry"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1">
+            {/* Delete button — only for text entries */}
+            {isTextEntry && (
+              !confirmDelete ? (
                 <button
-                  onClick={handleDelete}
+                  onClick={() => setConfirmDelete(true)}
                   disabled={isPending}
-                  className="px-2 py-0.5 rounded text-[10px] font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition-colors"
+                  className="p-1 rounded text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors disabled:opacity-40"
+                  title="Delete entry"
                 >
-                  {isPending ? "…" : "Delete"}
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
                 </button>
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={isPending}
-                  className="px-2 py-0.5 rounded text-[10px] font-medium text-slate-500 border border-slate-200 hover:bg-slate-50 transition-colors"
-                >
-                  Keep
-                </button>
-              </div>
+              ) : (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleDelete}
+                    disabled={isPending}
+                    className="px-2 py-0.5 rounded text-[10px] font-semibold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition-colors"
+                  >
+                    {isPending ? "…" : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={isPending}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium text-slate-500 border border-slate-200 hover:bg-slate-50 transition-colors"
+                  >
+                    Keep
+                  </button>
+                </div>
+              )
             )}
           </div>
         </div>
@@ -208,12 +208,28 @@ function EntryCard({
           </p>
         )}
 
-        {isFileEntry && fileName && (
+        {!isTextEntry && file.file_name && (
           <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-slate-50 border border-slate-100 px-2 py-1">
             <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
-            <span className="text-[10px] text-slate-500 font-medium truncate max-w-[200px]">{fileName}</span>
+            <span className="text-[10px] text-slate-500 font-medium truncate max-w-[200px]">{file.file_name}</span>
+          </div>
+        )}
+
+        {file.web_view_link && (
+          <div className="mt-2">
+            <a
+              href={file.web_view_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 transition-colors"
+            >
+              Open in Drive
+              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
           </div>
         )}
       </div>
@@ -221,8 +237,8 @@ function EntryCard({
   );
 }
 
-export default function DealEntriesList({ sources, dealId }: Props) {
-  if (sources.length === 0) {
+export default function DealEntriesList({ files, dealId }: Props) {
+  if (files.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-3">
         <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
@@ -238,12 +254,12 @@ export default function DealEntriesList({ sources, dealId }: Props) {
 
   return (
     <div className="flex flex-col gap-0">
-      {sources.map((source, idx) => (
+      {files.map((file, idx) => (
         <EntryCard
-          key={source.id}
-          source={source}
+          key={file.id}
+          file={file}
           dealId={dealId}
-          isLast={idx === sources.length - 1}
+          isLast={idx === files.length - 1}
         />
       ))}
     </div>
