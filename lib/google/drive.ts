@@ -516,7 +516,7 @@ export async function saveTextNoteToDrive(params: {
  * - If Drive is not connected or the folder doesn't exist yet, falls back to
  *   the Supabase-only list silently.
  */
-export async function syncAndListDealDriveFiles(userId: string, dealId: string) {
+export async function syncAndListDealDriveFiles(userId: string, dealId: string): Promise<import("@/types").DealDriveFile[]> {
   const supabase = await createClient();
 
   // ── 1. Try to fetch live file list from Drive ─────────────────────────────

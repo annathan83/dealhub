@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { analyzeDealEntry } from "@/lib/ai/analyzeDealEntry";
 import { saveRawEntryToDrive } from "@/lib/google/drive";
-import { ingestTextEntry } from "@/lib/services/DealFileIngestionService";
+import { ingestFromDealEntry } from "@/lib/services/entity/entityFileService";
 import type { Deal } from "@/types";
 
 export async function POST(
@@ -12,7 +12,6 @@ export async function POST(
 ) {
   const { id: dealId } = await params;
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,15 +27,9 @@ export async function POST(
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // ── Parse body ────────────────────────────────────────────────────────────
   let content: string;
   try {
     const body = await request.json();
@@ -49,7 +42,6 @@ export async function POST(
     return NextResponse.json({ error: "Content is required" }, { status: 400 });
   }
 
-  // ── Verify deal ownership ─────────────────────────────────────────────────
   const { data: dealData, error: dealError } = await supabase
     .from("deals")
     .select("id, name, description")
@@ -63,14 +55,10 @@ export async function POST(
 
   const deal = dealData as Pick<Deal, "id" | "name" | "description">;
 
-  // ── 1. Insert raw entry into Supabase ─────────────────────────────────────
+  // ── 1. Save raw entry ─────────────────────────────────────────────────────
   const { data: sourceData, error: sourceError } = await supabase
     .from("deal_sources")
-    .insert({
-      deal_id: dealId,
-      user_id: user.id,
-      content,
-    })
+    .insert({ deal_id: dealId, user_id: user.id, content })
     .select("id")
     .single();
 
@@ -81,8 +69,7 @@ export async function POST(
 
   const sourceId = sourceData.id as string;
 
-  // ── 2. Save raw content to Google Drive (if connected) ────────────────────
-  // Check if user has Google Drive connected
+  // ── 2. Save to Google Drive (non-fatal) ───────────────────────────────────
   const { data: tokenRow } = await supabase
     .from("google_oauth_tokens")
     .select("id")
@@ -90,31 +77,19 @@ export async function POST(
     .single();
 
   if (tokenRow) {
-    try {
-      await saveRawEntryToDrive({
-        userId: user.id,
-        dealId,
-        dealName: deal.name,
-        rawContent: content,
-      });
-    } catch (driveErr) {
-      // Drive save failure is non-fatal — entry is already in Supabase
-      console.error("Drive save failed (non-fatal):", driveErr);
-    }
+    saveRawEntryToDrive({ userId: user.id, dealId, dealName: deal.name, rawContent: content })
+      .catch((err) => console.error("Drive save failed (non-fatal):", err));
   }
 
-  // ── 2b. Register in deal_files + deal_file_derivatives ───────────────────
-  try {
-    await ingestTextEntry({
-      dealId,
-      userId: user.id,
-      dealSourceId: sourceId,
-    });
-  } catch (derivErr) {
-    console.error("ingestTextEntry failed (non-fatal):", derivErr);
-  }
+  // ── 3. Entity pipeline: extract text → facts → KPI scoring (non-fatal) ───
+  ingestFromDealEntry({
+    dealId,
+    userId: user.id,
+    entryContent: content,
+    entryTitle: null,
+  }).catch((err) => console.error("[entity pipeline] ingestFromDealEntry failed:", err));
 
-  // ── 3. Run AI analysis (server-side only) ─────────────────────────────────
+  // ── 4. AI analysis for the timeline entry ────────────────────────────────
   let analysis;
   try {
     analysis = await analyzeDealEntry({
@@ -127,16 +102,13 @@ export async function POST(
     return NextResponse.json({ sourceId, analysisId: null }, { status: 201 });
   }
 
-  // ── 4. Back-fill title + source_type on the raw entry ────────────────────
+  // ── 5. Back-fill title + source_type ─────────────────────────────────────
   await supabase
     .from("deal_sources")
-    .update({
-      title: analysis.generated_title,
-      source_type: analysis.detected_type,
-    })
+    .update({ title: analysis.generated_title, source_type: analysis.detected_type })
     .eq("id", sourceId);
 
-  // ── 5. Save analysis ──────────────────────────────────────────────────────
+  // ── 6. Save per-entry analysis to deal_source_analyses ───────────────────
   const { data: analysisData, error: analysisError } = await supabase
     .from("deal_source_analyses")
     .insert({
@@ -154,13 +126,9 @@ export async function POST(
     .select("id")
     .single();
 
-  if (analysisError) {
-    console.error("Failed to save analysis:", analysisError.message);
-  }
+  if (analysisError) console.error("Failed to save analysis:", analysisError.message);
 
-  const analysisId = analysisData?.id ?? null;
-
-  // ── 6. Save change-log items ──────────────────────────────────────────────
+  // ── 7. Save change-log items ──────────────────────────────────────────────
   if (analysis.change_log_items.length > 0) {
     const logRows = analysis.change_log_items.map((item) => ({
       deal_id: dealId,
@@ -170,15 +138,9 @@ export async function POST(
       title: item.title,
       description: item.description,
     }));
-
-    const { error: logError } = await supabase
-      .from("deal_change_log")
-      .insert(logRows);
-
-    if (logError) {
-      console.error("Failed to save change log:", logError.message);
-    }
+    supabase.from("deal_change_log").insert(logRows)
+      .then(({ error }) => { if (error) console.error("change_log insert failed:", error.message); });
   }
 
-  return NextResponse.json({ sourceId, analysisId }, { status: 201 });
+  return NextResponse.json({ sourceId, analysisId: analysisData?.id ?? null }, { status: 201 });
 }

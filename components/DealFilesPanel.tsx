@@ -99,7 +99,6 @@ type Props = {
   isConnected: boolean;
   dealFolderId: string | null;
   files: DealDriveFile[];
-  fileAnalyses: never[]; // kept for API compatibility, no longer used
   dealId: string;
 };
 
