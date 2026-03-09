@@ -101,18 +101,22 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-8">
             {(
               [
-                { key: "new", label: "New", color: "bg-slate-100 text-slate-600 border-slate-200" },
-                { key: "reviewing", label: "Reviewing", color: "bg-blue-50 text-blue-700 border-blue-100" },
-                { key: "due_diligence", label: "Due Diligence", color: "bg-purple-50 text-purple-700 border-purple-100" },
-                { key: "offer", label: "Offer", color: "bg-indigo-50 text-indigo-700 border-indigo-100" },
-                { key: "closed", label: "Closed", color: "bg-green-50 text-green-700 border-green-100" },
-                { key: "passed", label: "Passed", color: "bg-red-50 text-red-600 border-red-100" },
+                { key: "new", label: "New", color: "bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400" },
+                { key: "reviewing", label: "Reviewing", color: "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300" },
+                { key: "due_diligence", label: "Due Diligence", color: "bg-purple-50 text-purple-700 border-purple-100 hover:border-purple-300" },
+                { key: "offer", label: "Offer", color: "bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300" },
+                { key: "closed", label: "Closed", color: "bg-green-50 text-green-700 border-green-100 hover:border-green-300" },
+                { key: "passed", label: "Passed", color: "bg-red-50 text-red-600 border-red-100 hover:border-red-300" },
               ] as const
             ).map(({ key, label, color }) => (
-              <div key={key} className={`rounded-xl border px-4 py-3 text-center ${color}`}>
+              <Link
+                key={key}
+                href={`/dashboard?status=${key}`}
+                className={`rounded-xl border px-4 py-3 text-center transition-all cursor-pointer ${color}`}
+              >
                 <p className="text-2xl font-bold tabular-nums">{statusCounts[key] ?? 0}</p>
                 <p className="text-[10px] font-semibold uppercase tracking-wide mt-0.5 opacity-80">{label}</p>
-              </div>
+              </Link>
             ))}
           </div>
         )}

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import type { Deal, DealStatus } from "@/types";
 import StatusSelect from "./StatusSelect";
 
@@ -58,12 +59,24 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   );
 }
 
+const VALID_STATUSES: DealStatus[] = ["new", "reviewing", "due_diligence", "offer", "closed", "passed"];
+
 export default function DealsTable({ deals }: { deals: Deal[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DealStatus | "all">("all");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  useEffect(() => {
+    const s = searchParams.get("status");
+    if (s && (VALID_STATUSES as string[]).includes(s)) {
+      setStatusFilter(s as DealStatus);
+    } else {
+      setStatusFilter("all");
+    }
+  }, [searchParams]);
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -179,8 +192,19 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
               {deals.length === 0 ? "No deals yet" : "No deals match your filters"}
             </p>
             <p className="text-xs text-slate-400">
-              {deals.length === 0 ? "Create your first deal to get started." : "Try adjusting your search or status filter."}
+              {deals.length === 0 ? "Track your first acquisition opportunity." : "Try adjusting your search or status filter."}
             </p>
+            {deals.length === 0 && (
+              <Link
+                href="/deals/new"
+                className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Add your first deal
+              </Link>
+            )}
           </div>
         </div>
       ) : (

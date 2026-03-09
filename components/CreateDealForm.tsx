@@ -3,17 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { DealStatus } from "@/types";
 import Link from "next/link";
 
-const STATUS_OPTIONS: { value: DealStatus; label: string }[] = [
-  { value: "new", label: "New" },
-  { value: "reviewing", label: "Reviewing" },
-  { value: "due_diligence", label: "Due Diligence" },
-  { value: "offer", label: "Offer" },
-  { value: "closed", label: "Closed" },
-  { value: "passed", label: "Passed" },
-];
+/** Parse money strings like "$1.2M", "1,200,000", "240K" → number or null */
+function parseMoney(raw: string): number | null {
+  const s = raw.trim().replace(/[$,\s]/g, "").toUpperCase();
+  if (!s) return null;
+  const multiplier = s.endsWith("M") ? 1_000_000 : s.endsWith("K") ? 1_000 : 1;
+  const num = parseFloat(s.replace(/[MK]$/, ""));
+  return isNaN(num) ? null : num * multiplier;
+}
+
+function computeMultiple(asking_price: string, sde: string): string | null {
+  const price = parseMoney(asking_price);
+  const sdeVal = parseMoney(sde);
+  if (!price || !sdeVal || sdeVal === 0) return null;
+  return `${(price / sdeVal).toFixed(1)}x`;
+}
 
 export default function CreateDealForm() {
   const router = useRouter();
@@ -21,7 +27,8 @@ export default function CreateDealForm() {
   const [initialNotes, setInitialNotes] = useState("");
   const [industry, setIndustry] = useState("");
   const [location, setLocation] = useState("");
-  const [status, setStatus] = useState<DealStatus>("new");
+  const [askingPrice, setAskingPrice] = useState("");
+  const [sde, setSde] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("Creating…");
@@ -48,6 +55,8 @@ export default function CreateDealForm() {
     }
 
     // ── 1. Create the deal ────────────────────────────────────────────────────
+    const multiple = computeMultiple(askingPrice, sde);
+
     const { data, error: insertError } = await supabase
       .from("deals")
       .insert({
@@ -56,7 +65,10 @@ export default function CreateDealForm() {
         description: null,
         industry: industry.trim() || null,
         location: location.trim() || null,
-        status,
+        status: "new",
+        asking_price: askingPrice.trim() || null,
+        sde: sde.trim() || null,
+        multiple: multiple || null,
       })
       .select("id, name")
       .single();
@@ -117,6 +129,38 @@ export default function CreateDealForm() {
         />
       </div>
 
+      {/* Asking Price + SDE row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="askingPrice" className="text-sm font-medium text-slate-700">
+            Asking Price <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="askingPrice"
+            type="text"
+            value={askingPrice}
+            onChange={(e) => setAskingPrice(e.target.value)}
+            placeholder="e.g. $1.2M or 1200000"
+            disabled={loading}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition disabled:opacity-60"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="sde" className="text-sm font-medium text-slate-700">
+            SDE <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="sde"
+            type="text"
+            value={sde}
+            onChange={(e) => setSde(e.target.value)}
+            placeholder="e.g. $240K or 240000"
+            disabled={loading}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition disabled:opacity-60"
+          />
+        </div>
+      </div>
+
       {/* Industry + Location row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="flex flex-col gap-1.5">
@@ -147,26 +191,6 @@ export default function CreateDealForm() {
             className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition disabled:opacity-60"
           />
         </div>
-      </div>
-
-      {/* Status */}
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="status" className="text-sm font-medium text-slate-700">
-          Status
-        </label>
-        <select
-          id="status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as DealStatus)}
-          disabled={loading}
-          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 transition disabled:opacity-60"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
       </div>
 
       {/* Initial Notes */}

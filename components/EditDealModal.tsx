@@ -118,6 +118,8 @@ export default function EditDealModal({ deal, onClose }: Props) {
   const computedMultiple = computeMultiple(form.asking_price, form.sde);
 
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -135,6 +137,24 @@ export default function EditDealModal({ deal, onClose }: Props) {
 
   function set(field: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function handleDelete() {
+    setError(null);
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/deals/${deal.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error ?? "Failed to delete deal.");
+      }
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
   }
 
   async function handleSave() {
@@ -181,7 +201,7 @@ export default function EditDealModal({ deal, onClose }: Props) {
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
       {/* Modal */}
-      <div className="relative w-full sm:max-w-lg bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl border border-slate-100 flex flex-col max-h-[92vh] sm:max-h-[90vh]">
+        <div className="relative w-full sm:max-w-lg bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl border border-slate-100 flex flex-col max-h-[92dvh] sm:max-h-[90dvh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
@@ -345,11 +365,44 @@ export default function EditDealModal({ deal, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-end gap-3 px-6 py-4 border-t border-slate-100 shrink-0 bg-slate-50/60">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 px-6 py-4 border-t border-slate-100 shrink-0 bg-slate-50/60">
+          {/* Delete — left side */}
+          {!confirmDelete ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={loading || deleting}
+              className="sm:mr-auto w-full sm:w-auto px-4 h-11 rounded-lg text-sm font-medium text-red-500 border border-red-100 bg-white hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors disabled:opacity-40"
+            >
+              Delete deal
+            </button>
+          ) : (
+            <div className="sm:mr-auto flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-xs text-red-600 font-medium">Delete forever?</span>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-3 h-8 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 transition-colors"
+              >
+                {deleting ? "Deleting…" : "Yes, delete"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className="px-3 h-8 rounded-lg text-xs font-medium text-slate-500 border border-slate-200 bg-white hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {/* Cancel + Save — right side */}
           <button
             type="button"
             onClick={onClose}
-            disabled={loading}
+            disabled={loading || deleting}
             className="w-full sm:w-auto px-5 h-11 rounded-lg text-sm font-medium text-slate-600 border border-slate-200 bg-white hover:bg-slate-50 hover:text-slate-900 transition-colors disabled:opacity-60"
           >
             Cancel
@@ -357,7 +410,7 @@ export default function EditDealModal({ deal, onClose }: Props) {
           <button
             type="button"
             onClick={handleSave}
-            disabled={loading}
+            disabled={loading || deleting}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-6 h-11 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
           >
             {loading ? (

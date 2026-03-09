@@ -12,6 +12,7 @@
  */
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { DealOpinion, DealOpinionDelta, AIDealVerdict } from "@/types";
 
 // ─── Verdict config ───────────────────────────────────────────────────────────
@@ -90,11 +91,13 @@ function ScoreGauge({ score }: { score: number }) {
           fontSize="20"
           fontWeight="700"
           fill={color}
+          aria-hidden="true"
         >
           {clamped}
         </text>
       </svg>
-      <span className="text-xs text-slate-400">out of 100</span>
+      <span className="sr-only">{clamped} out of 100</span>
+      <span className="text-xs text-slate-400" aria-hidden="true">out of 100</span>
     </div>
   );
 }
@@ -133,11 +136,13 @@ type Props = {
   dealId: string;
   opinion: DealOpinion | null;
   delta: DealOpinionDelta | null;
+  hasEntries?: boolean;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function DealScorePanel({ dealId, opinion, delta }: Props) {
+export default function DealScorePanel({ dealId, opinion, delta, hasEntries = true }: Props) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [lastRunAt, setLastRunAt] = useState<string | null>(
@@ -158,8 +163,7 @@ export default function DealScorePanel({ dealId, opinion, delta }: Props) {
           setError(body.error ?? "Analysis failed. Please try again.");
         } else {
           setLastRunAt(new Date().toISOString());
-          // Reload to show updated opinion
-          window.location.reload();
+          router.refresh();
         }
       } catch {
         setError("Network error. Please try again.");
@@ -176,12 +180,16 @@ export default function DealScorePanel({ dealId, opinion, delta }: Props) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 bg-slate-50/60 border-b border-slate-100 flex items-center gap-2">
-          <span className="text-base">🤖</span>
+          <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
           <h3 className="text-sm font-semibold text-slate-700">AI Deal Score</h3>
         </div>
         <div className="p-5 flex flex-col items-center gap-3 text-center">
-          <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center text-2xl">
-            🧠
+          <div className="w-12 h-12 rounded-full bg-indigo-50 flex items-center justify-center">
+            <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
           </div>
           <p className="text-sm text-slate-500 leading-relaxed">
             No analysis run yet. Add entries or files, then run the AI analysis
@@ -189,11 +197,15 @@ export default function DealScorePanel({ dealId, opinion, delta }: Props) {
           </p>
           <button
             onClick={handleAnalyze}
-            disabled={isPending}
-            className="mt-1 w-full py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold transition-colors"
+            disabled={isPending || !hasEntries}
+            title={!hasEntries ? "Add entries or files before running analysis" : undefined}
+            className="mt-1 w-full py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors"
           >
             {isPending ? "Analyzing…" : "Run Analysis"}
           </button>
+          {!hasEntries && (
+            <p className="text-xs text-slate-400">Add entries or files first</p>
+          )}
           {error && (
             <p className="text-xs text-red-500 mt-1">{error}</p>
           )}
@@ -208,7 +220,9 @@ export default function DealScorePanel({ dealId, opinion, delta }: Props) {
       {/* Header */}
       <div className="px-4 py-3 bg-slate-50/60 border-b border-slate-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-base">🤖</span>
+          <svg className="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
           <h3 className="text-sm font-semibold text-slate-700">AI Deal Score</h3>
         </div>
         <button

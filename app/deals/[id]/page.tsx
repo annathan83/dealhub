@@ -77,7 +77,7 @@ export default async function DealPage({
         {/* 2-column workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5 items-start">
           {/* Left column */}
-          <div className="flex flex-col gap-5 min-w-0">
+          <div className="flex flex-col gap-5 min-w-0 order-2 lg:order-1">
             {/* Add Entry */}
             <WorkspacePanel id="add-entry" title="Add Entry">
               <AddDealEntryForm dealId={deal.id} />
@@ -89,7 +89,7 @@ export default async function DealPage({
               subtitle={sources.length > 0 ? `${sources.length} entr${sources.length === 1 ? "y" : "ies"}` : undefined}
               action={sources.length > 0 ? <DownloadEntriesButton dealName={deal.name} sources={sourcesWithAnalysis} /> : undefined}
             >
-              <DealEntriesList sources={sourcesWithAnalysis} />
+              <DealEntriesList sources={sourcesWithAnalysis} dealId={deal.id} />
             </WorkspacePanel>
 
             {/* Files */}
@@ -102,13 +102,14 @@ export default async function DealPage({
             />
           </div>
 
-          {/* Right column — sticky panels */}
-          <div className="flex flex-col gap-5 lg:sticky lg:top-20">
+          {/* Right column — sticky panels; on mobile appears first */}
+          <div className="flex flex-col gap-5 lg:sticky lg:top-20 order-1 lg:order-2">
             {/* Phase 3 score panel — shown when an opinion exists */}
             <DealScorePanel
               dealId={deal.id}
               opinion={latestOpinion}
               delta={latestDelta}
+              hasEntries={sources.length > 0}
             />
 
             {/* Legacy intelligence panel — shown when no opinion yet */}
