@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { GoogleDriveConnection } from "@/types";
 
@@ -19,7 +23,21 @@ export default function ConnectGoogleDriveCard({
 }: {
   connection: GoogleDriveConnection | null;
 }) {
+  const router = useRouter();
   const isConnected = !!connection;
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  async function handleDisconnect() {
+    setDisconnecting(true);
+    try {
+      await fetch("/api/google/disconnect", { method: "POST" });
+      router.refresh();
+    } finally {
+      setDisconnecting(false);
+      setConfirmDisconnect(false);
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
@@ -59,25 +77,52 @@ export default function ConnectGoogleDriveCard({
                 </svg>
                 <span>
                   Connected as{" "}
-                  <span className="font-medium text-slate-800">
-                    {connection.google_email}
-                  </span>
+                  <span className="font-medium text-slate-800">{connection.google_email}</span>
                 </span>
               </div>
             )}
 
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-3 flex-wrap">
               <Link
                 href="/api/google/connect?returnTo=/settings/integrations"
                 className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
               >
                 Reconnect
               </Link>
+
+              {!confirmDisconnect ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDisconnect(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-100 bg-white px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  Disconnect
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">Remove Drive connection?</span>
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    disabled={disconnecting}
+                    className="inline-flex items-center gap-1 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 disabled:opacity-60 transition-colors"
+                  >
+                    {disconnecting ? "Removing…" : "Yes, disconnect"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDisconnect(false)}
+                    className="inline-flex items-center rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="rounded-lg bg-slate-50 border border-slate-100 px-4 py-3">
               <p className="text-xs text-slate-500 leading-relaxed">
-                <strong className="text-slate-700">What gets stored:</strong> When you add an entry to a deal, the raw text is saved as a <code className="bg-slate-100 px-1 rounded text-xs">.txt</code> file in that deal&apos;s Google Drive folder. DealHub only stores files it creates — it cannot access other files in your Drive.
+                <strong className="text-slate-700">What gets stored:</strong> When you upload files or add entries to a deal, they are saved in that deal&apos;s Google Drive folder. DealHub only stores files it creates — it cannot access other files in your Drive.
               </p>
             </div>
           </div>
@@ -87,7 +132,7 @@ export default function ConnectGoogleDriveCard({
               {[
                 "A DealHub folder is created in your Google Drive",
                 "Each deal gets its own subfolder",
-                "Pasted entries are saved as timestamped .txt files",
+                "Uploaded files and pasted entries are saved automatically",
                 "DealHub only accesses files it creates (drive.file scope)",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2 text-xs text-slate-600">
