@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: "DealHub — Organize and Analyze Business Acquisition Deals",
   description:
     "DealHub helps acquisition entrepreneurs centralize listings, notes, documents, and AI-driven insights so they can evaluate deals faster and with more confidence.",
+  other: {
+    // Tells Google Translate and Chrome not to auto-translate this app
+    "google": "notranslate",
+  },
 };
 
 export default function RootLayout({
