@@ -3,7 +3,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
-import type { Deal } from "@/types";
+import type { Deal, DealStatus } from "@/types";
+
+// Statuses that count as "active" (not terminal)
+const ACTIVE_STATUSES: DealStatus[] = ["new", "reviewing", "due_diligence", "offer"];
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -12,9 +15,7 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/signin");
-  }
+  if (!user) redirect("/signin");
 
   const [dealsResult, driveResult] = await Promise.all([
     supabase
@@ -36,6 +37,11 @@ export default async function DashboardPage() {
   const dealList = (dealsResult.data ?? []) as Deal[];
   const isDriveConnected = !!driveResult.data;
 
+  // Compute summary stats
+  const totalDeals = dealList.length;
+  const activeDeals = dealList.filter((d) => (ACTIVE_STATUSES as string[]).includes(d.status)).length;
+  const offerDeals = dealList.filter((d) => d.status === "offer").length;
+
   const statusCounts = dealList.reduce<Record<string, number>>((acc, d) => {
     acc[d.status] = (acc[d.status] ?? 0) + 1;
     return acc;
@@ -45,49 +51,44 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-slate-50">
       <AppHeader />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-safe">
 
-        {/* ── Google Drive onboarding banner ── */}
+        {/* ── Google Drive onboarding banner ───────────────────────────── */}
         {!isDriveConnected && (
-          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-              <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 flex items-start gap-3">
+            <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
               </svg>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-amber-900">Connect Google Drive to get started</p>
               <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-                DealHub stores all your files, photos, and recordings in your own Google Drive. You need to connect it before you can add deals or upload files.
+                DealHub stores your files and recordings in your own Drive.
               </p>
+              <Link
+                href="/settings/integrations"
+                className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-3.5 py-1.5 text-xs font-semibold text-white transition-colors"
+              >
+                Connect Drive
+              </Link>
             </div>
-            <Link
-              href="/settings/integrations"
-              className="flex-shrink-0 inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 px-4 py-2 text-sm font-semibold text-white transition-colors shadow-sm"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-              Connect Google Drive
-            </Link>
           </div>
         )}
 
-        {/* Page header */}
-        <div className="flex items-start justify-between gap-4 mb-8">
+        {/* ── Page header ──────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between gap-3 mb-5">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Deal Pipeline
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              {dealList.length === 0
-                ? "No deals yet — create your first deal to get started."
-                : `${dealList.length} deal${dealList.length === 1 ? "" : "s"} in your pipeline`}
-            </p>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Pipeline</h1>
+            {totalDeals > 0 && (
+              <p className="text-sm text-slate-400 mt-0.5">
+                {totalDeals} deal{totalDeals !== 1 ? "s" : ""}
+              </p>
+            )}
           </div>
           <Link
             href="/deals/new"
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm hover:shadow-md"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors shadow-sm shadow-indigo-200"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -96,35 +97,78 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        {/* Pipeline summary strip */}
-        {dealList.length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-8">
-            {(
-              [
-                { key: "new", label: "New", color: "bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400" },
-                { key: "reviewing", label: "Reviewing", color: "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300" },
-                { key: "due_diligence", label: "Due Diligence", color: "bg-purple-50 text-purple-700 border-purple-100 hover:border-purple-300" },
-                { key: "offer", label: "Offer", color: "bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300" },
-                { key: "closed", label: "Closed", color: "bg-green-50 text-green-700 border-green-100 hover:border-green-300" },
-                { key: "passed", label: "Passed", color: "bg-red-50 text-red-600 border-red-100 hover:border-red-300" },
-              ] as const
-            ).map(({ key, label, color }) => (
-              <Link
-                key={key}
-                href={`/dashboard?status=${key}`}
-                className={`rounded-xl border px-4 py-3 text-center transition-all cursor-pointer ${color}`}
-              >
-                <p className="text-2xl font-bold tabular-nums">{statusCounts[key] ?? 0}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wide mt-0.5 opacity-80">{label}</p>
-              </Link>
-            ))}
+        {/* ── Compact summary stats ─────────────────────────────────────── */}
+        {totalDeals > 0 && (
+          <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+            {/* Total */}
+            <Link
+              href="/dashboard"
+              className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-slate-200 transition-colors"
+            >
+              <span className="text-lg font-bold text-slate-900 tabular-nums leading-none">{totalDeals}</span>
+              <span className="text-xs text-slate-400 font-medium">Total</span>
+            </Link>
+
+            <div className="w-px h-6 bg-slate-100 shrink-0" />
+
+            {/* Active */}
+            <Link
+              href="/dashboard?status=reviewing"
+              className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-blue-200 transition-colors"
+            >
+              <span className="text-lg font-bold text-blue-600 tabular-nums leading-none">{activeDeals}</span>
+              <span className="text-xs text-slate-400 font-medium">Active</span>
+            </Link>
+
+            {/* Offer — only show if there are any */}
+            {offerDeals > 0 && (
+              <>
+                <div className="w-px h-6 bg-slate-100 shrink-0" />
+                <Link
+                  href="/dashboard?status=offer"
+                  className="shrink-0 flex items-center gap-2 rounded-xl bg-indigo-50 border border-indigo-100 px-3.5 py-2.5 shadow-sm hover:border-indigo-200 transition-colors"
+                >
+                  <span className="text-lg font-bold text-indigo-600 tabular-nums leading-none">{offerDeals}</span>
+                  <span className="text-xs text-indigo-400 font-medium">Offer</span>
+                </Link>
+              </>
+            )}
+
+            {/* Per-status quick links — only show stages with deals */}
+            {(["due_diligence", "closed", "passed"] as DealStatus[])
+              .filter((s) => (statusCounts[s] ?? 0) > 0)
+              .map((s) => {
+                const colors: Record<string, string> = {
+                  due_diligence: "text-violet-600",
+                  closed: "text-emerald-600",
+                  passed: "text-red-400",
+                };
+                const labels: Record<string, string> = {
+                  due_diligence: "DD",
+                  closed: "Closed",
+                  passed: "Passed",
+                };
+                return (
+                  <div key={s} className="flex items-center gap-2">
+                    <div className="w-px h-6 bg-slate-100 shrink-0" />
+                    <Link
+                      href={`/dashboard?status=${s}`}
+                      className="shrink-0 flex items-center gap-2 rounded-xl bg-white border border-slate-100 px-3.5 py-2.5 shadow-sm hover:border-slate-200 transition-colors"
+                    >
+                      <span className={`text-lg font-bold tabular-nums leading-none ${colors[s]}`}>
+                        {statusCounts[s]}
+                      </span>
+                      <span className="text-xs text-slate-400 font-medium">{labels[s]}</span>
+                    </Link>
+                  </div>
+                );
+              })}
           </div>
         )}
 
-        {/* Deals table */}
-        <div className="rounded-xl border border-slate-100 bg-white shadow-sm p-5">
-          <DealsTable deals={dealList} />
-        </div>
+        {/* ── Deals list ────────────────────────────────────────────────── */}
+        <DealsTable deals={dealList} />
+
       </main>
     </div>
   );
