@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { ensureDealFolder } from "@/lib/google/drive";
+import { ensureDealSubfolders } from "@/lib/google/drive";
 
 export const maxDuration = 30;
 
@@ -66,15 +66,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 2. Provision the Google Drive folder (non-fatal if Drive not connected) ─
-  // We do this eagerly so the folder exists before the user uploads anything.
-  // If Drive isn't connected yet the user will be prompted to connect it later.
+  // ── 2. Provision Drive folder + subfolders (non-fatal if Drive not connected) ─
+  // Creates: DealHub/{name}__{id}/raw/, /derived/, /intelligence/
+  // If Drive isn't connected yet the folders are created lazily on first upload.
   let driveFolderError: string | null = null;
   try {
-    await ensureDealFolder(user.id, deal.id as string, deal.name as string);
+    await ensureDealSubfolders(user.id, deal.id as string, deal.name as string);
   } catch (err) {
-    // Non-fatal — the folder will be created lazily on first upload if this fails.
-    driveFolderError = err instanceof Error ? err.message : "Drive folder could not be created.";
+    // Non-fatal — folders will be created lazily on first upload if this fails.
+    driveFolderError = err instanceof Error ? err.message : "Drive folders could not be created.";
     console.warn(`[createDeal] Drive folder creation skipped for deal ${deal.id}:`, driveFolderError);
   }
 

@@ -149,6 +149,16 @@ async function createFolder(
   return res.data.id;
 }
 
+// ─── Subfolder names ──────────────────────────────────────────────────────────
+
+/**
+ * The three subfolders created inside every deal folder:
+ *   raw/          — original uploads and pasted text (source of truth)
+ *   derived/      — AI assessment .txt files generated from raw files
+ *   intelligence/ — deal-edit audit notes, change logs, internal memos
+ */
+export type DealSubfolder = "raw" | "derived" | "intelligence";
+
 // ─── Public helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -220,7 +230,50 @@ export async function ensureDealFolder(
 }
 
 /**
- * Upload raw pasted text as a .txt file into the deal's Drive folder.
+ * Ensure all three subfolders (raw/, derived/, intelligence/) exist inside
+ * the deal folder. Returns a map of subfolder name → Drive folder ID.
+ *
+ * Called eagerly at deal creation and lazily as a fallback before any write.
+ * Safe to call multiple times — uses findFolder before createFolder.
+ */
+export async function ensureDealSubfolders(
+  userId: string,
+  dealId: string,
+  dealName: string
+): Promise<Record<DealSubfolder, string>> {
+  const drive = await getAuthorizedDriveClient(userId);
+  const dealFolderId = await ensureDealFolder(userId, dealId, dealName);
+
+  const subfolderNames: DealSubfolder[] = ["raw", "derived", "intelligence"];
+  const result = {} as Record<DealSubfolder, string>;
+
+  await Promise.all(
+    subfolderNames.map(async (name) => {
+      let id = await findFolder(drive, name, dealFolderId);
+      if (!id) id = await createFolder(drive, name, dealFolderId);
+      result[name] = id;
+    })
+  );
+
+  return result;
+}
+
+/**
+ * Get the Drive folder ID for a specific subfolder of a deal.
+ * Creates the subfolder (and deal folder if needed) if they don't exist yet.
+ */
+export async function getDealSubfolderId(
+  userId: string,
+  dealId: string,
+  dealName: string,
+  subfolder: DealSubfolder
+): Promise<string> {
+  const subfolders = await ensureDealSubfolders(userId, dealId, dealName);
+  return subfolders[subfolder];
+}
+
+/**
+ * Upload raw pasted text as a .txt file into the deal's raw/ subfolder.
  * Inserts a metadata row into deal_drive_files.
  * Returns the file metadata.
  */
@@ -234,7 +287,7 @@ export async function saveRawEntryToDrive(params: {
   const supabase = await createClient();
   const drive = await getAuthorizedDriveClient(userId);
 
-  const folderId = await ensureDealFolder(userId, dealId, dealName);
+  const folderId = await getDealSubfolderId(userId, dealId, dealName, "raw");
   const fileName = buildEntryFileName(rawContent);
 
   // Upload the file
@@ -280,11 +333,11 @@ export async function saveRawEntryToDrive(params: {
 }
 
 /**
- * Upload a file (binary) into the deal's Google Drive folder.
+ * Upload a file (binary) into the deal's Drive folder.
+ * - User uploads (files, photos, audio) → raw/
+ * - AI assessment text files            → derived/
  * Uses a timestamped name derived from the original filename.
  * Stores both the Drive name and the original filename in Supabase.
- *
- * Structured for easy upgrade to resumable uploads for large files.
  */
 export async function uploadFileToDealFolder(params: {
   userId: string;
@@ -307,7 +360,10 @@ export async function uploadFileToDealFolder(params: {
 
   const supabase = await createClient();
   const drive = await getAuthorizedDriveClient(userId);
-  const folderId = await ensureDealFolder(userId, dealId, dealName);
+
+  // AI assessments go to derived/, everything else (raw uploads) goes to raw/
+  const subfolder: DealSubfolder = sourceKind === "ai_assessment" ? "derived" : "raw";
+  const folderId = await getDealSubfolderId(userId, dealId, dealName, subfolder);
 
   const driveFileName = buildUploadFileName(originalFileName);
 
@@ -392,7 +448,7 @@ export async function saveAIAssessmentToDrive(params: {
 }
 
 /**
- * Save a plain-text note directly to the deal's Drive folder.
+ * Save a plain-text note directly to the deal's intelligence/ subfolder.
  * Used for change-log notes (deal edits, status changes, etc.).
  * Does NOT insert a deal_drive_files row — this is an internal audit note.
  */
@@ -405,7 +461,7 @@ export async function saveTextNoteToDrive(params: {
 }): Promise<{ googleFileId: string; webViewLink: string | null }> {
   const { userId, dealId, dealName, noteContent, fileNameSuffix } = params;
   const drive = await getAuthorizedDriveClient(userId);
-  const folderId = await ensureDealFolder(userId, dealId, dealName);
+  const folderId = await getDealSubfolderId(userId, dealId, dealName, "intelligence");
 
   const now = new Date();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
