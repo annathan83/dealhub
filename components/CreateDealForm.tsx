@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 
 /** Parse money strings like "$1.2M", "1,200,000", "240K" → number or null */
@@ -43,46 +42,37 @@ export default function CreateDealForm() {
     setLoading(true);
     setLoadingLabel("Creating deal…");
 
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setError("You must be signed in to create a deal.");
-      setLoading(false);
-      return;
-    }
-
-    // ── 1. Create the deal ────────────────────────────────────────────────────
+    // ── 1. Create deal + provision Drive folder via server route ─────────────
     const multiple = computeMultiple(askingPrice, sde);
 
-    const { data, error: insertError } = await supabase
-      .from("deals")
-      .insert({
-        user_id: user.id,
-        name: name.trim(),
-        description: null,
-        industry: industry.trim() || null,
-        location: location.trim() || null,
-        status: "new",
-        asking_price: askingPrice.trim() || null,
-        sde: sde.trim() || null,
-        multiple: multiple || null,
-      })
-      .select("id, name")
-      .single();
-
-    if (insertError || !data) {
-      setError(insertError?.message ?? "Failed to create deal. Please try again.");
+    let dealId: string;
+    try {
+      const res = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          industry: industry.trim() || null,
+          location: location.trim() || null,
+          asking_price: askingPrice.trim() || null,
+          sde: sde.trim() || null,
+          multiple: multiple || null,
+        }),
+      });
+      const data = await res.json() as { id?: string; error?: string };
+      if (!res.ok || !data.id) {
+        setError(data.error ?? "Failed to create deal. Please try again.");
+        setLoading(false);
+        return;
+      }
+      dealId = data.id;
+    } catch {
+      setError("Network error. Please try again.");
       setLoading(false);
       return;
     }
 
-    const dealId = data.id as string;
-
     // ── 2. If initial notes were provided, submit them as a first entry ───────
-    // This triggers Drive save + AI analysis via the existing entries API.
     if (initialNotes.trim()) {
       setLoadingLabel("Analyzing notes…");
       try {
@@ -92,11 +82,9 @@ export default function CreateDealForm() {
           body: JSON.stringify({ content: initialNotes.trim() }),
         });
         if (!res.ok) {
-          // Non-fatal — deal was created, just skip the entry
           console.warn("Initial entry submission failed:", await res.text());
         }
       } catch (err) {
-        // Non-fatal
         console.warn("Initial entry submission error:", err);
       }
     }
