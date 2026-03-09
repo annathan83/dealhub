@@ -96,8 +96,11 @@ export default function AudioRecordModal({ onCapture, onClose, onError }: Props)
 
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
-      const ext = blob.type.includes("webm") ? "webm" : "mp4";
-      const file = new File([blob], `recording.${ext}`, { type: blob.type });
+      // Strip codec parameters (e.g. "audio/webm;codecs=opus" → "audio/webm")
+      // so the MIME type is clean for both the File object and Google Drive upload.
+      const cleanMime = blob.type.split(";")[0].trim();
+      const ext = cleanMime.includes("webm") ? "webm" : "mp4";
+      const file = new File([blob], `recording.${ext}`, { type: cleanMime });
       onCapture(file);
       onClose();
     };

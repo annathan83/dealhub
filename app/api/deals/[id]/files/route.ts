@@ -182,7 +182,9 @@ export async function POST(
   for (const file of files) {
     try {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const mimeType = file.type || "application/octet-stream";
+      // Strip codec parameters (e.g. "audio/webm;codecs=opus" → "audio/webm")
+      // Google Drive rejects MIME types with codec suffixes.
+      const mimeType = (file.type || "application/octet-stream").split(";")[0].trim();
 
       // 1. Upload to Google Drive
       const driveMeta = await uploadFileToDealFolder({
