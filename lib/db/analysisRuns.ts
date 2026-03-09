@@ -32,6 +32,7 @@ function normalize(row: Record<string, unknown>): DealAnalysisRun {
     source_file_ids: (row.source_file_ids as string[]) ?? [],
     derivative_ids: (row.derivative_ids as string[]) ?? [],
     created_at: row.created_at as string,
+    updated_at: (row.updated_at as string) ?? (row.created_at as string),
   };
 }
 

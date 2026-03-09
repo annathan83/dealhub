@@ -45,9 +45,9 @@ select
   ddf.user_id,
   'google_drive'                             as storage_provider,
   ddf.google_file_id                         as provider_file_id,
-  ddf.file_name                              as provider_file_name,
+  ddf.google_file_name                       as provider_file_name,
   ddf.web_view_link,
-  ddf.file_name                              as original_file_name,
+  coalesce(ddf.original_file_name, ddf.google_file_name) as original_file_name,
   ddf.mime_type,
   'uploaded_file'                            as source_kind,
   ddf.user_id                                as uploaded_by,
@@ -77,7 +77,7 @@ begin
     update deal_file_derivatives dfd
     set deal_file_id = df.id
     from deal_files df
-    where df.provider_file_id = dfd.google_drive_file_id
+    where df.provider_file_id = dfd.google_file_id  -- correct column name (was google_drive_file_id — bug fixed in 013)
       and dfd.deal_file_id is null;
   end if;
 end $$;

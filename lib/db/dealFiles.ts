@@ -32,6 +32,7 @@ function normalize(row: Record<string, unknown>): DealFile {
     ingest_status: (row.ingest_status as FileIngestStatus) ?? "uploaded",
     legacy_drive_file_id: (row.legacy_drive_file_id as string) ?? null,
     created_at: row.created_at as string,
+    updated_at: (row.updated_at as string) ?? (row.created_at as string),
   };
 }
 

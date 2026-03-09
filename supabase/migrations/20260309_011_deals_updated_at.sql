@@ -7,6 +7,15 @@
 --    (which inserts a deal_sources row) also bumps the parent deal's updated_at.
 --    This keeps the pipeline sorted by "last activity" rather than "last edit".
 
+-- ── 0. Add updated_at column to deals ────────────────────────────────────────
+alter table deals
+  add column if not exists updated_at timestamptz not null default now();
+
+-- Backfill: set updated_at = created_at for rows that pre-date this migration
+update deals
+set updated_at = coalesce(created_at, now())
+where updated_at > now() - interval '5 seconds';
+
 -- ── 1. Trigger: deals row self-update ────────────────────────────────────────
 -- set_updated_at() already exists (created in migration 001).
 -- Drop first so this migration is idempotent.

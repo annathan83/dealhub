@@ -207,14 +207,15 @@ export type DealFileDerivative = {
   deal_id: string;
   user_id: string;
   deal_source_id: string | null;
-  google_file_id: string | null;
-  google_file_name: string | null;
+  deal_file_id: string | null;         // FK to deal_files (added migration 013)
+  google_file_id: string | null;       // legacy — use deal_file_id going forward
+  google_file_name: string | null;     // legacy — use deal_file_id going forward
   original_file_name: string;
   mime_type: string | null;
   file_type: DerivativeFileType;
   extraction_status: DerivativeStatus;
-  extracted_text: string | null;       // populated in Phase 3
-  structured_fields: DealStructuredFields | null; // populated in Phase 3
+  extracted_text: string | null;
+  structured_fields: DealStructuredFields | null;
   extraction_model: string | null;
   extraction_run_id: string | null;
   confidence: AttachmentConfidence | null;
@@ -323,13 +324,14 @@ export type DealFile = {
   ingest_status: FileIngestStatus;
   legacy_drive_file_id: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 // ─── Phase 3: analysis run versioning ────────────────────────────────────────
 
-export type AnalysisRunType = "file_extraction" | "deal_aggregation";
-export type AnalysisRunStatus = "pending" | "running" | "completed" | "failed";
-export type AnalysisRunTrigger = "upload" | "entry" | "manual" | "system" | "backfill";
+export type AnalysisRunType = "file_extraction" | "deal_aggregation" | "full";
+export type AnalysisRunStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+export type AnalysisRunTrigger = "upload" | "entry" | "manual" | "system" | "backfill" | "auto" | "webhook";
 
 export type DealAnalysisRun = {
   id: string;
@@ -349,6 +351,7 @@ export type DealAnalysisRun = {
   source_file_ids: string[];
   derivative_ids: string[];
   created_at: string;
+  updated_at: string;
 };
 
 // ─── Phase 3: source claims ───────────────────────────────────────────────────
@@ -373,6 +376,7 @@ export type DealSourceClaim = {
   is_active: boolean;
   extracted_at: string;
   created_at: string;
+  updated_at: string;
 };
 
 // ─── Phase 3: metric snapshots ────────────────────────────────────────────────

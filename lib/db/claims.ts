@@ -29,6 +29,7 @@ function normalize(row: Record<string, unknown>): DealSourceClaim {
     is_active: (row.is_active as boolean) ?? true,
     extracted_at: row.extracted_at as string,
     created_at: row.created_at as string,
+    updated_at: (row.updated_at as string) ?? (row.created_at as string),
   };
 }
 
