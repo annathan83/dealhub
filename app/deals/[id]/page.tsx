@@ -7,10 +7,10 @@ import DealEntriesList from "@/components/DealEntriesList";
 import DealFilesPanel from "@/components/DealFilesPanel";
 import DealHeader from "@/components/DealHeader";
 import DealIntakeActions from "@/components/DealIntakeActions";
-import DealScorePanel from "@/components/DealScorePanel";
 import ChangeLogPanel from "@/components/ChangeLogPanel";
 import DownloadEntriesButton from "@/components/DownloadEntriesButton";
 import WorkspacePanel from "@/components/WorkspacePanel";
+import TriageReviewPanel from "@/components/TriageReviewPanel";
 import EntityDetailTabs from "@/components/entity/EntityDetailTabs";
 import { syncAndListDealDriveFiles } from "@/lib/google/drive";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
@@ -29,7 +29,12 @@ export default async function DealPage({
   const vm = await buildDealPageViewModel(id, user.id).catch(() => null);
   if (!vm) notFound();
 
-  const { deal, sources, analyses, changeLog, driveFiles, entityData, kpiScorecard } = vm;
+  const {
+    deal, sources, analyses, changeLog, driveFiles,
+    entityData, kpiScorecard,
+    triageSummary,
+    deepAnalysis, deepAnalysisStale, deepAnalysisRunAt, latestSourceAt,
+  } = vm;
 
   const analysisMap = new Map(analyses.map((a) => [a.deal_source_id, a]));
   const sourcesWithAnalysis = sources.map((s) => ({ ...s, analysis: analysisMap.get(s.id) ?? null }));
@@ -46,9 +51,11 @@ export default async function DealPage({
     ? await syncAndListDealDriveFiles(user.id, id).catch(() => driveFiles)
     : driveFiles;
 
-  // Latest deal_assessment snapshot for the score panel
-  const latestAssessmentSnapshot =
-    entityData?.analysis_snapshots.find((s) => s.analysis_type === "deal_assessment") ?? null;
+  // Show "processing" spinner if text has been added but triage hasn't completed yet
+  const isTriageProcessing =
+    sources.length > 0 &&
+    !triageSummary &&
+    (deal.status === "new" || deal.status === "reviewing");
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -76,14 +83,31 @@ export default async function DealPage({
         {/* Deal identity + key metrics */}
         <DealHeader deal={deal} />
 
-        {/* ── 4-Layer Architecture Tabs ─────────────────────────────────────────
-            Facts / KPI Score / AI Analysis / Files / History
-            This is the primary content area for the new architecture. */}
+        {/* ── Initial Review (Triage) ───────────────────────────────────────────
+            Always shown first. Contains extracted facts, neutral AI summary,
+            and the Pass / Keep Investigating decision bar.
+            Deep analysis only runs after the user explicitly requests it. */}
+        <div className="mt-4">
+          <TriageReviewPanel
+            deal={deal}
+            triage={triageSummary}
+            isProcessing={isTriageProcessing}
+          />
+        </div>
+
+        {/* ── Detail Tabs ───────────────────────────────────────────────────────
+            Facts / KPI Score / Deep Analysis / Files / History
+            Shown below the triage panel for deeper investigation. */}
         {entityData && (
           <EntityDetailTabs
             data={entityData}
             scorecard={kpiScorecard}
             dealId={deal.id}
+            dealStatus={deal.status}
+            deepAnalysis={deepAnalysis}
+            deepAnalysisStale={deepAnalysisStale}
+            deepAnalysisRunAt={deepAnalysisRunAt}
+            latestSourceAt={latestSourceAt}
           />
         )}
 
@@ -115,13 +139,8 @@ export default async function DealPage({
             />
           </div>
 
-          {/* Right column — AI score + activity log */}
+          {/* Right column — activity log */}
           <div className="flex flex-col gap-4 lg:sticky lg:top-20 order-1 lg:order-2">
-            <DealScorePanel
-              dealId={deal.id}
-              snapshot={latestAssessmentSnapshot}
-              hasEntries={sources.length > 0}
-            />
             <ChangeLogPanel changeLog={changeLog} />
           </div>
         </div>

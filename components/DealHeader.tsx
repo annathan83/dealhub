@@ -7,25 +7,36 @@ import EditDealModal from "./EditDealModal";
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<DealStatus, string> = {
-  new: "New",
-  reviewing: "Reviewing",
+  new:           "New",
+  triaged:       "Triaged",
+  investigating: "Investigating",
+  loi:           "LOI",
+  acquired:      "Acquired",
+  passed:        "Passed",
+  archived:      "Archived",
+  reviewing:     "Reviewing",
   due_diligence: "Due Diligence",
-  offer: "Offer",
-  closed: "Closed",
-  passed: "Passed",
+  offer:         "Offer",
+  closed:        "Closed",
 };
 
 const STATUS_STYLES: Record<DealStatus, { badge: string; dot: string }> = {
   new:           { badge: "bg-slate-100 text-slate-600",    dot: "bg-slate-400" },
-  reviewing:     { badge: "bg-blue-50 text-blue-700",       dot: "bg-blue-500" },
+  triaged:       { badge: "bg-blue-50 text-blue-700",       dot: "bg-blue-500" },
+  investigating: { badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500" },
+  loi:           { badge: "bg-violet-50 text-violet-700",   dot: "bg-violet-500" },
+  acquired:      { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+  passed:        { badge: "bg-red-50 text-red-600",         dot: "bg-red-400" },
+  archived:      { badge: "bg-slate-50 text-slate-500",     dot: "bg-slate-300" },
+  reviewing:     { badge: "bg-blue-50 text-blue-700",       dot: "bg-blue-400" },
   due_diligence: { badge: "bg-violet-50 text-violet-700",   dot: "bg-violet-500" },
   offer:         { badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500" },
   closed:        { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-  passed:        { badge: "bg-red-50 text-red-600",         dot: "bg-red-400" },
 };
 
 const STATUS_OPTIONS: DealStatus[] = [
-  "new", "reviewing", "due_diligence", "offer", "closed", "passed",
+  "new", "triaged", "investigating", "loi", "acquired", "passed", "archived",
+  "reviewing", "due_diligence", "offer", "closed",
 ];
 
 // ─── Inline status select ─────────────────────────────────────────────────────

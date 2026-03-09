@@ -31,6 +31,9 @@ export type Entity = {
   deep_scan_facts_added: number | null;
   deep_scan_facts_updated: number | null;
   deep_scan_conflicts_found: number | null;
+  deep_analysis_run_at: string | null;
+  deep_analysis_stale: boolean;
+  latest_source_at: string | null;
 };
 
 // ─── File Layer ───────────────────────────────────────────────────────────────
@@ -162,7 +165,7 @@ export type FactEditLogEntry = {
 
 // ─── Analysis Snapshots ───────────────────────────────────────────────────────
 
-export type AnalysisType = "deal_assessment" | "valuation" | "risk_flags" | "questions" | "kpi_scorecard";
+export type AnalysisType = "deal_assessment" | "valuation" | "risk_flags" | "questions" | "kpi_scorecard" | "triage_summary" | "deep_analysis";
 
 export type AnalysisSnapshot = {
   id: string;
@@ -187,7 +190,10 @@ export type EntityEventType =
   | "fact_manually_edited"
   | "fact_manually_confirmed"
   | "deep_scan_started"
-  | "deep_scan_completed";
+  | "deep_scan_completed"
+  | "triage_completed"
+  | "deep_analysis_started"
+  | "deep_analysis_completed";
 
 export type EntityEvent = {
   id: string;

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { EntityPageData } from "@/types/entity";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
+import type { DeepAnalysisContent } from "@/lib/services/entity/deepAnalysisService";
+import type { DealStatus } from "@/types";
 import FactsTab from "./FactsTab";
 import AIAnalysisTab from "./AIAnalysisTab";
 import FilesTab from "./FilesTab";
@@ -15,6 +17,11 @@ type Props = {
   data: EntityPageData;
   scorecard: KpiScorecardResult | null;
   dealId: string;
+  dealStatus: DealStatus;
+  deepAnalysis: DeepAnalysisContent | null;
+  deepAnalysisStale: boolean;
+  deepAnalysisRunAt: string | null;
+  latestSourceAt: string | null;
 };
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -38,7 +45,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   },
   {
     id: "ai",
-    label: "AI Analysis",
+    label: "Deep Analysis",
     icon: (
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -65,7 +72,16 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   },
 ];
 
-export default function EntityDetailTabs({ data, scorecard, dealId }: Props) {
+export default function EntityDetailTabs({
+  data,
+  scorecard,
+  dealId,
+  dealStatus,
+  deepAnalysis,
+  deepAnalysisStale,
+  deepAnalysisRunAt,
+  latestSourceAt,
+}: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("facts");
 
   const confirmedCount = data.fact_values.filter(
@@ -89,7 +105,8 @@ export default function EntityDetailTabs({ data, scorecard, dealId }: Props) {
           let badge: number | null = null;
           if (tab.id === "facts" && criticalMissingCount > 0) badge = criticalMissingCount;
           if (tab.id === "files") badge = data.files.length > 0 ? data.files.length : null;
-          if (tab.id === "kpi" && scorecard?.overall_score_100 != null) badge = null; // show score inline instead
+          if (tab.id === "kpi" && scorecard?.overall_score_100 != null) badge = null;
+          const isStaleTab = tab.id === "ai" && deepAnalysisStale && deepAnalysis !== null;
 
           return (
             <button
@@ -127,6 +144,9 @@ export default function EntityDetailTabs({ data, scorecard, dealId }: Props) {
                 `}>
                   {badge}
                 </span>
+              )}
+              {isStaleTab && (
+                <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="New information added since last analysis" />
               )}
             </button>
           );
@@ -170,7 +190,12 @@ export default function EntityDetailTabs({ data, scorecard, dealId }: Props) {
       )}
       {activeTab === "ai" && (
         <AIAnalysisTab
-          snapshots={data.analysis_snapshots.filter((s) => s.analysis_type !== "kpi_scorecard")}
+          dealId={dealId}
+          dealStatus={dealStatus}
+          deepAnalysis={deepAnalysis}
+          deepAnalysisStale={deepAnalysisStale}
+          deepAnalysisRunAt={deepAnalysisRunAt}
+          latestSourceAt={latestSourceAt}
         />
       )}
       {activeTab === "files" && (

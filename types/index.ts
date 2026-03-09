@@ -1,12 +1,29 @@
 // ─── Deal ────────────────────────────────────────────────────────────────────
 
 export type DealStatus =
+  // New triage lifecycle
   | "new"
+  | "triaged"
+  | "investigating"
+  | "passed"
+  | "loi"
+  | "acquired"
+  | "archived"
+  // Legacy statuses (kept for backwards compatibility)
   | "reviewing"
   | "due_diligence"
   | "offer"
-  | "closed"
-  | "passed";
+  | "closed";
+
+export type PassReason =
+  | "price_too_high"
+  | "financials_dont_work"
+  | "wrong_industry"
+  | "wrong_location"
+  | "owner_dependent"
+  | "customer_concentration"
+  | "not_enough_info"
+  | "other";
 
 export type Deal = {
   id: string;
@@ -21,6 +38,10 @@ export type Deal = {
   sde: string | null;
   multiple: string | null;
   google_drive_folder_id: string | null;
+  pass_reason: PassReason | null;
+  pass_note: string | null;
+  passed_at: string | null;
+  triaged_at: string | null;
   created_at: string;
   updated_at: string;
 };

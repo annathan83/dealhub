@@ -43,6 +43,31 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Verify deal ownership and status gate:
+  // The legacy deal assessment (score + verdict) must not run automatically on intake.
+  // It is only available after the user has explicitly chosen to keep investigating.
+  const { data: deal } = await supabase
+    .from("deals")
+    .select("status")
+    .eq("id", dealId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!deal) {
+    return NextResponse.json({ error: "Deal not found" }, { status: 404 });
+  }
+
+  const blockedStatuses = ["new", "triaged", "passed", "archived"];
+  if (blockedStatuses.includes(deal.status)) {
+    return NextResponse.json(
+      {
+        error: `Analysis is not available for deals with status "${deal.status}". ` +
+          `Use the Deep Analysis tab after choosing to Keep Investigating.`,
+      },
+      { status: 422 }
+    );
+  }
+
   // Resolve entity for this deal
   const entity = await getEntityByLegacyDealId(dealId, user.id);
   if (!entity) {

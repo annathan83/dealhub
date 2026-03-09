@@ -25,8 +25,6 @@ const PROMPT_VERSION = "v1";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type AnalysisOutput = {
-  score: number | null;
-  verdict: string | null;
   summary: string;
   risk_flags: string[];
   missing_information: string[];
@@ -40,7 +38,7 @@ function buildAnalysisPrompt(
   factsContext: string,
   recentEvents: string
 ): string {
-  return `You are an expert business acquisition analyst. Analyze the following business deal and provide a structured assessment.
+  return `You are a neutral business acquisition analyst. Summarize what is known about this business based only on the facts provided. Do not make buy/pass recommendations.
 
 Business: ${entityTitle}
 
@@ -52,23 +50,13 @@ ${recentEvents}
 
 Provide a JSON response with this exact structure:
 {
-  "score": <integer 0-100 or null if insufficient data>,
-  "verdict": <"strong_buy" | "buy" | "hold" | "pass" | null>,
-  "summary": "<2-3 sentence narrative summary of the deal>",
+  "summary": "<2-3 sentence neutral factual summary of the deal based only on available data>",
   "risk_flags": ["<risk 1>", "<risk 2>"],
   "missing_information": ["<missing item 1>", "<missing item 2>"],
   "broker_questions": ["<question 1>", "<question 2>", "<question 3>"]
 }
 
-Scoring guide:
-- 80-100: Excellent deal, strong financials, low risk
-- 60-79: Good deal, some concerns worth investigating
-- 40-59: Average deal, significant due diligence needed
-- 20-39: Weak deal, major red flags
-- 0-19: Poor deal, likely to pass
-- null: Insufficient data to score
-
-Keep risk_flags to the top 3-5 most important. Keep broker_questions to 3-5 most impactful questions.`;
+Keep risk_flags to the top 3-5 most important. Keep broker_questions to 3-5 most impactful questions. Do not include scores, verdicts, or buy/pass language.`;
 }
 
 // ─── Context builders ─────────────────────────────────────────────────────────
@@ -161,8 +149,6 @@ export async function refreshAnalysis(
     try {
       const parsed = JSON.parse(rawContent) as Record<string, unknown>;
       output = {
-        score: typeof parsed.score === "number" ? Math.min(100, Math.max(0, parsed.score)) : null,
-        verdict: typeof parsed.verdict === "string" ? parsed.verdict : null,
         summary: typeof parsed.summary === "string" ? parsed.summary : "Analysis complete.",
         risk_flags: Array.isArray(parsed.risk_flags) ? parsed.risk_flags as string[] : [],
         missing_information: Array.isArray(parsed.missing_information) ? parsed.missing_information as string[] : [],
@@ -178,8 +164,6 @@ export async function refreshAnalysis(
       analysis_type: "deal_assessment",
       title: `Deal Assessment — ${entityTitle}`,
       content_json: {
-        score: output.score,
-        verdict: output.verdict,
         summary: output.summary,
         risk_flags: output.risk_flags,
         missing_information: output.missing_information,
@@ -194,8 +178,6 @@ export async function refreshAnalysis(
     if (snapshot) {
       await logAnalysisRefreshed(entityId, {
         snapshot_id: snapshot.id,
-        score: output.score,
-        verdict: output.verdict,
       });
     }
 

@@ -8,45 +8,66 @@ import StatusSelect from "./StatusSelect";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<string, string> = {
-  new: "New",
-  reviewing: "Reviewing",
+const STATUS_LABELS: Record<DealStatus, string> = {
+  new:           "New",
+  triaged:       "Triaged",
+  investigating: "Investigating",
+  loi:           "LOI",
+  acquired:      "Acquired",
+  passed:        "Passed",
+  archived:      "Archived",
+  reviewing:     "Reviewing",
   due_diligence: "Due Diligence",
-  offer: "Offer",
-  closed: "Closed",
-  passed: "Passed",
+  offer:         "Offer",
+  closed:        "Closed",
 };
 
 const STATUS_DOT: Record<DealStatus, string> = {
-  new: "bg-slate-400",
-  reviewing: "bg-blue-500",
+  new:           "bg-slate-400",
+  triaged:       "bg-blue-500",
+  investigating: "bg-indigo-500",
+  loi:           "bg-violet-500",
+  acquired:      "bg-emerald-500",
+  passed:        "bg-red-400",
+  archived:      "bg-slate-300",
+  reviewing:     "bg-blue-400",
   due_diligence: "bg-violet-500",
-  offer: "bg-indigo-500",
-  closed: "bg-emerald-500",
-  passed: "bg-red-400",
+  offer:         "bg-indigo-500",
+  closed:        "bg-emerald-500",
 };
 
 const STATUS_BADGE: Record<DealStatus, string> = {
-  new: "bg-slate-100 text-slate-600",
-  reviewing: "bg-blue-50 text-blue-700",
+  new:           "bg-slate-100 text-slate-600",
+  triaged:       "bg-blue-50 text-blue-700",
+  investigating: "bg-indigo-50 text-indigo-700",
+  loi:           "bg-violet-50 text-violet-700",
+  acquired:      "bg-emerald-50 text-emerald-700",
+  passed:        "bg-red-50 text-red-600",
+  archived:      "bg-slate-50 text-slate-500",
+  reviewing:     "bg-blue-50 text-blue-700",
   due_diligence: "bg-violet-50 text-violet-700",
-  offer: "bg-indigo-50 text-indigo-700",
-  closed: "bg-emerald-50 text-emerald-700",
-  passed: "bg-red-50 text-red-600",
+  offer:         "bg-indigo-50 text-indigo-700",
+  closed:        "bg-emerald-50 text-emerald-700",
 };
 
 // Desktop table badge (with border)
 const STATUS_BADGE_BORDER: Record<DealStatus, string> = {
-  new: "bg-slate-100 text-slate-600 border-slate-200",
-  reviewing: "bg-blue-50 text-blue-700 border-blue-100",
+  new:           "bg-slate-100 text-slate-600 border-slate-200",
+  triaged:       "bg-blue-50 text-blue-700 border-blue-100",
+  investigating: "bg-indigo-50 text-indigo-700 border-indigo-100",
+  loi:           "bg-violet-50 text-violet-700 border-violet-100",
+  acquired:      "bg-emerald-50 text-emerald-700 border-emerald-100",
+  passed:        "bg-red-50 text-red-600 border-red-100",
+  archived:      "bg-slate-50 text-slate-500 border-slate-200",
+  reviewing:     "bg-blue-50 text-blue-700 border-blue-100",
   due_diligence: "bg-violet-50 text-violet-700 border-violet-100",
-  offer: "bg-indigo-50 text-indigo-700 border-indigo-100",
-  closed: "bg-emerald-50 text-emerald-700 border-emerald-100",
-  passed: "bg-red-50 text-red-600 border-red-100",
+  offer:         "bg-indigo-50 text-indigo-700 border-indigo-100",
+  closed:        "bg-emerald-50 text-emerald-700 border-emerald-100",
 };
 
 const ALL_STATUSES: DealStatus[] = [
-  "new", "reviewing", "due_diligence", "offer", "closed", "passed",
+  "new", "triaged", "investigating", "loi", "acquired", "passed", "archived",
+  "reviewing", "due_diligence", "offer", "closed",
 ];
 
 const VALID_STATUSES: DealStatus[] = ALL_STATUSES;
@@ -149,10 +170,10 @@ function DealCard({ deal }: { deal: Deal }) {
       </div>
 
       {/* Subtle bottom accent line for active deals */}
-      {(deal.status === "reviewing" || deal.status === "due_diligence" || deal.status === "offer") && (
+      {(deal.status === "investigating" || deal.status === "loi" || deal.status === "triaged" || deal.status === "reviewing" || deal.status === "due_diligence" || deal.status === "offer") && (
         <div className={`h-0.5 ${
-          deal.status === "offer" ? "bg-indigo-400" :
-          deal.status === "due_diligence" ? "bg-violet-400" :
+          deal.status === "loi" || deal.status === "offer" ? "bg-violet-400" :
+          deal.status === "investigating" || deal.status === "due_diligence" ? "bg-indigo-400" :
           "bg-blue-300"
         }`} />
       )}

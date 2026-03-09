@@ -45,6 +45,9 @@ function normalizeEntity(row: Record<string, unknown>): Entity {
     deep_scan_facts_added: (row.deep_scan_facts_added as number | null) ?? null,
     deep_scan_facts_updated: (row.deep_scan_facts_updated as number | null) ?? null,
     deep_scan_conflicts_found: (row.deep_scan_conflicts_found as number | null) ?? null,
+    deep_analysis_run_at: (row.deep_analysis_run_at as string | null) ?? null,
+    deep_analysis_stale: (row.deep_analysis_stale as boolean) ?? false,
+    latest_source_at: (row.latest_source_at as string | null) ?? null,
   };
 }
 
@@ -785,6 +788,47 @@ export async function getFileTextsForEntity(
         file_id: row.id as string,
         full_text: fullText,
         file_name: row.file_name as string,
+      });
+    }
+  }
+  return results;
+}
+
+/** Richer version used by the analysis context builder — includes source metadata. */
+export async function getFileTextsWithMetaForEntity(
+  entityId: string
+): Promise<Array<{
+  file_id: string;
+  full_text: string;
+  file_name: string;
+  source_type: string | null;
+  uploaded_at: string;
+}>> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("entity_files")
+    .select("id, file_name, source_type, uploaded_at, file_text(full_text, extraction_status)")
+    .eq("entity_id", entityId)
+    .order("uploaded_at", { ascending: true });
+
+  const results: Array<{
+    file_id: string;
+    full_text: string;
+    file_name: string;
+    source_type: string | null;
+    uploaded_at: string;
+  }> = [];
+
+  for (const row of data ?? []) {
+    const ft = (row as Record<string, unknown>).file_text as Record<string, unknown> | null;
+    const fullText = ft?.full_text as string | null;
+    if (fullText && fullText.trim().length > 0) {
+      results.push({
+        file_id: row.id as string,
+        full_text: fullText,
+        file_name: row.file_name as string,
+        source_type: (row.source_type as string | null) ?? null,
+        uploaded_at: row.uploaded_at as string,
       });
     }
   }

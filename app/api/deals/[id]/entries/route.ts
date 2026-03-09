@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { analyzeDealEntry } from "@/lib/ai/analyzeDealEntry";
 import { saveRawEntryToDrive } from "@/lib/google/drive";
 import { ingestFromDealEntry } from "@/lib/services/entity/entityFileService";
 import type { Deal } from "@/types";
@@ -81,7 +80,9 @@ export async function POST(
       .catch((err) => console.error("Drive save failed (non-fatal):", err));
   }
 
-  // ── 3. Entity pipeline: extract text → facts → KPI scoring (non-fatal) ───
+  // ── 3. Entity pipeline: text → triage facts → triage summary ─────────────
+  // Deep analysis (KPI scoring, deal assessment, broker questions) is
+  // user-triggered only — never runs automatically on intake.
   ingestFromDealEntry({
     dealId,
     userId: user.id,
@@ -89,58 +90,5 @@ export async function POST(
     entryTitle: null,
   }).catch((err) => console.error("[entity pipeline] ingestFromDealEntry failed:", err));
 
-  // ── 4. AI analysis for the timeline entry ────────────────────────────────
-  let analysis;
-  try {
-    analysis = await analyzeDealEntry({
-      dealName: deal.name,
-      dealDescription: deal.description,
-      entryContent: content,
-    });
-  } catch (err) {
-    console.error("AI analysis failed:", err);
-    return NextResponse.json({ sourceId, analysisId: null }, { status: 201 });
-  }
-
-  // ── 5. Back-fill title + source_type ─────────────────────────────────────
-  await supabase
-    .from("deal_sources")
-    .update({ title: analysis.generated_title, source_type: analysis.detected_type })
-    .eq("id", sourceId);
-
-  // ── 6. Save per-entry analysis to deal_source_analyses ───────────────────
-  const { data: analysisData, error: analysisError } = await supabase
-    .from("deal_source_analyses")
-    .insert({
-      deal_source_id: sourceId,
-      deal_id: dealId,
-      user_id: user.id,
-      generated_title: analysis.generated_title,
-      detected_type: analysis.detected_type,
-      summary: analysis.summary,
-      extracted_facts: analysis.extracted_facts,
-      red_flags: analysis.red_flags,
-      missing_information: analysis.missing_information,
-      broker_questions: analysis.broker_questions,
-    })
-    .select("id")
-    .single();
-
-  if (analysisError) console.error("Failed to save analysis:", analysisError.message);
-
-  // ── 7. Save change-log items ──────────────────────────────────────────────
-  if (analysis.change_log_items.length > 0) {
-    const logRows = analysis.change_log_items.map((item) => ({
-      deal_id: dealId,
-      deal_source_id: sourceId,
-      user_id: user.id,
-      change_type: item.change_type,
-      title: item.title,
-      description: item.description,
-    }));
-    supabase.from("deal_change_log").insert(logRows)
-      .then(({ error }) => { if (error) console.error("change_log insert failed:", error.message); });
-  }
-
-  return NextResponse.json({ sourceId, analysisId: analysisData?.id ?? null }, { status: 201 });
+  return NextResponse.json({ sourceId }, { status: 201 });
 }

@@ -182,11 +182,13 @@ export async function ensureDealHubRootFolder(userId: string): Promise<string> {
   let folderId = await findFolder(drive, "DealHub");
   if (!folderId) folderId = await createFolder(drive, "DealHub");
 
-  // Persist
+  // Persist — upsert so this works whether or not a row already exists
   await supabase
     .from("google_drive_connections")
-    .update({ root_folder_id: folderId, updated_at: new Date().toISOString() })
-    .eq("user_id", userId);
+    .upsert(
+      { user_id: userId, root_folder_id: folderId, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    );
 
   return folderId;
 }

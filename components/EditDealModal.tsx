@@ -5,21 +5,31 @@ import { useRouter } from "next/navigation";
 import type { Deal, DealStatus } from "@/types";
 
 const STATUS_OPTIONS: { value: DealStatus; label: string }[] = [
-  { value: "new", label: "New" },
-  { value: "reviewing", label: "Reviewing" },
+  { value: "new",           label: "New" },
+  { value: "triaged",       label: "Triaged" },
+  { value: "investigating", label: "Investigating" },
+  { value: "loi",           label: "LOI" },
+  { value: "acquired",      label: "Acquired" },
+  { value: "passed",        label: "Passed" },
+  { value: "archived",      label: "Archived" },
+  { value: "reviewing",     label: "Reviewing" },
   { value: "due_diligence", label: "Due Diligence" },
-  { value: "offer", label: "Offer" },
-  { value: "closed", label: "Closed" },
-  { value: "passed", label: "Passed" },
+  { value: "offer",         label: "Offer" },
+  { value: "closed",        label: "Closed" },
 ];
 
 const STATUS_COLORS: Record<DealStatus, string> = {
-  new: "bg-slate-100 text-slate-600",
-  reviewing: "bg-blue-50 text-blue-700",
+  new:           "bg-slate-100 text-slate-600",
+  triaged:       "bg-blue-50 text-blue-700",
+  investigating: "bg-indigo-50 text-indigo-700",
+  loi:           "bg-violet-50 text-violet-700",
+  acquired:      "bg-emerald-50 text-emerald-700",
+  passed:        "bg-red-50 text-red-600",
+  archived:      "bg-slate-50 text-slate-500",
+  reviewing:     "bg-blue-50 text-blue-700",
   due_diligence: "bg-purple-50 text-purple-700",
-  offer: "bg-indigo-50 text-indigo-700",
-  closed: "bg-green-50 text-green-700",
-  passed: "bg-red-50 text-red-600",
+  offer:         "bg-indigo-50 text-indigo-700",
+  closed:        "bg-green-50 text-green-700",
 };
 
 type Props = {

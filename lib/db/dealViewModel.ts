@@ -10,8 +10,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getEntityPageData } from "@/lib/db/entities";
 import { getLatestKpiScorecard } from "@/lib/kpi/kpiScoringService";
 import type { Deal, DealSource, DealSourceAnalysis, DealChangeLogItem, DealDriveFile } from "@/types";
-import type { EntityPageData } from "@/types/entity";
+import type { AnalysisSnapshot, EntityPageData } from "@/types/entity";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
+import type { TriageSummaryContent } from "@/lib/services/entity/triageSummaryService";
+import type { DeepAnalysisContent } from "@/lib/services/entity/deepAnalysisService";
 
 export type DealPageViewModel = {
   deal: Deal;
@@ -21,6 +23,13 @@ export type DealPageViewModel = {
   driveFiles: DealDriveFile[];
   entityData: EntityPageData | null;
   kpiScorecard: KpiScorecardResult | null;
+  triageSummary: TriageSummaryContent | null;
+  triageSnapshot: AnalysisSnapshot | null;
+  deepAnalysis: DeepAnalysisContent | null;
+  deepAnalysisSnapshot: AnalysisSnapshot | null;
+  deepAnalysisStale: boolean;
+  deepAnalysisRunAt: string | null;
+  latestSourceAt: string | null;
 };
 
 export async function buildDealPageViewModel(
@@ -51,6 +60,25 @@ export async function buildDealPageViewModel(
     ? await getLatestKpiScorecard(entityData.entity.id).catch(() => null)
     : null;
 
+  // Extract the most recent triage_summary snapshot for the Initial Review panel
+  const triageSnapshot =
+    entityData?.analysis_snapshots.find((s) => s.analysis_type === "triage_summary") ?? null;
+  const triageSummary = triageSnapshot
+    ? (triageSnapshot.content_json as unknown as TriageSummaryContent)
+    : null;
+
+  // Extract the most recent deep_analysis snapshot
+  const deepAnalysisSnapshot =
+    entityData?.analysis_snapshots.find((s) => s.analysis_type === "deep_analysis") ?? null;
+  const deepAnalysis = deepAnalysisSnapshot
+    ? (deepAnalysisSnapshot.content_json as unknown as DeepAnalysisContent)
+    : null;
+
+  // Staleness and last-run timestamp come from the entity record
+  const deepAnalysisStale = entityData?.entity.deep_analysis_stale ?? false;
+  const deepAnalysisRunAt = entityData?.entity.deep_analysis_run_at ?? null;
+  const latestSourceAt = entityData?.entity.latest_source_at ?? null;
+
   return {
     deal: dealResult.data as Deal,
     sources: (sourcesResult.data ?? []) as DealSource[],
@@ -59,5 +87,12 @@ export async function buildDealPageViewModel(
     driveFiles: (driveFilesResult.data ?? []) as DealDriveFile[],
     entityData,
     kpiScorecard,
+    triageSummary,
+    triageSnapshot,
+    deepAnalysis,
+    deepAnalysisSnapshot,
+    deepAnalysisStale,
+    deepAnalysisRunAt,
+    latestSourceAt,
   };
 }

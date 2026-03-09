@@ -9,6 +9,7 @@
  * The existing pipeline continues even if this service fails.
  */
 
+import { createClient } from "@/lib/supabase/server";
 import {
   getEntityByLegacyDealId,
   insertEntityFile,
@@ -19,7 +20,7 @@ import { chunkAndStoreText } from "./textChunkingService";
 import { logFileUploaded, logTextExtracted, logFactsExtracted } from "./entityEventService";
 import { extractFactsFromText } from "../facts/factExtractionService";
 import { reconcileFacts } from "../facts/factReconciliationService";
-import { scoreAndPersistKpis } from "@/lib/kpi/kpiScoringService";
+import { runTriageSummary } from "./triageSummaryService";
 import type { Entity } from "@/types/entity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,6 +47,34 @@ export type IngestFromDealEntryParams = {
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+/**
+ * Stamps latest_source_at = now() unconditionally (so the UI can show when
+ * new content arrived), and marks deep_analysis_stale = true only if a deep
+ * analysis has already been run (so the stale banner only appears when relevant).
+ * Called whenever new text is successfully stored.
+ */
+async function markDeepAnalysisStale(entityId: string): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const now = new Date().toISOString();
+
+    // Always update latest_source_at so the UI knows when content last changed
+    await supabase
+      .from("entities")
+      .update({ latest_source_at: now })
+      .eq("id", entityId);
+
+    // Only set stale if a deep analysis has actually been run before
+    await supabase
+      .from("entities")
+      .update({ deep_analysis_stale: true })
+      .eq("id", entityId)
+      .not("deep_analysis_run_at", "is", null);
+  } catch (err) {
+    console.error("[entityFileService] markDeepAnalysisStale failed (non-fatal):", err);
+  }
+}
+
 async function resolveEntity(dealId: string, userId: string): Promise<Entity | null> {
   try {
     return await getEntityByLegacyDealId(dealId, userId);
@@ -58,7 +87,8 @@ async function resolveEntity(dealId: string, userId: string): Promise<Entity | n
 async function runFactExtraction(
   entity: Entity,
   entityFileId: string,
-  text: string
+  text: string,
+  dealId: string
 ): Promise<void> {
   try {
     // Get applicable fact definitions for this entity type (critical only for speed)
@@ -88,9 +118,11 @@ async function runFactExtraction(
       model: extractionResult.model_name,
     });
 
-    // Recalculate KPI scorecard after facts are updated (non-fatal)
-    scoreAndPersistKpis(entity.id, entity.entity_type_id).catch((err) => {
-      console.error("[entityFileService] KPI scoring failed (non-fatal):", err);
+    // Run triage summary after facts are updated (non-fatal).
+    // This is the only AI analysis that runs automatically on intake.
+    // Deep analysis (KPI scoring, deal assessment) is user-triggered only.
+    runTriageSummary(entity.id, entity.entity_type_id, dealId, entity.title).catch((err) => {
+      console.error("[entityFileService] triage summary failed (non-fatal):", err);
     });
   } catch (err) {
     console.error("[entityFileService] runFactExtraction failed (non-fatal):", err);
@@ -157,8 +189,11 @@ export async function ingestFromDealUpload(
           chunk_count: chunkCount,
         });
 
-        // 5. Extract facts (critical subset, non-fatal)
-        await runFactExtraction(entity, entityFile.id, params.extractedText);
+        // 5. Mark deep analysis stale (non-fatal) — new text was added
+        markDeepAnalysisStale(entity.id).catch(() => {});
+
+        // 6. Extract facts (critical subset, non-fatal)
+        await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId);
       }
     } else {
       // No text — mark as skipped so we know it was processed
@@ -221,8 +256,11 @@ export async function ingestFromDealEntry(
       chunk_count: chunkCount,
     });
 
+    // Mark deep analysis stale (non-fatal) — new text was added
+    markDeepAnalysisStale(entity.id).catch(() => {});
+
     // Extract facts from pasted text (critical subset, non-fatal)
-    await runFactExtraction(entity, entityFile.id, params.entryContent);
+    await runFactExtraction(entity, entityFile.id, params.entryContent, params.dealId);
   } catch (err) {
     console.error("[entityFileService] ingestFromDealEntry failed (non-fatal):", err);
   }

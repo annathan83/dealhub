@@ -5,21 +5,32 @@ import { useRouter } from "next/navigation";
 import type { DealStatus } from "@/types";
 
 const STATUS_OPTIONS: { value: DealStatus; label: string }[] = [
-  { value: "new", label: "New" },
-  { value: "reviewing", label: "Reviewing" },
+  { value: "new",           label: "New" },
+  { value: "triaged",       label: "Triaged" },
+  { value: "investigating", label: "Investigating" },
+  { value: "loi",           label: "LOI" },
+  { value: "acquired",      label: "Acquired" },
+  { value: "passed",        label: "Passed" },
+  { value: "archived",      label: "Archived" },
+  // Legacy statuses
+  { value: "reviewing",     label: "Reviewing" },
   { value: "due_diligence", label: "Due Diligence" },
-  { value: "offer", label: "Offer" },
-  { value: "closed", label: "Closed" },
-  { value: "passed", label: "Passed" },
+  { value: "offer",         label: "Offer" },
+  { value: "closed",        label: "Closed" },
 ];
 
 const STATUS_STYLES: Record<DealStatus, string> = {
-  new: "bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300",
-  reviewing: "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300",
+  new:           "bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-300",
+  triaged:       "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300",
+  investigating: "bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300",
+  loi:           "bg-violet-50 text-violet-700 border-violet-100 hover:border-violet-300",
+  acquired:      "bg-emerald-50 text-emerald-700 border-emerald-100 hover:border-emerald-300",
+  passed:        "bg-red-50 text-red-600 border-red-100 hover:border-red-300",
+  archived:      "bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300",
+  reviewing:     "bg-blue-50 text-blue-700 border-blue-100 hover:border-blue-300",
   due_diligence: "bg-purple-50 text-purple-700 border-purple-100 hover:border-purple-300",
-  offer: "bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300",
-  closed: "bg-green-50 text-green-700 border-green-100 hover:border-green-300",
-  passed: "bg-red-50 text-red-600 border-red-100 hover:border-red-300",
+  offer:         "bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300",
+  closed:        "bg-green-50 text-green-700 border-green-100 hover:border-green-300",
 };
 
 type Props = {
