@@ -296,6 +296,7 @@ export type FileStorageProvider = "google_drive" | "s3" | "local" | "supabase_st
 
 export type FileSourceKind =
   | "uploaded_file"
+  | "uploaded_image"
   | "webcam_photo"
   | "audio_recording"
   | "pasted_text"

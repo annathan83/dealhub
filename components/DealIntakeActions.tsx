@@ -158,6 +158,7 @@ export default function DealIntakeActions({ dealId, isDriveConnected }: Props) {
     try {
       const form = new FormData();
       for (const f of list) form.append("files", f);
+      form.append("captureSource", source);
       const res = await fetch(`/api/deals/${dealId}/files`, { method: "POST", body: form });
       const data = await res.json().catch(() => ({})) as { error?: string; results?: { success: boolean; error?: string }[] };
       if (!res.ok) throw new Error(data.error ?? "Upload failed.");
@@ -340,7 +341,7 @@ export default function DealIntakeActions({ dealId, isDriveConnected }: Props) {
         <WebcamCaptureModal
           onCapture={(files) => { if (files.length > 0) uploadFiles(files, "camera"); }}
           onClose={() => setShowWebcam(false)}
-          onError={() => {}}
+          onError={(msg) => { setShowWebcam(false); setError(msg ?? "Camera access was denied. Please allow camera permission and try again."); }}
         />
       )}
 
@@ -348,7 +349,7 @@ export default function DealIntakeActions({ dealId, isDriveConnected }: Props) {
         <AudioRecordModal
           onCapture={(file) => uploadFiles([file], "audio")}
           onClose={() => setShowAudio(false)}
-          onError={() => {}}
+          onError={(msg) => { setShowAudio(false); setError(msg ?? "Microphone access was denied. Please allow microphone permission and try again."); }}
         />
       )}
     </div>

@@ -11,7 +11,7 @@ export const ACCEPTED_MIME_TYPES: Record<string, string> = {
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
 };
 
-export const ACCEPTED_EXTENSIONS = [".txt", ".pdf", ".doc", ".docx", ".xls", ".xlsx"];
+export const ACCEPTED_EXTENSIONS = [".txt", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv"];
 
 export function validateFile(file: { size: number; type: string; name: string }): string | null {
   if (file.size > MAX_FILE_SIZE) {
@@ -75,6 +75,11 @@ export async function extractTextFromBuffer(
       .replace(/[^\x20-\x7E\n\r\t]/g, " ")
       .replace(/ {3,}/g, "  ")
       .trim();
+  }
+
+  // ── CSV ───────────────────────────────────────────────────────────────────
+  if (ext === "csv") {
+    return buffer.toString("utf-8");
   }
 
   // ── Excel (.xlsx / .xls) ──────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { transcribeAudio, isAudioFile } from "@/lib/ai/transcribeAudio";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
 import { ingestFile } from "@/lib/services/DealFileIngestionService";
 import { processDerivative } from "@/lib/services/DerivativeProcessingService";
+import { updateDerivative } from "@/lib/db/derivatives";
 import type { Deal, ExtractedFacts } from "@/types";
 import type { AttachmentAnalysisResult } from "@/types";
 
@@ -133,6 +134,7 @@ export async function POST(
 
   const rawFiles = formData.getAll("files");
   const files = rawFiles.filter((f): f is File => f instanceof File);
+  const captureSource = (formData.get("captureSource") as string | null) ?? "file";
 
   if (files.length === 0) {
     return NextResponse.json({ error: "No files provided" }, { status: 400 });
@@ -334,15 +336,20 @@ export async function POST(
         });
       }
 
-      // 3b. Register in deal_files + deal_file_derivatives, then immediately
-      //     process image/audio derivatives (extraction happens inline here).
+      // 3b. Register in deal_files + deal_file_derivatives, then drive extraction.
       try {
+        const sourceKind = isImage
+          ? (captureSource === "camera" ? "webcam_photo" : "uploaded_image")
+          : isAudio
+            ? "audio_recording"
+            : "uploaded_file";
+
         const { derivative } = await ingestFile({
           dealId,
           userId: user.id,
           originalFileName: file.name,
           mimeType: mimeType,
-          sourceKind: isImage ? "webcam_photo" : isAudio ? "audio_recording" : "uploaded_file",
+          sourceKind,
           googleFileId: driveMeta.googleFileId,
           googleFileName: driveMeta.googleFileName,
           webViewLink: driveMeta.webViewLink ?? null,
@@ -350,9 +357,23 @@ export async function POST(
           dealSourceId: sourceId,
         });
 
-        // Run extraction immediately for image and audio — these are fast enough
-        // to do inline (Vision API ~2s, Whisper ~5s). PDF/spreadsheet stay pending.
         if (isImage || isAudio) {
+          // Already analyzed inline above — mark derivative done immediately
+          // with the content we already computed, avoiding a redundant API call.
+          const extractedText = isAudio
+            ? analysis.summary  // full transcript
+            : analysis.summary; // image AI summary
+          updateDerivative({
+            id: derivative.id,
+            userId: user.id,
+            extractionStatus: "done",
+            extractedText,
+            extractionModel: isAudio ? "whisper-1" : "gpt-4o-mini",
+          }).catch((err) => {
+            console.error("updateDerivative (inline) failed (non-fatal):", err);
+          });
+        } else {
+          // PDF, spreadsheet, text — run extraction now (pdf-parse / xlsx are fast).
           processDerivative(derivative).catch((err) => {
             console.error("processDerivative failed (non-fatal):", err);
           });

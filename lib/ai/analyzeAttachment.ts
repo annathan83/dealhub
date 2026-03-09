@@ -8,7 +8,7 @@ import type {
 } from "@/types";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.DEALHUB_OPENAI_MODEL ?? "gpt-4.1-mini";
+const MODEL = process.env.DEALHUB_OPENAI_MODEL ?? "gpt-4o-mini";
 const VISION_MODEL = "gpt-4o-mini"; // Vision-capable for image analysis
 
 const VALID_KINDS: AttachmentKind[] = [

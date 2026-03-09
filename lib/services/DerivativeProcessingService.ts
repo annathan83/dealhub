@@ -8,8 +8,8 @@
  *  - text        → reads deal_sources.content directly (no AI, no Drive)
  *  - image       → downloads from Drive, calls GPT-4o Vision
  *  - audio       → downloads from Drive, calls Whisper transcription
- *  - pdf         → stub — Phase 4 will add pdf-parse
- *  - spreadsheet → stub — Phase 4 will add xlsx
+ *  - pdf         → downloads from Drive, extracts text with pdf-parse
+ *  - spreadsheet → downloads from Drive, extracts CSV rows with xlsx
  */
 
 import { updateDerivative, listPendingDerivatives } from "@/lib/db/derivatives";
@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/server";
 import { downloadDriveFile } from "@/lib/google/drive";
 import { analyzeImageAttachment } from "@/lib/ai/analyzeAttachment";
 import { transcribeAudio } from "@/lib/ai/transcribeAudio";
+import { extractTextFromBuffer } from "@/lib/files/extractText";
 import type { DealFileDerivative, DerivativeFileType } from "@/types";
 
 // ─── Extractor stubs ──────────────────────────────────────────────────────────
@@ -53,11 +54,25 @@ async function extractText(
   }
 }
 
-/** PDF extraction stub — Phase 4 will add pdf-parse + GPT-4o-mini structured extraction. */
+/** Download PDF from Drive and extract text with pdf-parse. */
 async function extractPdf(
-  _derivative: DealFileDerivative
+  derivative: DealFileDerivative
 ): Promise<ExtractorResult> {
-  return { extractedText: null, structuredFields: null, model: null };
+  if (!derivative.google_file_id) {
+    return { extractedText: null, structuredFields: null, model: null };
+  }
+
+  const buffer = await downloadDriveFile(derivative.user_id, derivative.google_file_id);
+  const text = await extractTextFromBuffer(buffer, derivative.original_file_name);
+
+  return {
+    extractedText: text || null,
+    structuredFields: {
+      char_count: text?.length ?? 0,
+      word_count: text ? text.split(/\s+/).filter(Boolean).length : 0,
+    },
+    model: "pdf-parse",
+  };
 }
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;  // 4 MB — GPT-4o Vision limit
@@ -144,11 +159,25 @@ async function extractAudio(
   };
 }
 
-/** Spreadsheet extraction stub — Phase 4 will add xlsx + financial row parsing. */
+/** Download spreadsheet from Drive and extract CSV rows with xlsx. */
 async function extractSpreadsheet(
-  _derivative: DealFileDerivative
+  derivative: DealFileDerivative
 ): Promise<ExtractorResult> {
-  return { extractedText: null, structuredFields: null, model: null };
+  if (!derivative.google_file_id) {
+    return { extractedText: null, structuredFields: null, model: null };
+  }
+
+  const buffer = await downloadDriveFile(derivative.user_id, derivative.google_file_id);
+  const text = await extractTextFromBuffer(buffer, derivative.original_file_name);
+
+  return {
+    extractedText: text || null,
+    structuredFields: {
+      char_count: text?.length ?? 0,
+      row_count: text ? text.split("\n").filter(Boolean).length : 0,
+    },
+    model: "xlsx",
+  };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
