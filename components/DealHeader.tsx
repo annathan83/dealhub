@@ -199,6 +199,14 @@ export default function DealHeader({ deal }: { deal: Deal }) {
               </svg>
               Added {formatDate(deal.created_at)}
             </span>
+            {deal.updated_at !== deal.created_at && (
+              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Updated {formatDate(deal.updated_at)}
+              </span>
+            )}
           </div>
         </div>
 

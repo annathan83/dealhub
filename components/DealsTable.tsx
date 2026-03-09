@@ -51,7 +51,7 @@ const ALL_STATUSES: DealStatus[] = [
 
 const VALID_STATUSES: DealStatus[] = ALL_STATUSES;
 
-type SortKey = "name" | "asking_price" | "sde" | "multiple" | "status" | "created_at";
+type SortKey = "name" | "asking_price" | "sde" | "multiple" | "status" | "created_at" | "updated_at";
 type SortDir = "asc" | "desc";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -134,12 +134,16 @@ function DealCard({ deal }: { deal: Deal }) {
                 <p className="text-sm font-semibold text-slate-600 tabular-nums leading-tight">{deal.multiple}</p>
               </div>
             )}
-            <span className="ml-auto text-[11px] text-slate-300 tabular-nums">{formatDate(deal.created_at)}</span>
+            <span className="ml-auto text-[11px] text-slate-300 tabular-nums" title={`Added ${formatDate(deal.created_at)}`}>
+              Updated {formatDate(deal.updated_at)}
+            </span>
           </div>
         ) : (
           <div className="flex items-center justify-between">
             <p className="text-xs text-slate-300 italic">No financials yet</p>
-            <span className="text-[11px] text-slate-300 tabular-nums">{formatDate(deal.created_at)}</span>
+            <span className="text-[11px] text-slate-300 tabular-nums" title={`Added ${formatDate(deal.created_at)}`}>
+              Updated {formatDate(deal.updated_at)}
+            </span>
           </div>
         )}
       </div>
@@ -165,7 +169,7 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DealStatus | "all">("all");
-  const [sortKey, setSortKey] = useState<SortKey>("created_at");
+  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   // Sync filter from URL query param (set by pipeline stat tiles)
@@ -207,6 +211,7 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
       else if (sortKey === "multiple") cmp = parseNum(a.multiple) - parseNum(b.multiple);
       else if (sortKey === "status") cmp = a.status.localeCompare(b.status);
       else if (sortKey === "created_at") cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      else if (sortKey === "updated_at") cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
       return sortDir === "asc" ? cmp : -cmp;
     });
 
@@ -356,7 +361,7 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                   <Th label="Ask" sortable colKey="asking_price" align="right" />
                   <Th label="Mult." sortable colKey="multiple" align="right" />
                   <Th label="Status" sortable colKey="status" />
-                  <Th label="Added" sortable colKey="created_at" />
+                  <Th label="Updated" sortable colKey="updated_at" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -385,8 +390,8 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                     <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <StatusSelect dealId={deal.id} currentStatus={deal.status} variant="row" />
                     </td>
-                    <td className="px-4 py-3 text-slate-400 whitespace-nowrap tabular-nums text-xs">
-                      {formatDate(deal.created_at)}
+                    <td className="px-4 py-3 text-slate-400 whitespace-nowrap tabular-nums text-xs" title={`Added ${formatDate(deal.created_at)}`}>
+                      {formatDate(deal.updated_at)}
                     </td>
                   </tr>
                 ))}

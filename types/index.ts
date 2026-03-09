@@ -21,6 +21,7 @@ export type Deal = {
   multiple: string | null;
   google_drive_folder_id: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 // ─── Deal Source ──────────────────────────────────────────────────────────────

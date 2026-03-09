@@ -22,7 +22,7 @@ export default async function DashboardPage() {
       .from("deals")
       .select("*")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false }),
+      .order("updated_at", { ascending: false }),
     supabase
       .from("google_oauth_tokens")
       .select("id")
