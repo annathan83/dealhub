@@ -96,7 +96,7 @@ export default async function DealPage({
         </div>
 
         {/* ── 3. History timeline ─────────────────────────────────────────────── */}
-        <div className="mt-4">
+        <div className="mt-6 pb-4">
           <TimelineSection items={timelineItems} />
         </div>
 

@@ -2,7 +2,6 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import type { EntityFile } from "@/types/entity";
 import WebcamCaptureModal from "./WebcamCaptureModal";
 import AudioRecordModal from "./AudioRecordModal";
@@ -67,78 +66,36 @@ function getKindLabel(kind: FileKind): string {
 
 // ─── File kind icon ───────────────────────────────────────────────────────────
 
-function KindIcon({ kind, size = "md" }: { kind: FileKind; size?: "sm" | "md" }) {
-  const s = size === "sm" ? "w-3.5 h-3.5" : "w-4 h-4";
-  const wrap = size === "sm" ? "w-7 h-7 rounded-lg" : "w-9 h-9 rounded-xl";
+type IconConfig = { color: string; path: string };
 
-  const configs: Record<FileKind, { bg: string; color: string; path: string }> = {
-    note: {
-      bg: "bg-slate-100", color: "text-slate-500",
-      path: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
-    },
-    audio: {
-      bg: "bg-violet-50", color: "text-violet-500",
-      path: "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-4a4 4 0 01-8 0V9a4 4 0 018 0z",
-    },
-    image: {
-      bg: "bg-amber-50", color: "text-amber-500",
-      path: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z",
-    },
-    pdf: {
-      bg: "bg-red-50", color: "text-red-500",
-      path: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-    },
-    spreadsheet: {
-      bg: "bg-emerald-50", color: "text-emerald-600",
-      path: "M3 10h18M3 14h18M10 3v18M3 6a3 3 0 013-3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6z",
-    },
-    doc: {
-      bg: "bg-blue-50", color: "text-blue-500",
-      path: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
-    },
-    file: {
-      bg: "bg-slate-100", color: "text-slate-400",
-      path: "M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z",
-    },
-  };
+const KIND_ICON_CONFIGS: Record<FileKind, IconConfig> = {
+  note:        { color: "text-slate-400",   path: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" },
+  audio:       { color: "text-violet-400",  path: "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-4a4 4 0 01-8 0V9a4 4 0 018 0z" },
+  image:       { color: "text-amber-400",   path: "M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" },
+  pdf:         { color: "text-red-400",     path: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+  spreadsheet: { color: "text-emerald-500", path: "M3 10h18M3 14h18M10 3v18M3 6a3 3 0 013-3h12a3 3 0 013 3v12a3 3 0 01-3 3H6a3 3 0 01-3-3V6z" },
+  doc:         { color: "text-blue-400",    path: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+  file:        { color: "text-slate-400",   path: "M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" },
+};
 
-  const { bg, color, path } = configs[kind];
+function FileTypeIcon({ kind }: { kind: FileKind }) {
+  const { color, path } = KIND_ICON_CONFIGS[kind];
   return (
-    <span className={`${wrap} ${bg} flex items-center justify-center shrink-0`}>
-      <svg className={`${s} ${color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d={path} />
-      </svg>
-    </span>
+    <svg className={`w-4 h-4 shrink-0 ${color}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d={path} />
+    </svg>
   );
 }
 
-// ─── Processing status badge ──────────────────────────────────────────────────
+// ─── Status dot ───────────────────────────────────────────────────────────────
 
-function StatusBadge({ file }: { file: EntityFile }) {
+function StatusDot({ file }: { file: EntityFile }) {
   const hasText = !!file.summary;
   const isNote = file.source_type === "pasted_text" || file.metadata_json?.is_text_entry;
-
-  if (isNote) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-        Note
-      </span>
-    );
+  if (isNote || hasText) {
+    return <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" title="Processed" />;
   }
-  if (hasText) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-        Processed
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-600">
-      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-      Processing
-    </span>
-  );
+  return <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0" title="Processing" />;
 }
 
 // ─── File detail modal ────────────────────────────────────────────────────────
@@ -165,7 +122,6 @@ function FileDetailModal({
     onDeleted();
   }
 
-  // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     window.addEventListener("keydown", onKey);
@@ -174,14 +130,13 @@ function FileDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Panel */}
       <div className="relative w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-start gap-3 px-5 py-4 border-b border-slate-100">
-          <KindIcon kind={kind} size="md" />
+          <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+            <FileTypeIcon kind={kind} />
+          </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-slate-900 leading-tight break-all">
               {file.title ?? file.file_name}
@@ -202,7 +157,6 @@ function FileDetailModal({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4">
-          {/* Metadata grid */}
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Type</p>
@@ -220,11 +174,14 @@ function FileDetailModal({
             )}
             <div>
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-0.5">Status</p>
-              <StatusBadge file={file} />
+              <p className="text-sm text-slate-700">
+                {(file.source_type === "pasted_text" || file.metadata_json?.is_text_entry || file.summary)
+                  ? "Processed"
+                  : "Processing"}
+              </p>
             </div>
           </div>
 
-          {/* Summary / extracted content */}
           {file.summary && (
             <div>
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
@@ -238,7 +195,6 @@ function FileDetailModal({
             </div>
           )}
 
-          {/* No content yet */}
           {!file.summary && !isNote && (
             <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
               <p className="text-xs text-amber-700">
@@ -248,7 +204,7 @@ function FileDetailModal({
           )}
         </div>
 
-        {/* Footer actions */}
+        {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-100 flex items-center gap-2">
           {file.web_view_link && (
             <a
@@ -263,7 +219,6 @@ function FileDetailModal({
               Open in Drive
             </a>
           )}
-
           {isNote && !confirmDelete && (
             <button
               onClick={() => setConfirmDelete(true)}
@@ -373,171 +328,82 @@ function AddNotePanel({ dealId, onDone }: { dealId: string; onDone: () => void }
   );
 }
 
-// ─── File row ─────────────────────────────────────────────────────────────────
+// ─── Explorer file row ────────────────────────────────────────────────────────
 
-function FileRow({ file, onClick }: { file: EntityFile; onClick: () => void }) {
+function ExplorerRow({ file, onClick }: { file: EntityFile; onClick: () => void }) {
   const kind = getFileKind(file);
   const displayName = file.title ?? file.file_name;
-  const showFileName = file.title && file.title !== file.file_name;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 active:bg-slate-100 transition-colors text-left group"
+      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-indigo-50/60 active:bg-indigo-100/60 transition-colors text-left group"
     >
-      <KindIcon kind={kind} size="sm" />
+      {/* Status dot — leftmost, very subtle */}
+      <StatusDot file={file} />
 
+      {/* File type icon */}
+      <FileTypeIcon kind={kind} />
+
+      {/* Name + meta */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-800 truncate leading-tight group-hover:text-indigo-700 transition-colors">
+        <p className="text-sm text-slate-800 truncate leading-tight font-medium group-hover:text-indigo-700 transition-colors">
           {displayName}
         </p>
-        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          {showFileName && (
-            <>
-              <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{file.file_name}</span>
-              <span className="text-[10px] text-slate-300">·</span>
-            </>
-          )}
-          <span className="text-[10px] text-slate-400">{getKindLabel(kind)}</span>
-          <span className="text-[10px] text-slate-300">·</span>
-          <span className="text-[10px] text-slate-400">{formatRelativeTime(file.uploaded_at)}</span>
-          {file.file_size_bytes && (
-            <>
-              <span className="text-[10px] text-slate-300">·</span>
-              <span className="text-[10px] text-slate-400">{formatFileSize(file.file_size_bytes)}</span>
-            </>
-          )}
-        </div>
+        <p className="text-[10px] text-slate-400 truncate mt-px">
+          {getKindLabel(kind)}
+          {file.file_size_bytes ? ` · ${formatFileSize(file.file_size_bytes)}` : ""}
+        </p>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        <StatusBadge file={file} />
-        <svg className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </div>
+      {/* Timestamp */}
+      <span className="text-[11px] text-slate-400 shrink-0 tabular-nums whitespace-nowrap">
+        {formatRelativeTime(file.uploaded_at)}
+      </span>
+
+      {/* Chevron */}
+      <svg
+        className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-400 transition-colors shrink-0"
+        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
     </button>
   );
 }
 
-// ─── Add menu ─────────────────────────────────────────────────────────────────
+// ─── Action button (large, tappable) ─────────────────────────────────────────
 
-function AddMenu({
-  onNote,
-  onUpload,
-  onPhoto,
-  onAudio,
-  uploading,
-  isMobile,
-  uploadInputRef,
-  cameraInputRef,
-  onFileChange,
-  onCameraChange,
+function ActionButton({
+  label,
+  iconPath,
+  onClick,
+  disabled,
+  accent,
 }: {
-  onNote: () => void;
-  onUpload: () => void;
-  onPhoto: () => void;
-  onAudio: () => void;
-  uploading: string | null;
-  isMobile: boolean;
-  uploadInputRef: React.RefObject<HTMLInputElement | null>;
-  cameraInputRef: React.RefObject<HTMLInputElement | null>;
-  onFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onCameraChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  label: string;
+  iconPath: string;
+  onClick: () => void;
+  disabled?: boolean;
+  accent?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-
-  const items = [
-    {
-      label: "Add note",
-      icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z",
-      action: () => { setOpen(false); onNote(); },
-    },
-    {
-      label: "Upload file",
-      icon: "M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12",
-      action: () => { setOpen(false); onUpload(); },
-    },
-    {
-      label: "Add photo",
-      icon: "M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z",
-      action: () => { setOpen(false); onPhoto(); },
-    },
-    {
-      label: "Record audio",
-      icon: "M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-4a4 4 0 01-8 0V9a4 4 0 018 0z",
-      action: () => { setOpen(false); onAudio(); },
-    },
-  ];
-
   return (
-    <div className="relative">
-      {/* Hidden file inputs */}
-      <input
-        ref={uploadInputRef}
-        type="file"
-        accept={ALL_ACCEPT}
-        multiple
-        className="hidden"
-        onChange={onFileChange}
-        disabled={!!uploading}
-      />
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={onCameraChange}
-        disabled={!!uploading}
-      />
-
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        disabled={!!uploading}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700 hover:bg-indigo-50 transition-colors disabled:opacity-50 shadow-sm"
-      >
-        {uploading ? (
-          <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
-          </svg>
-        ) : (
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-        )}
-        {uploading ? "Uploading…" : "Add"}
-        {!uploading && (
-          <svg className="w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        )}
-      </button>
-
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1.5 z-20 w-44 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
-            {items.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={item.action}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
-              >
-                <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3 text-xs font-semibold transition-colors disabled:opacity-40 flex-1 min-w-0 ${
+        accent
+          ? "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300"
+          : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+      }`}
+    >
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
+      </svg>
+      <span className="leading-none">{label}</span>
+    </button>
   );
 }
 
@@ -616,64 +482,94 @@ export default function IntakeSection({
 
   const handleDragLeave = useCallback(() => setIsDragOver(false), []);
 
-  // Stats
   const totalFiles = files.length;
-  const processedCount = files.filter((f) => !!f.summary || f.source_type === "pasted_text" || f.metadata_json?.is_text_entry).length;
+  const processedCount = files.filter(
+    (f) => !!f.summary || f.source_type === "pasted_text" || f.metadata_json?.is_text_entry
+  ).length;
   const pendingCount = totalFiles - processedCount;
 
   return (
     <>
+      {/* Hidden file inputs */}
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept={ALL_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(e) => uploadFiles(e.target.files, "file")}
+        disabled={!!uploading}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => uploadFiles(e.target.files, "camera")}
+        disabled={!!uploading}
+      />
+
+      {/* ── Zone 1: Large action buttons ──────────────────────────────────────── */}
+      <div className="flex gap-2 mb-3">
+        <ActionButton
+          label={uploading === "file" ? "Uploading…" : "Upload"}
+          iconPath="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+          onClick={() => uploadInputRef.current?.click()}
+          disabled={!!uploading}
+          accent
+        />
+        <ActionButton
+          label="Note"
+          iconPath="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+          onClick={() => setShowNote((v) => !v)}
+          disabled={!!uploading}
+        />
+        <ActionButton
+          label="Photo"
+          iconPath="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+          onClick={() => isMobile ? cameraInputRef.current?.click() : setShowWebcam(true)}
+          disabled={!!uploading}
+        />
+        <ActionButton
+          label="Audio"
+          iconPath="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-4a4 4 0 01-8 0V9a4 4 0 018 0z"
+          onClick={() => setShowAudio(true)}
+          disabled={!!uploading}
+        />
+      </div>
+
+      {/* ── Zone 2: File workspace pane ────────────────────────────────────────── */}
       <div
-        className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
-          isDragOver ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-100"
+        className={`rounded-xl border overflow-hidden transition-all ${
+          isDragOver
+            ? "border-indigo-300 ring-2 ring-indigo-100 bg-indigo-50/30"
+            : "border-slate-200 bg-white"
         }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
       >
-        {/* ── Header bar ────────────────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+        {/* Pane toolbar */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+          {/* Folder icon */}
+          <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          </svg>
+          <span className="text-[11px] font-semibold text-slate-500 flex-1">Deal Folder</span>
           {/* Stats */}
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            {totalFiles === 0 ? (
-              <span className="text-xs text-slate-400">No files yet</span>
-            ) : (
-              <>
-                <span className="text-xs font-semibold text-slate-700">{totalFiles} item{totalFiles !== 1 ? "s" : ""}</span>
-                {processedCount > 0 && (
-                  <>
-                    <span className="text-slate-300 text-xs">·</span>
-                    <span className="text-xs text-emerald-600 font-medium">{processedCount} processed</span>
-                  </>
-                )}
-                {pendingCount > 0 && (
-                  <>
-                    <span className="text-slate-300 text-xs">·</span>
-                    <span className="text-xs text-amber-500 font-medium">{pendingCount} pending</span>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Actions — always available; Drive is optional, Supabase Storage is the fallback */}
-          <AddMenu
-            onNote={() => setShowNote((v) => !v)}
-            onUpload={() => uploadInputRef.current?.click()}
-            onPhoto={() => isMobile ? cameraInputRef.current?.click() : setShowWebcam(true)}
-            onAudio={() => setShowAudio(true)}
-            uploading={uploading}
-            isMobile={isMobile}
-            uploadInputRef={uploadInputRef}
-            cameraInputRef={cameraInputRef}
-            onFileChange={(e) => uploadFiles(e.target.files, "file")}
-            onCameraChange={(e) => uploadFiles(e.target.files, "camera")}
-          />
+          {totalFiles > 0 && (
+            <span className="text-[11px] text-slate-400">
+              {totalFiles} {totalFiles === 1 ? "file" : "files"}
+              {processedCount > 0 && ` · ${processedCount} processed`}
+              {pendingCount > 0 && ` · ${pendingCount} pending`}
+            </span>
+          )}
         </div>
 
-        {/* ── Error banner ──────────────────────────────────────────────────── */}
+        {/* Error banner */}
         {error && (
-          <div className="flex items-start gap-2 border-b border-red-100 bg-red-50 px-4 py-2.5">
+          <div className="flex items-start gap-2 border-b border-red-100 bg-red-50 px-3 py-2">
             <svg className="w-3.5 h-3.5 text-red-500 shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
@@ -686,16 +582,16 @@ export default function IntakeSection({
           </div>
         )}
 
-        {/* ── Add note panel ────────────────────────────────────────────────── */}
+        {/* Add note panel */}
         {showNote && (
           <AddNotePanel dealId={dealId} onDone={() => setShowNote(false)} />
         )}
 
-        {/* ── File list ─────────────────────────────────────────────────────── */}
+        {/* File list */}
         {files.length > 0 ? (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-100">
             {files.map((file) => (
-              <FileRow
+              <ExplorerRow
                 key={file.id}
                 file={file}
                 onClick={() => setSelectedFile(file)}
@@ -704,56 +600,46 @@ export default function IntakeSection({
           </div>
         ) : (
           /* Empty state */
-          <div
-            className="px-4 py-8 text-center"
-          >
-            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-            </div>
-            <p className="text-sm font-medium text-slate-600 mb-1">No files yet</p>
-            <p className="text-xs text-slate-400">
-              Upload a file, add a note, or record audio to get started.
+          <div className={`px-4 py-7 text-center ${isDragOver ? "bg-indigo-50/40" : ""}`}>
+            <svg className="w-8 h-8 text-slate-300 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+            </svg>
+            <p className="text-sm font-medium text-slate-500 mb-1">
+              {isDragOver ? "Drop to upload" : "No files yet"}
             </p>
-            {isDragOver && (
-              <p className="mt-2 text-xs font-semibold text-indigo-600 animate-pulse">Drop to upload…</p>
-            )}
+            <p className="text-xs text-slate-400">
+              {isDragOver ? "Release to add files to this deal." : "Use the buttons above to upload files, add notes, or record audio."}
+            </p>
           </div>
         )}
 
-        {/* ── Triage connection banner ───────────────────────────────────────── */}
+        {/* Triage status footer */}
         {files.length > 0 && newFilesAfterTriage && (
-          <div className="border-t border-amber-100 bg-amber-50 px-4 py-2.5 flex items-center gap-2">
-            <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="border-t border-amber-100 bg-amber-50 px-3 py-2 flex items-center gap-2">
+            <svg className="w-3 h-3 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <p className="text-xs text-amber-700 flex-1">New files added since last review — Initial Review may be outdated.</p>
+            <p className="text-[11px] text-amber-700">New files added since last review — Initial Review may be outdated.</p>
           </div>
         )}
-
-        {files.length > 0 && !triageSummaryExists && !newFilesAfterTriage && (
-          <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 flex items-center gap-2">
-            <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        {files.length > 0 && !triageSummaryExists && !newFilesAfterTriage && processedCount > 0 && (
+          <div className="border-t border-slate-100 bg-slate-50/60 px-3 py-2 flex items-center gap-2">
+            <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-xs text-slate-500 flex-1">
-              {processedCount > 0
-                ? "Files processed — Initial Review will generate automatically."
-                : "Files are being processed…"}
-            </p>
+            <p className="text-[11px] text-slate-500">Files processed — Initial Review will generate automatically.</p>
           </div>
         )}
 
-        {/* Drag-over overlay hint */}
+        {/* Drag-over overlay */}
         {isDragOver && files.length > 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl">
             <p className="text-sm font-semibold text-indigo-600 bg-white/90 rounded-xl px-4 py-2 shadow-sm animate-pulse">Drop to upload…</p>
           </div>
         )}
       </div>
 
-      {/* ── File detail modal ──────────────────────────────────────────────── */}
+      {/* File detail modal */}
       {selectedFile && (
         <FileDetailModal
           file={selectedFile}
@@ -763,7 +649,7 @@ export default function IntakeSection({
         />
       )}
 
-      {/* ── Modals ────────────────────────────────────────────────────────── */}
+      {/* Camera / audio modals */}
       {showWebcam && (
         <WebcamCaptureModal
           onCapture={(fileList) => { if (fileList.length > 0) uploadFiles(fileList, "camera"); }}
