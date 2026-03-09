@@ -9,8 +9,8 @@ type Props = {
 
 export default function WorkspacePanel({ id, title, subtitle, children, action }: Props) {
   return (
-    <div id={id} className="rounded-xl border border-slate-100 bg-white shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50/60">
+    <div id={id} className="rounded-xl border border-slate-100 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-slate-100 bg-slate-50/60 rounded-t-xl overflow-hidden">
         <div>
           <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
             {title}

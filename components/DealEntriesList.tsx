@@ -111,12 +111,8 @@ export default function DealEntriesList({ sources }: { sources: SourceWithAnalys
   }
 
   return (
-    <div className="relative">
-      {/* Timeline line */}
-      <div className="absolute left-[19px] top-5 bottom-5 w-px bg-slate-100" aria-hidden />
-
-      <div className="flex flex-col gap-0">
-        {sources.map((source, idx) => {
+    <div className="flex flex-col gap-0">
+      {sources.map((source, idx) => {
           const analysis = source.analysis;
           const title = analysis?.generated_title ?? source.title ?? null;
           const detectedType = analysis?.detected_type ?? source.source_type ?? "unknown";
@@ -128,12 +124,19 @@ export default function DealEntriesList({ sources }: { sources: SourceWithAnalys
           const fileName = extractFileName(source.content);
           const isFileEntry = !!fileName;
           const bodyText = analysis?.summary ?? contentFallback(source.content) ?? null;
+          const isLast = idx === sources.length - 1;
 
           return (
-            <div key={source.id} className={`relative flex gap-4 ${idx < sources.length - 1 ? "pb-4" : ""}`}>
-              {/* Timeline dot / icon */}
-              <div className={`relative z-10 flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center border-2 border-white shadow-sm ${iconBg} ${iconColor}`}>
-                <TypeIcon type={detectedType} />
+            <div key={source.id} className="relative flex gap-4 pb-4 last:pb-0">
+              {/* Timeline dot / icon + connecting line */}
+              <div className="relative flex-shrink-0 flex flex-col items-center">
+                <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center border-2 border-white shadow-sm ${iconBg} ${iconColor}`}>
+                  <TypeIcon type={detectedType} />
+                </div>
+                {/* Vertical connector line — hidden on last item */}
+                {!isLast && (
+                  <div className="flex-1 w-px bg-slate-100 mt-1" />
+                )}
               </div>
 
               {/* Card */}
@@ -176,7 +179,6 @@ export default function DealEntriesList({ sources }: { sources: SourceWithAnalys
             </div>
           );
         })}
-      </div>
     </div>
   );
 }
