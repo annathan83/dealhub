@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import WebcamCaptureModal from "./WebcamCaptureModal";
@@ -127,12 +127,18 @@ type Props = {
 export default function DealIntakeActions({ dealId, isDriveConnected }: Props) {
   const router = useRouter();
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [showWebcam, setShowWebcam] = useState(false);
   const [showAudio, setShowAudio] = useState(false);
   const [uploading, setUploading] = useState<"camera" | "audio" | "file" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  // Detect mobile: use native camera input instead of webcam modal
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    setIsMobile(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+  }, []);
 
   function scrollToAddEntry() {
     document.getElementById("add-entry")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -261,10 +267,10 @@ export default function DealIntakeActions({ dealId, isDriveConnected }: Props) {
           disabled={!!uploading}
         />
 
-        {/* Take Photo */}
+        {/* Take Photo — native camera on mobile, webcam modal on desktop */}
         <ActionTile
           label="Take Photo"
-          sublabel="Camera or webcam"
+          sublabel={isMobile ? "Opens camera app" : "Camera or webcam"}
           accent="amber"
           loading={uploading === "camera"}
           disabled={!!uploading && uploading !== "camera"}
@@ -274,7 +280,18 @@ export default function DealIntakeActions({ dealId, isDriveConnected }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           }
-          onClick={() => setShowWebcam(true)}
+          onClick={isMobile ? () => cameraInputRef.current?.click() : () => setShowWebcam(true)}
+          fileInput={isMobile ? (
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              onChange={(e) => uploadFiles(e.target.files, "camera")}
+              disabled={!!uploading}
+            />
+          ) : undefined}
         />
 
         {/* Record Audio */}
