@@ -320,7 +320,8 @@ export async function POST(
       let sourceId: string | null = null;
       if (!sourceError && sourceData) {
         sourceId = sourceData.id as string;
-        await supabase.from("deal_source_analyses").insert({
+        // Non-fatal — analysis record is supplementary; never block the upload
+        supabase.from("deal_source_analyses").insert({
           deal_source_id: sourceId,
           deal_id: dealId,
           user_id: user.id,
@@ -331,6 +332,8 @@ export async function POST(
           red_flags: [],
           missing_information: [],
           broker_questions: [],
+        }).then(({ error }) => {
+          if (error) console.error("deal_source_analyses insert failed (non-fatal):", error.message);
         });
       }
 
@@ -381,8 +384,8 @@ export async function POST(
         console.error("ingestFile failed (non-fatal):", derivErr);
       }
 
-      // 4. Log the upload in deal_change_log (linked to entry when created)
-      await supabase.from("deal_change_log").insert({
+      // 4. Log the upload in deal_change_log (non-fatal — never block the upload)
+      supabase.from("deal_change_log").insert({
         deal_id: dealId,
         user_id: user.id,
         deal_source_id: sourceId,
@@ -390,6 +393,8 @@ export async function POST(
         change_type: "file_uploaded",
         title: analysis.title,
         description: analysis.description,
+      }).then(({ error }) => {
+        if (error) console.error("deal_change_log insert failed (non-fatal):", error.message);
       });
 
       results.push({ fileName: file.name, success: true, googleFileId: driveMeta.googleFileId });
