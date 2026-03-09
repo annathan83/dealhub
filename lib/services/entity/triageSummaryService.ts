@@ -5,55 +5,39 @@
  * Produces a short, grounded, neutral AI summary of what is known so far.
  *
  * Design constraints:
- * - Uses only the 15 fixed triage facts (never the full fact set)
+ * - Uses only facts with fact_scope='triage' or is_user_visible_initially=true
+ *   (loaded from fact_definitions via getTriageFactDefinitions — not a hardcoded list)
  * - Prompt is strictly neutral — no verdicts, no recommendations
  * - Stores result as an analysis_snapshot with type "triage_summary"
+ * - Creates a processing_run record for full pipeline visibility
  * - Updates deal.status to "triaged" and sets deal.triaged_at
  * - Never throws — all errors are logged and swallowed
+ *
+ * Migration 027: processing_run wired in for triage_generation runs.
  */
 
 import OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
 import {
   getCurrentFactsForEntity,
-  getFactDefinitionsForEntityType,
+  getTriageFactDefinitions,
   insertAnalysisSnapshot,
+  createProcessingRun,
+  updateProcessingRun,
 } from "@/lib/db/entities";
 import { logEntityEvent } from "./entityEventService";
-import type { AnalysisSnapshot } from "@/types/entity";
+import type { AnalysisSnapshot, FactDefinition } from "@/types/entity";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.DEALHUB_OPENAI_MODEL ?? "gpt-4o-mini";
-const PROMPT_VERSION = "triage-v1";
+const PROMPT_VERSION = "triage-v2";
 
-// ─── Fixed triage fact keys ───────────────────────────────────────────────────
-// These 15 facts are the only ones shown in the Initial Review section.
-// They map to keys in the fact_definitions table.
-
-export const TRIAGE_FACT_KEYS = [
-  "asking_price",
-  "location",
-  "industry",
-  "revenue_latest",
-  "sde_or_ebitda",
-  "revenue_trend",
-  "profit_margin",
-  "employees_ft_pt",
-  "owner_hours",
-  "manager_in_place",
-  "years_in_business",
-  "customer_concentration",
-  "reason_for_sale",
-  "real_estate_included",
-  "inventory_included",
-] as const;
-
-export type TriageFactKey = (typeof TRIAGE_FACT_KEYS)[number];
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TriageFactStatus = "found" | "missing" | "ambiguous";
 
 export type TriageFact = {
-  key: TriageFactKey | string;
+  key: string;
   label: string;
   value: string | null;
   confidence: number | null;
@@ -107,11 +91,53 @@ Return ONLY valid JSON with this exact structure:
 }`;
 }
 
+// ─── Fact builder ─────────────────────────────────────────────────────────────
+
+/**
+ * Build the triage fact list from fact definitions and current entity fact values.
+ * Uses the DB-driven triage fact set (fact_scope='triage' or is_user_visible_initially=true)
+ * rather than a hardcoded key list.
+ */
+function buildTriageFacts(
+  triageFactDefs: FactDefinition[],
+  factValueByDefId: Map<string, { value_raw: string | null; status: string; confidence: number | null }>
+): TriageFact[] {
+  // Sort by display_order (nulls last) so the UI and prompt are stable
+  const sorted = [...triageFactDefs].sort((a, b) => {
+    if (a.display_order === null && b.display_order === null) return 0;
+    if (a.display_order === null) return 1;
+    if (b.display_order === null) return -1;
+    return a.display_order - b.display_order;
+  });
+
+  return sorted.map((def) => {
+    const val = factValueByDefId.get(def.id);
+    const hasValue = val && val.value_raw && val.status !== "missing";
+
+    return {
+      key: def.key,
+      label: def.label,
+      value: hasValue ? val!.value_raw : null,
+      confidence: hasValue ? (val!.confidence ?? null) : null,
+      source: null,
+      status: !val || val.status === "missing"
+        ? "missing"
+        : val.status === "unclear" || val.status === "conflicting"
+        ? "ambiguous"
+        : "found",
+    };
+  });
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 /**
  * Run triage summary for an entity. Stores the result as an analysis_snapshot
  * and updates the deal status to "triaged". Non-fatal.
+ *
+ * Creates a processing_run record for full pipeline visibility.
+ * Uses getTriageFactDefinitions() to load the triage fact set from the DB
+ * (fact_scope='triage' or is_user_visible_initially=true) — no hardcoded keys.
  */
 export async function runTriageSummary(
   entityId: string,
@@ -119,53 +145,39 @@ export async function runTriageSummary(
   dealId: string,
   dealTitle: string
 ): Promise<AnalysisSnapshot | null> {
+  // Create processing_run record before starting
+  const processingRun = await createProcessingRun({
+    entity_id: entityId,
+    run_type: "triage_generation",
+    triggered_by_type: "upload_event",
+    model_name: MODEL,
+    prompt_version: PROMPT_VERSION,
+  }).catch(() => null);
+  const runId = processingRun?.id ?? null;
+
   try {
+    if (runId) await updateProcessingRun(runId, { status: "running" }).catch(() => {});
+
     const supabase = await createClient();
 
-    // 1. Load all fact definitions and current values
-    const [allFactDefs, currentFacts] = await Promise.all([
-      getFactDefinitionsForEntityType(entityTypeId),
+    // 1. Load triage fact definitions (DB-driven, not hardcoded)
+    const [triageFactDefs, currentFacts] = await Promise.all([
+      getTriageFactDefinitions(entityTypeId),
       getCurrentFactsForEntity(entityId),
     ]);
 
-    // 2. Build triage fact set (fixed 15 keys, fall back to any matching label)
-    const factDefByKey = new Map(allFactDefs.map((fd) => [fd.key, fd]));
-    const factValueByDefId = new Map(currentFacts.map((fv) => [fv.fact_definition_id, fv]));
+    // 2. Build lookup maps
+    const factValueByDefId = new Map(
+      currentFacts.map((fv) => [fv.fact_definition_id, fv])
+    );
 
-    const triageFacts: TriageFact[] = TRIAGE_FACT_KEYS.map((key) => {
-      const def = factDefByKey.get(key);
-      if (!def) {
-        return {
-          key,
-          label: key.replace(/_/g, " "),
-          value: null,
-          confidence: null,
-          source: null,
-          status: "missing" as TriageFactStatus,
-        };
-      }
+    // 3. Build triage fact list
+    const triageFacts = buildTriageFacts(triageFactDefs, factValueByDefId);
 
-      const val = factValueByDefId.get(def.id);
-      const hasValue = val && val.value_raw && val.status !== "missing";
-
-      return {
-        key,
-        label: def.label,
-        value: hasValue ? val!.value_raw : null,
-        confidence: hasValue ? (val!.confidence ?? null) : null,
-        source: null,
-        status: !val || val.status === "missing"
-          ? "missing"
-          : val.status === "unclear" || val.status === "conflicting"
-          ? "ambiguous"
-          : "found",
-      };
-    });
-
-    // 3. Build context strings for the prompt
     const foundFacts = triageFacts.filter((f) => f.status !== "missing");
     const missingFacts = triageFacts.filter((f) => f.status === "missing");
 
+    // 4. Build context strings for the prompt
     const factsContext = foundFacts.length > 0
       ? foundFacts.map((f) => {
           const ambig = f.status === "ambiguous" ? " [ambiguous]" : "";
@@ -175,7 +187,7 @@ export async function runTriageSummary(
 
     const missingFactLabels = missingFacts.map((f) => f.label);
 
-    // 4. Call AI for the neutral summary
+    // 5. Call AI for the neutral summary
     let summary = "Initial review in progress. Add more information to generate a summary.";
     let notablePositives: string[] = [];
     let notableConcerns: string[] = [];
@@ -216,7 +228,7 @@ export async function runTriageSummary(
       }
     }
 
-    // 5. Build the full content object
+    // 6. Build the full content object
     const content: TriageSummaryContent = {
       summary,
       facts: triageFacts,
@@ -227,7 +239,7 @@ export async function runTriageSummary(
       facts_missing: missingFacts.length,
     };
 
-    // 6. Store as analysis_snapshot
+    // 7. Store as analysis_snapshot (linked to processing_run)
     const snapshot = await insertAnalysisSnapshot({
       entity_id: entityId,
       analysis_type: "triage_summary",
@@ -235,24 +247,46 @@ export async function runTriageSummary(
       content_json: content as unknown as Record<string, unknown>,
       model_name: foundFacts.length > 0 ? MODEL : null,
       prompt_version: PROMPT_VERSION,
+      run_id: runId,
     });
 
-    // 7. Update deal status to "triaged"
+    // 8. Update deal status to "triaged"
     await supabase
       .from("deals")
       .update({ status: "triaged", triaged_at: new Date().toISOString() })
       .eq("id", dealId);
 
-    // 8. Log the event
+    // 9. Mark processing_run as completed
+    if (runId) {
+      await updateProcessingRun(runId, {
+        status: "completed",
+        output_summary_json: {
+          snapshot_id: snapshot?.id ?? null,
+          facts_found: foundFacts.length,
+          facts_missing: missingFacts.length,
+          triage_fact_count: triageFacts.length,
+        },
+      }).catch(() => {});
+    }
+
+    // 10. Log the event
     await logEntityEvent(entityId, "triage_completed", {
       facts_found: foundFacts.length,
       facts_missing: missingFacts.length,
       snapshot_id: snapshot?.id ?? null,
-    });
+    }, undefined, undefined, { runId });
 
     return snapshot;
   } catch (err) {
     console.error("[triageSummaryService] runTriageSummary failed (non-fatal):", err);
+
+    if (runId) {
+      await updateProcessingRun(runId, {
+        status: "failed",
+        error_message: err instanceof Error ? err.message : String(err),
+      }).catch(() => {});
+    }
+
     return null;
   }
 }

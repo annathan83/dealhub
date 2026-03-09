@@ -101,10 +101,10 @@ export async function buildAnalysisContext(
     if (!def) continue;
 
     const qualifier =
-      val.status === "conflicting" ? " [CONFLICTING — verify with broker]"
-      : val.status === "unclear"   ? " [UNCLEAR]"
-      : val.status === "estimated" ? " [ESTIMATED]"
-      : val.manual_override        ? " [USER CONFIRMED]"
+      val.status === "conflicting"             ? " [CONFLICTING — verify with broker]"
+      : val.status === "unclear"               ? " [UNCLEAR]"
+      : val.status === "estimated"             ? " [ESTIMATED]"
+      : val.value_source_type === "user_override" ? " [USER CONFIRMED]"
       : "";
 
     factLines.push(`${def.label}: ${val.value_raw ?? "unknown"}${qualifier}`);

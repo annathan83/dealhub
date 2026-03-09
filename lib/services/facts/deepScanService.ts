@@ -6,22 +6,21 @@
  * targets the FULL supported fact set for the entity type.
  *
  * Design:
- *   - Reads from file_text (already stored) — no re-upload needed
+ *   - Reads from file_texts (already stored) — no re-upload needed
  *   - Processes each file's text through extractFactsFromText with all fact defs
- *   - Respects manual_override: confirmed/edited facts are never silently overwritten
+ *   - Respects value_source_type='user_override': confirmed/edited facts are never overwritten
  *   - Writes results into fact_evidence + entity_fact_values via reconcileFacts
- *   - Updates entity.deep_scan_status + stats when done
+ *   - Run tracking via processing_runs (deep_scan_* columns removed in migration 027)
  *
  * Can be called from:
  *   - POST /api/deals/[id]/deep-scan  (user-triggered)
- *   - Future: background job / scheduled scan
+ *   - deepAnalysisOrchestrator (as part of the full deep analysis pipeline)
  */
 
 import {
   getEntityByLegacyDealId,
   getFactDefinitionsForEntityType,
   getFileTextsForEntity,
-  updateEntityDeepScanStatus,
 } from "@/lib/db/entities";
 import { extractFactsFromText } from "./factExtractionService";
 import { reconcileFacts } from "./factReconciliationService";
@@ -67,8 +66,6 @@ export async function runDeepScan(
   };
 
   try {
-    // Mark scan as running
-    await updateEntityDeepScanStatus(entityId, "running");
     await logEntityEvent(entityId, "deep_scan_started", {
       triggered_at: new Date().toISOString(),
     });
@@ -76,14 +73,12 @@ export async function runDeepScan(
     // Load all fact definitions (not just critical ones)
     const allFactDefs = await getFactDefinitionsForEntityType(entityTypeId);
     if (allFactDefs.length === 0) {
-      await updateEntityDeepScanStatus(entityId, "completed", { facts_added: 0, facts_updated: 0, conflicts_found: 0 });
       return result;
     }
 
     // Load all stored file texts for this entity
     const fileTexts = await getFileTextsForEntity(entityId);
     if (fileTexts.length === 0) {
-      await updateEntityDeepScanStatus(entityId, "completed", { facts_added: 0, facts_updated: 0, conflicts_found: 0 });
       return result;
     }
 
@@ -133,13 +128,6 @@ export async function runDeepScan(
       console.error("[deepScanService] KPI rescore failed (non-fatal):", err);
     });
 
-    // Mark scan as completed
-    await updateEntityDeepScanStatus(entityId, "completed", {
-      facts_added: result.facts_inserted,
-      facts_updated: result.facts_updated,
-      conflicts_found: result.conflicts_found,
-    });
-
     await logEntityEvent(entityId, "deep_scan_completed", {
       files_processed: result.files_processed,
       facts_found: result.facts_found,
@@ -152,9 +140,6 @@ export async function runDeepScan(
   } catch (err) {
     console.error("[deepScanService] runDeepScan failed:", err);
     result.error = err instanceof Error ? err.message : "Unknown error";
-
-    await updateEntityDeepScanStatus(entityId, "failed").catch(() => {});
-
     return result;
   }
 }

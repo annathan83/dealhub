@@ -7,6 +7,12 @@
  *
  * All public functions are non-fatal — they log errors but never throw.
  * The existing pipeline continues even if this service fails.
+ *
+ * Migration 026 changes:
+ * - upsertFileText now returns the FileText record (with id) so we can pass
+ *   file_text_id to chunkAndStoreText for chunk provenance.
+ * - createProcessingRun / updateProcessingRun used for fact_extraction runs.
+ * - logFileUploaded / logTextExtracted / logFactsExtracted pass run_id.
  */
 
 import { createClient } from "@/lib/supabase/server";
@@ -15,6 +21,8 @@ import {
   insertEntityFile,
   upsertFileText,
   getFactDefinitionsForEntityType,
+  createProcessingRun,
+  updateProcessingRun,
 } from "@/lib/db/entities";
 import { chunkAndStoreText } from "./textChunkingService";
 import { logFileUploaded, logTextExtracted, logFactsExtracted } from "./entityEventService";
@@ -93,17 +101,37 @@ async function runFactExtraction(
   entity: Entity,
   entityFileId: string,
   text: string,
-  dealId: string
+  dealId: string,
+  fileTextId?: string | null
 ): Promise<void> {
+  // Create a processing_run record for this fact extraction
+  const run = await createProcessingRun({
+    entity_id: entity.id,
+    run_type: "fact_extraction",
+    triggered_by_type: "upload_event",
+    related_file_id: entityFileId,
+    related_text_id: fileTextId ?? null,
+  }).catch(() => null);
+
+  const runId = run?.id ?? null;
+
   try {
+    await updateProcessingRun(runId ?? "", { status: "running" }).catch(() => {});
+
     // Get applicable fact definitions for this entity type (critical only for speed)
     const allFactDefs = await getFactDefinitionsForEntityType(entity.entity_type_id);
     const criticalFacts = allFactDefs.filter((fd) => fd.is_critical);
-    if (criticalFacts.length === 0) return;
+    if (criticalFacts.length === 0) {
+      if (runId) await updateProcessingRun(runId, { status: "skipped", output_summary_json: { reason: "no_critical_facts" } });
+      return;
+    }
 
     // Extract facts from text
     const extractionResult = await extractFactsFromText(text, criticalFacts, entity.title);
-    if (extractionResult.candidates.length === 0) return;
+    if (extractionResult.candidates.length === 0) {
+      if (runId) await updateProcessingRun(runId, { status: "completed", output_summary_json: { facts_found: 0 } });
+      return;
+    }
 
     // Reconcile with existing entity_fact_values
     const reconcileResult = await reconcileFacts({
@@ -115,13 +143,26 @@ async function runFactExtraction(
       extractor_version: extractionResult.extractor_version,
     });
 
+    if (runId) {
+      await updateProcessingRun(runId, {
+        status: "completed",
+        model_name: extractionResult.model_name,
+        output_summary_json: {
+          facts_found: extractionResult.candidates.length,
+          facts_inserted: reconcileResult.facts_inserted,
+          facts_updated: reconcileResult.facts_updated,
+          facts_conflicted: reconcileResult.facts_conflicted,
+        },
+      });
+    }
+
     await logFactsExtracted(entity.id, entityFileId, {
       facts_found: extractionResult.candidates.length,
       facts_inserted: reconcileResult.facts_inserted,
       facts_updated: reconcileResult.facts_updated,
       facts_conflicted: reconcileResult.facts_conflicted,
       model: extractionResult.model_name,
-    });
+    }, { runId });
 
     // Run triage summary after facts are updated (non-fatal).
     // This is the only AI analysis that runs automatically on intake.
@@ -130,6 +171,12 @@ async function runFactExtraction(
       console.error("[entityFileService] triage summary failed (non-fatal):", err);
     });
   } catch (err) {
+    if (runId) {
+      await updateProcessingRun(runId, {
+        status: "failed",
+        error_message: err instanceof Error ? err.message : String(err),
+      }).catch(() => {});
+    }
     console.error("[entityFileService] runFactExtraction failed (non-fatal):", err);
   }
 }
@@ -181,33 +228,41 @@ export async function ingestFromDealUpload(
       const isNote = params.extractedText.startsWith("[Text extraction note:");
       const status = isNote ? "skipped" : "done";
 
-      await upsertFileText({
+      // upsertFileText now returns the record so we can get its id for chunk provenance
+      const fileTextRecord = await upsertFileText({
         file_id: entityFile.id,
+        text_type: "raw_extracted",
         full_text: isNote ? null : params.extractedText,
         extraction_method: params.extractionMethod ?? "unknown",
         extraction_status: status,
         metadata_json: isNote ? { note: params.extractedText } : {},
       });
 
-      if (!isNote) {
-        // 4. Chunk the text for fact extraction
-        const chunkCount = await chunkAndStoreText(entityFile.id, params.extractedText);
+      if (!isNote && fileTextRecord) {
+        // 4. Chunk the text, linking chunks to the specific text record
+        const chunkCount = await chunkAndStoreText(
+          entityFile.id,
+          params.extractedText,
+          fileTextRecord.id
+        );
 
         await logTextExtracted(entity.id, entityFile.id, {
           extraction_method: params.extractionMethod,
           chunk_count: chunkCount,
+          text_type: "raw_extracted",
         });
 
         // 5. Mark deep analysis stale (non-fatal) — new text was added
         markDeepAnalysisStale(entity.id).catch(() => {});
 
         // 6. Extract facts (critical subset, non-fatal)
-        await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId);
+        await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId, fileTextRecord.id);
       }
     } else {
       // No text — mark as skipped so we know it was processed
       await upsertFileText({
         file_id: entityFile.id,
+        text_type: "raw_extracted",
         full_text: null,
         extraction_method: params.extractionMethod ?? "none",
         extraction_status: "skipped",
@@ -220,7 +275,7 @@ export async function ingestFromDealUpload(
 }
 
 /**
- * Called after a text entry is saved to deal_sources.
+ * Called after a text entry is saved.
  * Creates an entity_file record for the pasted text and stores it as a chunk.
  */
 export async function ingestFromDealEntry(
@@ -254,26 +309,32 @@ export async function ingestFromDealEntry(
 
     await logFileUploaded(entity.id, entityFile.id, { source_type: "pasted_text" });
 
-    // Store full text + chunks
-    await upsertFileText({
+    // Store full text — text_type='raw_extracted' (passthrough for pasted text)
+    const fileTextRecord = await upsertFileText({
       file_id: entityFile.id,
+      text_type: "raw_extracted",
       full_text: params.entryContent,
       extraction_method: "passthrough",
       extraction_status: "done",
     });
 
-    const chunkCount = await chunkAndStoreText(entityFile.id, params.entryContent);
+    const chunkCount = await chunkAndStoreText(
+      entityFile.id,
+      params.entryContent,
+      fileTextRecord?.id ?? null
+    );
 
     await logTextExtracted(entity.id, entityFile.id, {
       extraction_method: "passthrough",
       chunk_count: chunkCount,
+      text_type: "raw_extracted",
     });
 
     // Mark deep analysis stale (non-fatal) — new text was added
     markDeepAnalysisStale(entity.id).catch(() => {});
 
     // Extract facts from pasted text (critical subset, non-fatal)
-    await runFactExtraction(entity, entityFile.id, params.entryContent, params.dealId);
+    await runFactExtraction(entity, entityFile.id, params.entryContent, params.dealId, fileTextRecord?.id ?? null);
   } catch (err) {
     console.error("[entityFileService] ingestFromDealEntry failed (non-fatal):", err);
   }

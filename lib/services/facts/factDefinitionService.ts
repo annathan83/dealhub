@@ -126,6 +126,11 @@ export async function getFactDefinitionByKey(
     data_type: data.data_type as FactDefinition["data_type"],
     is_critical: (data.is_critical as boolean) ?? false,
     is_multi_value: (data.is_multi_value as boolean) ?? false,
+    fact_scope: (data.fact_scope as FactDefinition["fact_scope"]) ?? "deep",
+    display_order: (data.display_order as number | null) ?? null,
+    is_user_visible_initially: (data.is_user_visible_initially as boolean) ?? false,
+    is_required_for_kpi: (data.is_required_for_kpi as boolean) ?? false,
+    industry_key: (data.industry_key as string | null) ?? null,
     metadata_json: (data.metadata_json as Record<string, unknown>) ?? {},
     created_at: data.created_at as string,
   };

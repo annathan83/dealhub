@@ -132,7 +132,8 @@ export async function runDeepAnalysis(
   entityId: string,
   entityTitle: string,
   context: AnalysisContext,
-  trigger: string = "manual_run"
+  trigger: string = "manual_run",
+  runId?: string | null
 ): Promise<AnalysisSnapshot | null> {
   try {
     const prompt = buildDeepAnalysisPrompt(context);
@@ -224,6 +225,7 @@ export async function runDeepAnalysis(
       content_json: content as unknown as Record<string, unknown>,
       model_name: MODEL,
       prompt_version: PROMPT_VERSION,
+      run_id: runId ?? null,
     });
 
     return snapshot;

@@ -2,19 +2,24 @@
  * Tests: triage fact persistence
  *
  * Validates that:
- * - TRIAGE_FACT_KEYS contains exactly 15 keys
- * - TriageSummaryContent always includes all 15 facts (found + missing)
+ * - TriageSummaryContent shape is correct
  * - Missing facts are explicitly labeled, not silently omitted
  * - Fact statuses are one of the three valid values
+ * - triageSummaryService uses getTriageFactDefinitions (DB-driven, not hardcoded)
+ *
+ * Migration 027 / triage-v2: TRIAGE_FACT_KEYS hardcoded list removed from the
+ * service. The triage fact set is now loaded from fact_definitions where
+ * fact_scope='triage' or is_user_visible_initially=true.
+ * The 15 canonical triage facts are seeded in migration 026.
  */
 
 import { describe, it, expect } from "vitest";
 
-// Import only the pure constants/types — avoid importing the module itself
-// because it instantiates OpenAI at module level (requires OPENAI_API_KEY).
-// We duplicate the constant here so the test has no external dependencies.
+// ─── Canonical triage fact keys (seeded in migration 026) ────────────────────
+// These are kept here for test assertions only.
+// The service loads them from the DB via getTriageFactDefinitions().
 
-const TRIAGE_FACT_KEYS = [
+const CANONICAL_TRIAGE_KEYS = [
   "asking_price",
   "location",
   "industry",
@@ -53,25 +58,48 @@ type TriageSummaryContent = {
   facts_missing: number;
 };
 
-describe("TRIAGE_FACT_KEYS", () => {
-  it("contains exactly 15 keys (matches service source)", async () => {
-    // Verify the real service also exports exactly 15 keys
+describe("triageSummaryService: DB-driven fact loading (contract)", () => {
+  it("service uses getTriageFactDefinitions, not a hardcoded key list", async () => {
     const fs = await import("fs/promises");
     const src = await fs.readFile(
       new URL("../lib/services/entity/triageSummaryService.ts", import.meta.url),
       "utf-8"
     );
-    // Count entries in the TRIAGE_FACT_KEYS array in the source
-    const match = src.match(/TRIAGE_FACT_KEYS\s*=\s*\[([\s\S]*?)\]\s*as const/);
-    expect(match).toBeTruthy();
-    const entries = match![1].split(",").map((s) => s.trim()).filter((s) => s.startsWith('"'));
-    expect(entries).toHaveLength(15);
-    expect(TRIAGE_FACT_KEYS).toHaveLength(15);
+    // Must import getTriageFactDefinitions from the DB layer
+    expect(src).toContain("getTriageFactDefinitions");
+    // Must NOT contain a hardcoded TRIAGE_FACT_KEYS array
+    expect(src).not.toContain("TRIAGE_FACT_KEYS");
   });
 
-  it("contains no duplicates", () => {
-    const unique = new Set(TRIAGE_FACT_KEYS);
-    expect(unique.size).toBe(TRIAGE_FACT_KEYS.length);
+  it("service creates a processing_run for triage_generation", async () => {
+    const fs = await import("fs/promises");
+    const src = await fs.readFile(
+      new URL("../lib/services/entity/triageSummaryService.ts", import.meta.url),
+      "utf-8"
+    );
+    expect(src).toContain("createProcessingRun");
+    expect(src).toContain("triage_generation");
+    expect(src).toContain("updateProcessingRun");
+  });
+
+  it("service links snapshot to processing_run via run_id", async () => {
+    const fs = await import("fs/promises");
+    const src = await fs.readFile(
+      new URL("../lib/services/entity/triageSummaryService.ts", import.meta.url),
+      "utf-8"
+    );
+    expect(src).toContain("run_id: runId");
+  });
+});
+
+describe("canonical triage keys (migration 026 seed)", () => {
+  it("canonical list contains exactly 15 keys", () => {
+    expect(CANONICAL_TRIAGE_KEYS).toHaveLength(15);
+  });
+
+  it("canonical list contains no duplicates", () => {
+    const unique = new Set(CANONICAL_TRIAGE_KEYS);
+    expect(unique.size).toBe(CANONICAL_TRIAGE_KEYS.length);
   });
 
   it("includes the required financial and operational keys", () => {
@@ -83,14 +111,14 @@ describe("TRIAGE_FACT_KEYS", () => {
       "reason_for_sale",
     ];
     for (const key of required) {
-      expect(TRIAGE_FACT_KEYS).toContain(key);
+      expect(CANONICAL_TRIAGE_KEYS).toContain(key);
     }
   });
 });
 
 describe("TriageSummaryContent shape", () => {
   function makeContent(overrides: Partial<TriageSummaryContent> = {}): TriageSummaryContent {
-    const facts: TriageFact[] = TRIAGE_FACT_KEYS.map((key, i) => ({
+    const facts: TriageFact[] = CANONICAL_TRIAGE_KEYS.map((key, i) => ({
       key,
       label: key.replace(/_/g, " "),
       value: i < 8 ? `value-${i}` : null,
@@ -120,7 +148,6 @@ describe("TriageSummaryContent shape", () => {
     const content = makeContent();
     const missing = content.facts.filter((f) => f.status === "missing");
     expect(missing.length).toBeGreaterThan(0);
-    // Every missing fact has null value — never silently omitted
     for (const f of missing) {
       expect(f.value).toBeNull();
     }

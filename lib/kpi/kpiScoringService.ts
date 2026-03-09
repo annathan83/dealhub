@@ -13,7 +13,13 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentFactsForEntity, getFactDefinitionsForEntityType, insertAnalysisSnapshot } from "@/lib/db/entities";
+import {
+  getCurrentFactsForEntity,
+  getFactDefinitionsForEntityType,
+  insertAnalysisSnapshot,
+  createProcessingRun,
+  updateProcessingRun,
+} from "@/lib/db/entities";
 import { extractFactInputs } from "./factRegistry";
 import { KPI_DEFINITIONS, type KpiFactInputs, type KpiScorecardResult, type KpiScore } from "./kpiConfig";
 import type { EntityFactValue } from "@/types/entity";
@@ -104,43 +110,89 @@ export function computeKpiScorecard(
 
 /**
  * Compute KPI scorecard for an entity and persist it as an analysis_snapshot.
+ * Creates a processing_run record for full pipeline visibility.
  * Returns the scorecard result (whether or not persistence succeeded).
  */
 export async function scoreAndPersistKpis(
   entityId: string,
   entityTypeId: string
 ): Promise<KpiScorecardResult> {
-  const [factValues, factDefs] = await Promise.all([
-    getCurrentFactsForEntity(entityId),
-    getFactDefinitionsForEntityType(entityTypeId),
-  ]);
-
-  // Build fact_definition_id → key map
-  const factDefIdToKey = new Map<string, string>(
-    factDefs.map((fd) => [fd.id, fd.key])
-  );
-
-  const scorecard = computeKpiScorecard(factValues, factDefIdToKey);
-
-  // Persist as analysis_snapshot (non-fatal)
-  insertAnalysisSnapshot({
+  // Create processing_run before starting
+  const processingRun = await createProcessingRun({
     entity_id: entityId,
-    analysis_type: "kpi_scorecard",
-    title: "KPI Scorecard",
-    content_json: {
-      overall_score: scorecard.overall_score,
-      overall_score_100: scorecard.overall_score_100,
-      coverage_pct: scorecard.coverage_pct,
-      missing_count: scorecard.missing_count,
-      kpis: scorecard.kpis,
-    },
-    model_name: null,
+    run_type: "kpi_scoring",
+    triggered_by_type: "system",
     prompt_version: "v1",
-  }).catch((err) => {
-    console.error("[kpiScoringService] Failed to persist KPI scorecard:", err);
-  });
+  }).catch(() => null);
+  const runId = processingRun?.id ?? null;
 
-  return scorecard;
+  try {
+    if (runId) await updateProcessingRun(runId, { status: "running" }).catch(() => {});
+
+    const [factValues, factDefs] = await Promise.all([
+      getCurrentFactsForEntity(entityId),
+      getFactDefinitionsForEntityType(entityTypeId),
+    ]);
+
+    // Build fact_definition_id → key map
+    const factDefIdToKey = new Map<string, string>(
+      factDefs.map((fd) => [fd.id, fd.key])
+    );
+
+    const scorecard = computeKpiScorecard(factValues, factDefIdToKey);
+
+    // Persist as analysis_snapshot (linked to processing_run)
+    await insertAnalysisSnapshot({
+      entity_id: entityId,
+      analysis_type: "kpi_scorecard",
+      title: "KPI Scorecard",
+      content_json: {
+        overall_score: scorecard.overall_score,
+        overall_score_100: scorecard.overall_score_100,
+        coverage_pct: scorecard.coverage_pct,
+        missing_count: scorecard.missing_count,
+        kpis: scorecard.kpis,
+      },
+      model_name: null,
+      prompt_version: "v1",
+      run_id: runId,
+    }).catch((err) => {
+      console.error("[kpiScoringService] Failed to persist KPI scorecard:", err);
+    });
+
+    if (runId) {
+      await updateProcessingRun(runId, {
+        status: "completed",
+        output_summary_json: {
+          overall_score: scorecard.overall_score,
+          overall_score_100: scorecard.overall_score_100,
+          coverage_pct: scorecard.coverage_pct,
+          missing_count: scorecard.missing_count,
+          kpi_count: scorecard.kpis.length,
+        },
+      }).catch(() => {});
+    }
+
+    return scorecard;
+  } catch (err) {
+    console.error("[kpiScoringService] scoreAndPersistKpis failed:", err);
+
+    if (runId) {
+      await updateProcessingRun(runId, {
+        status: "failed",
+        error_message: err instanceof Error ? err.message : String(err),
+      }).catch(() => {});
+    }
+
+    // Return empty scorecard on failure
+    return {
+      overall_score: null,
+      overall_score_100: null,
+      kpis: [],
+      missing_count: 0,
+      coverage_pct: 0,
+    };
+  }
 }
 
 /**

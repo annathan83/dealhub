@@ -21,6 +21,7 @@ import {
   insertFactEvidence,
   upsertEntityFactValue,
   getFactEvidenceForEntity,
+  promoteEvidenceToPrimary,
 } from "@/lib/db/entities";
 import { logFactUpdated, logFactConflictDetected } from "../entity/entityEventService";
 import type { ExtractedFactCandidate } from "./factExtractionService";
@@ -201,6 +202,21 @@ export async function reconcileFacts(
         confidence: newConfidence,
         current_evidence_id: newEvidenceId,
       });
+
+      // 4. Promote the winning evidence row to is_primary=true, demote others.
+      //    Skip when conflicting — no clear winner in that case.
+      if (newStatus !== "conflicting") {
+        await promoteEvidenceToPrimary(
+          input.entityId,
+          factDef.id,
+          newEvidenceId
+        ).catch((err) => {
+          console.error(
+            `[factReconciliationService] promoteEvidenceToPrimary failed for "${candidate.fact_key}":`,
+            err
+          );
+        });
+      }
     } catch (err) {
       console.error(
         `[factReconciliationService] Failed to reconcile fact "${candidate.fact_key}":`,

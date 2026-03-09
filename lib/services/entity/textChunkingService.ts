@@ -5,7 +5,8 @@
  * Uses a simple character-based splitter (≈500 tokens ≈ 2000 chars, 50-token
  * overlap ≈ 200 chars). No external dependency required.
  *
- * Chunks are stored in the file_chunks table via the entities repository.
+ * Migration 026: chunks now reference file_text_id (the specific text record
+ * that produced them) for provenance and rerun traceability.
  */
 
 import { insertFileChunks } from "@/lib/db/entities";
@@ -54,17 +55,19 @@ export function splitTextIntoChunks(fullText: string): ChunkInput[] {
 
 /**
  * Chunk the given text and persist all chunks for the entity file.
+ * Pass fileTextId to link chunks to the specific text record (migration 026).
  * Non-fatal — logs errors but does not throw.
  */
 export async function chunkAndStoreText(
   fileId: string,
-  fullText: string
+  fullText: string,
+  fileTextId?: string | null
 ): Promise<number> {
   try {
     const chunks = splitTextIntoChunks(fullText);
     if (chunks.length === 0) return 0;
 
-    await insertFileChunks(fileId, chunks);
+    await insertFileChunks(fileId, chunks, fileTextId ?? null);
     return chunks.length;
   } catch (err) {
     console.error("[textChunkingService] chunkAndStoreText failed:", err);

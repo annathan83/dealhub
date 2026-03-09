@@ -159,34 +159,29 @@ export default function DealHeader({ deal }: { deal: Deal }) {
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm mb-4 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
 
-        {/* ── Identity block ──────────────────────────────────────────── */}
-        <div className="px-5 pt-5 pb-4">
-
-          {/* Title — wraps naturally, never truncates */}
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight leading-snug mb-3">
-            {deal.name}
-          </h1>
-
-          {/* Status + Edit row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <InlineStatusSelect dealId={deal.id} status={deal.status} />
-
+        {/* ── Top row: name + status + edit ───────────────────────────── */}
+        <div className="px-4 pt-4 pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-snug flex-1 min-w-0">
+              {deal.name}
+            </h1>
             <button
               onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
-              style={{ minHeight: 32 }}
+              className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors mt-0.5"
+              title="Edit deal"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
-              Edit
             </button>
           </div>
 
-          {/* Metadata row */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3">
+          {/* Status + metadata row */}
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mt-2">
+            <InlineStatusSelect dealId={deal.id} status={deal.status} />
+
             {deal.industry && (
               <span className="inline-flex items-center gap-1 text-xs text-slate-400">
                 <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -204,66 +199,36 @@ export default function DealHeader({ deal }: { deal: Deal }) {
                 {deal.location}
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-              <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Added {formatDate(deal.created_at)}
-            </span>
-            {deal.updated_at !== deal.created_at && (
-              <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Updated {formatDate(deal.updated_at)}
-              </span>
-            )}
+            <span className="text-xs text-slate-400">{formatDate(deal.created_at)}</span>
           </div>
         </div>
 
         {/* ── Metrics strip ───────────────────────────────────────────── */}
-        <div className="border-t border-slate-100 px-5 py-4">
-          {hasAnyMetric ? (
-            <div className="grid grid-cols-3 gap-4">
-              {/* SDE — primary (most important for buyers) */}
-              <MetricCell
-                label="SDE"
-                value={formatCurrency(deal.sde)}
-                empty={!deal.sde}
-                primary
-              />
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute left-0 top-0 bottom-0 w-px bg-slate-100" />
-                <MetricCell
-                  label="Ask"
-                  value={formatCurrency(deal.asking_price)}
-                  empty={!deal.asking_price}
-                />
-              </div>
-              {/* Divider */}
-              <div className="relative">
-                <div className="absolute left-0 top-0 bottom-0 w-px bg-slate-100" />
-                <MetricCell
-                  label="Multiple"
-                  value={formatMultiple(deal.multiple)}
-                  empty={!deal.multiple}
-                />
-              </div>
+        {hasAnyMetric ? (
+          <div className="border-t border-slate-100 px-4 py-3 grid grid-cols-3 gap-3">
+            <MetricCell label="SDE" value={formatCurrency(deal.sde)} empty={!deal.sde} primary />
+            <div className="relative">
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-slate-100" />
+              <MetricCell label="Ask" value={formatCurrency(deal.asking_price)} empty={!deal.asking_price} />
             </div>
-          ) : (
+            <div className="relative">
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-slate-100" />
+              <MetricCell label="Multiple" value={formatMultiple(deal.multiple)} empty={!deal.multiple} />
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-slate-100 px-4 py-2.5">
             <button
               onClick={() => setEditOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-slate-200 text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
-              style={{ minHeight: 44 }}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-dashed border-slate-200 text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               Add asking price &amp; SDE
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {editOpen && (

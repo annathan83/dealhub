@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Entity, DeepScanStatus } from "@/types/entity";
+import type { Entity } from "@/types/entity";
 
 type Props = {
   entity: Entity;
@@ -22,13 +22,6 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-const STATUS_CONFIG: Record<NonNullable<DeepScanStatus>, { label: string; classes: string; dot: string }> = {
-  not_run:   { label: "Not run",   classes: "bg-slate-50 text-slate-500 border-slate-200",   dot: "bg-slate-300"   },
-  running:   { label: "Running…",  classes: "bg-blue-50 text-blue-600 border-blue-200",       dot: "bg-blue-400 animate-pulse" },
-  completed: { label: "Completed", classes: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  failed:    { label: "Failed",    classes: "bg-red-50 text-red-600 border-red-200",           dot: "bg-red-500"     },
-};
-
 export default function DeepScanPanel({ entity, dealId }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -38,9 +31,6 @@ export default function DeepScanPanel({ entity, dealId }: Props) {
     facts_updated: number;
     conflicts_found: number;
   } | null>(null);
-
-  const scanStatus: DeepScanStatus = entity.deep_scan_status ?? "not_run";
-  const statusCfg = STATUS_CONFIG[scanStatus];
 
   async function runDeepScan() {
     setError(null);
@@ -67,13 +57,16 @@ export default function DeepScanPanel({ entity, dealId }: Props) {
           conflicts_found: data.conflicts_found ?? 0,
         });
 
-        // Refresh page data to show updated facts and KPI
         router.refresh();
       } catch {
         setError("Network error. Please try again.");
       }
     });
   }
+
+  // Derive display state from denormalized entity fields + local scan result
+  const hasRunBefore = !!entity.deep_analysis_run_at;
+  const isStale = entity.deep_analysis_stale;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -87,10 +80,32 @@ export default function DeepScanPanel({ entity, dealId }: Props) {
           </div>
 
           {/* Status pill */}
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border ${statusCfg.classes}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
-            {statusCfg.label}
-          </span>
+          {isPending ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-blue-50 text-blue-600 border-blue-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+              Running…
+            </span>
+          ) : lastResult ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Completed
+            </span>
+          ) : isStale ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-amber-50 text-amber-600 border-amber-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Stale
+            </span>
+          ) : hasRunBefore ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Up to date
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border bg-slate-50 text-slate-500 border-slate-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+              Not run
+            </span>
+          )}
         </div>
         <p className="text-xs text-slate-400 mt-1.5">
           Extracts the full set of supported facts from all stored documents.
@@ -99,34 +114,30 @@ export default function DeepScanPanel({ entity, dealId }: Props) {
       </div>
 
       <div className="px-5 py-4">
-        {/* Last scan stats */}
-        {(entity.deep_scan_completed_at || lastResult) && (
+        {/* Last scan stats (from current run) */}
+        {lastResult && (
           <div className="mb-4 grid grid-cols-3 gap-3 text-center">
             <div className="bg-slate-50 rounded-lg py-2">
-              <div className="text-base font-bold text-slate-800">
-                {lastResult?.facts_inserted ?? entity.deep_scan_facts_added ?? 0}
-              </div>
+              <div className="text-base font-bold text-slate-800">{lastResult.facts_inserted}</div>
               <div className="text-[10px] text-slate-400 mt-0.5">Facts added</div>
             </div>
             <div className="bg-slate-50 rounded-lg py-2">
-              <div className="text-base font-bold text-slate-800">
-                {lastResult?.facts_updated ?? entity.deep_scan_facts_updated ?? 0}
-              </div>
+              <div className="text-base font-bold text-slate-800">{lastResult.facts_updated}</div>
               <div className="text-[10px] text-slate-400 mt-0.5">Updated</div>
             </div>
-            <div className={`rounded-lg py-2 ${(lastResult?.conflicts_found ?? entity.deep_scan_conflicts_found ?? 0) > 0 ? "bg-red-50" : "bg-slate-50"}`}>
-              <div className={`text-base font-bold ${(lastResult?.conflicts_found ?? entity.deep_scan_conflicts_found ?? 0) > 0 ? "text-red-600" : "text-slate-800"}`}>
-                {lastResult?.conflicts_found ?? entity.deep_scan_conflicts_found ?? 0}
+            <div className={`rounded-lg py-2 ${lastResult.conflicts_found > 0 ? "bg-red-50" : "bg-slate-50"}`}>
+              <div className={`text-base font-bold ${lastResult.conflicts_found > 0 ? "text-red-600" : "text-slate-800"}`}>
+                {lastResult.conflicts_found}
               </div>
               <div className="text-[10px] text-slate-400 mt-0.5">Conflicts</div>
             </div>
           </div>
         )}
 
-        {/* Last run time */}
-        {entity.deep_scan_completed_at && !lastResult && (
+        {/* Last run time (from entity denormalized field) */}
+        {entity.deep_analysis_run_at && !lastResult && (
           <div className="mb-3 text-xs text-slate-400">
-            Last scan: {formatDate(entity.deep_scan_completed_at)}
+            Last scan: {formatDate(entity.deep_analysis_run_at)}
           </div>
         )}
 
@@ -147,7 +158,7 @@ export default function DeepScanPanel({ entity, dealId }: Props) {
         {/* Trigger button */}
         <button
           onClick={runDeepScan}
-          disabled={isPending || scanStatus === "running"}
+          disabled={isPending}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
         >
           {isPending ? (
@@ -163,13 +174,13 @@ export default function DeepScanPanel({ entity, dealId }: Props) {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              {scanStatus === "completed" ? "Re-run Deep Scan" : "Run Deep Scan"}
+              {hasRunBefore ? "Re-run Deep Scan" : "Run Deep Scan"}
             </>
           )}
         </button>
 
         <p className="mt-2 text-[10px] text-slate-400 text-center">
-          Manual fact overrides are preserved. Only missing or unclear facts are updated.
+          User-confirmed facts are preserved. Only missing or unclear facts are updated.
         </p>
       </div>
     </div>

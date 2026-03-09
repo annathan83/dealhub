@@ -2,16 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
-import AddDealEntryForm from "@/components/AddDealEntryForm";
-import DealEntriesList from "@/components/DealEntriesList";
-import DealFilesPanel from "@/components/DealFilesPanel";
 import DealHeader from "@/components/DealHeader";
-import DealIntakeActions from "@/components/DealIntakeActions";
-import ChangeLogPanel from "@/components/ChangeLogPanel";
-import DownloadEntriesButton from "@/components/DownloadEntriesButton";
-import WorkspacePanel from "@/components/WorkspacePanel";
+import IntakeSection from "@/components/IntakeSection";
 import TriageReviewPanel from "@/components/TriageReviewPanel";
-import EntityDetailTabs from "@/components/entity/EntityDetailTabs";
+import DealDetailTabs from "@/components/DealDetailTabs";
 import { syncAndListDealDriveFiles } from "@/lib/google/drive";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 
@@ -44,31 +38,23 @@ export default async function DealPage({
 
   const isDriveConnected = !!tokenRow;
 
-  // Sync Drive files and get merged list (entity_files with Drive metadata)
   const syncedFiles = isDriveConnected
     ? await syncAndListDealDriveFiles(user.id, id).catch(() => entityFiles)
     : entityFiles;
 
-  // Show "processing" spinner if text has been added but triage hasn't completed yet
   const isTriageProcessing =
-    entityFiles.length > 0 &&
+    syncedFiles.length > 0 &&
     !triageSummary &&
     (deal.status === "new" || deal.status === "reviewing");
-
-  // Split files: text entries for the timeline, all files for the files panel
-  const textEntries = syncedFiles.filter(
-    (f) => f.source_type === "pasted_text" || f.metadata_json?.is_text_entry === true
-  );
-  const allFiles = syncedFiles;
 
   return (
     <div className="min-h-screen bg-slate-50">
       <AppHeader />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 pb-28 sm:pb-16">
+      <main className="max-w-2xl mx-auto px-4 sm:px-5 pt-4 pb-32">
 
         {/* Breadcrumb */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-4">
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-1 hover:text-indigo-600 transition-colors font-medium"
@@ -84,71 +70,56 @@ export default async function DealPage({
           <span className="text-slate-600 font-medium truncate">{deal.name}</span>
         </div>
 
-        {/* Deal identity + key metrics */}
+        {/* ── 1. Deal Header ────────────────────────────────────────────────── */}
         <DealHeader deal={deal} />
 
-        {/* ── Initial Review (Triage) ───────────────────────────────────────────
-            Always shown first. Contains extracted facts, neutral AI summary,
-            and the Pass / Keep Investigating decision bar.
-            Deep analysis only runs after the user explicitly requests it. */}
-        <div className="mt-4">
-          <TriageReviewPanel
-            deal={deal}
-            triage={triageSummary}
-            isProcessing={isTriageProcessing}
-          />
-        </div>
+        {/* ── 2. Intake ─────────────────────────────────────────────────────── */}
+        <SectionLabel label="Intake" />
+        <IntakeSection
+          dealId={deal.id}
+          isDriveConnected={isDriveConnected}
+          files={syncedFiles}
+        />
 
-        {/* ── Detail Tabs ───────────────────────────────────────────────────────
-            Facts / KPI Score / Deep Analysis / Files / History
-            Shown below the triage panel for deeper investigation. */}
+        {/* ── 3. Initial Review ─────────────────────────────────────────────── */}
+        <SectionLabel label="Initial Review" />
+        <TriageReviewPanel
+          deal={deal}
+          triage={triageSummary}
+          isProcessing={isTriageProcessing}
+        />
+
+        {/* ── 4. Deep Analysis + All Facts + History tabs ───────────────────── */}
         {entityData && (
-          <EntityDetailTabs
-            data={entityData}
-            scorecard={kpiScorecard}
-            dealId={deal.id}
-            dealStatus={deal.status}
-            deepAnalysis={deepAnalysis}
-            deepAnalysisStale={deepAnalysisStale}
-            deepAnalysisRunAt={deepAnalysisRunAt}
-            latestSourceAt={latestSourceAt}
-          />
+          <>
+            <SectionLabel label="Analysis" />
+            <DealDetailTabs
+              data={entityData}
+              scorecard={kpiScorecard}
+              dealId={deal.id}
+              dealStatus={deal.status}
+              deepAnalysis={deepAnalysis}
+              deepAnalysisStale={deepAnalysisStale}
+              deepAnalysisRunAt={deepAnalysisRunAt}
+              latestSourceAt={latestSourceAt}
+            />
+          </>
         )}
 
-        {/* Add information actions */}
-        <DealIntakeActions dealId={deal.id} isDriveConnected={isDriveConnected} />
-
-        {/* 2-column workspace */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-
-          {/* Left column — timeline + file list */}
-          <div className="flex flex-col gap-4 min-w-0 order-2 lg:order-1">
-            <WorkspacePanel id="add-entry" title="Paste Text">
-              <AddDealEntryForm dealId={deal.id} />
-            </WorkspacePanel>
-
-            <WorkspacePanel
-              title="Timeline"
-              subtitle={textEntries.length > 0 ? `${textEntries.length} entr${textEntries.length === 1 ? "y" : "ies"}` : undefined}
-              action={textEntries.length > 0 ? <DownloadEntriesButton dealName={deal.name} files={textEntries} /> : undefined}
-            >
-              <DealEntriesList files={textEntries} dealId={deal.id} />
-            </WorkspacePanel>
-
-            <DealFilesPanel
-              isConnected={isDriveConnected}
-              dealFolderId={deal.google_drive_folder_id}
-              files={allFiles}
-              dealId={deal.id}
-            />
-          </div>
-
-          {/* Right column — activity log */}
-          <div className="flex flex-col gap-4 lg:sticky lg:top-20 order-1 lg:order-2">
-            <ChangeLogPanel events={entityEvents} />
-          </div>
-        </div>
       </main>
+    </div>
+  );
+}
+
+// ─── Section label ────────────────────────────────────────────────────────────
+
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 mt-6 mb-2">
+      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
+        {label}
+      </p>
+      <div className="flex-1 h-px bg-slate-200" />
     </div>
   );
 }

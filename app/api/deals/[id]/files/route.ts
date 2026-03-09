@@ -111,13 +111,14 @@ export async function POST(
   if (dealError || !dealData) return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   const deal = dealData as Pick<Deal, "id" | "name">;
 
-  const { data: tokenRow } = await supabase
+  const { data: tokenRow, error: tokenError } = await supabase
     .from("google_oauth_tokens")
     .select("id")
     .eq("user_id", user.id)
     .single();
 
   if (!tokenRow) {
+    console.error(`[upload] No Google OAuth token for user ${user.id}:`, tokenError?.message);
     return NextResponse.json(
       { error: "Google Drive is not connected. Connect it in Settings → Integrations." },
       { status: 422 }
@@ -128,10 +129,12 @@ export async function POST(
 
   for (const file of files) {
     try {
+      console.log(`[upload] Processing "${file.name}" (${file.size} bytes, ${file.type}) for deal ${dealId}`);
       const buffer = Buffer.from(await file.arrayBuffer());
       const mimeType = (file.type || "application/octet-stream").split(";")[0].trim();
 
       // ── 1. Upload to Google Drive ─────────────────────────────────────────
+      console.log(`[upload] Uploading "${file.name}" to Google Drive...`);
       const driveMeta = await uploadFileToDealFolder({
         userId: user.id,
         dealId,
@@ -224,10 +227,12 @@ export async function POST(
         driveCreatedTime: driveMeta.createdTime ?? null,
       }).catch((err) => console.error("[entity pipeline] ingestFromDealUpload failed:", err));
 
+      console.log(`[upload] "${file.name}" complete. Drive ID: ${driveMeta.googleFileId}`);
       results.push({ fileName: file.name, success: true, googleFileId: driveMeta.googleFileId });
     } catch (err) {
-      console.error(`Failed to upload "${file.name}":`, err);
-      results.push({ fileName: file.name, success: false, error: err instanceof Error ? err.message : "Unknown error" });
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[upload] FAILED "${file.name}":`, msg, err);
+      results.push({ fileName: file.name, success: false, error: msg });
     }
   }
 

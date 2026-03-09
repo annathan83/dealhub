@@ -1,0 +1,28 @@
+feat: deal detail redesign, architecture refinement, and upload fixes
+
+UI:
+- Intake-first deal detail page (Intake, Initial Review, Analysis sections)
+- IntakeSection: unified file/photo/audio/paste upload with drag-and-drop
+- DealDetailTabs: reordered tabs (Deep Analysis, All Facts, History, KPI)
+- DealHeader: compact cleaner layout
+- TriageReviewPanel: tighter 2-col fact grid, compact missing facts chips
+- CreateDealForm: file/photo/audio staging and upload at deal creation time
+
+Backend architecture (migrations 026-029):
+- Multi-version file_texts with text_type field
+- file_chunks linked to specific file_text_id for provenance
+- fact_definitions: fact_scope, display_order, is_user_visible_initially
+- entity_fact_values: value_source_type, review_status, confirmed_by lifecycle
+- fact_evidence: is_primary, evidence_rank, evidence_type, superseded_at
+- processing_runs table for full pipeline observability
+- analysis_snapshots linked to processing_runs via run_id
+- Removed deprecated deep_scan_* and manual_override columns (migration 027)
+- Fixed missing unique constraints on entities.legacy_deal_id and entity_fact_values (migration 028)
+- deal-files Supabase Storage bucket with RLS (migration 029)
+
+Services:
+- triageSummaryService: uses getTriageFactDefinitions() instead of hardcoded keys
+- triageSummaryService + kpiScoringService: wired into processing_runs
+- factReconciliationService: promotes winning evidence to is_primary=true
+- getAuthorizedDriveClient: proactive token refresh before API calls (fixes expired token upload failures)
+- Debug endpoint: fixed env var names, added testDrive live auth test

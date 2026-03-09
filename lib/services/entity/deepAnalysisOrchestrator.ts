@@ -6,21 +6,31 @@
  *
  * Pipeline:
  *   1. Resolve entity from deal ID
- *   2. Guard against concurrent runs (deep_scan_status = "running")
- *   3. Transition deal status: triaged → investigating (if applicable)
- *   4. Log deep_analysis_started event
- *   5. Run deep fact scan (reuses stored file texts, no re-upload)
- *   6. Build analysis context (facts + text corpus)
- *   7. Run deep AI analysis
- *   8. Mark entity deep_analysis_run_at = now(), deep_analysis_stale = false
- *   9. Log deep_analysis_completed event
+ *   2. Guard against concurrent runs (via processing_runs status check)
+ *   3. Create a processing_run record for this deep_analysis run
+ *   4. Transition deal status: triaged → investigating (if applicable)
+ *   5. Log deep_analysis_started event (with run_id)
+ *   6. Run deep fact scan (reuses stored file texts, no re-upload)
+ *   7. Build analysis context (facts + text corpus)
+ *   8. Run deep AI analysis → analysis_snapshot (linked to run_id)
+ *   9. Mark entity deep_analysis_run_at = now(), deep_analysis_stale = false
+ *  10. Update processing_run to completed
+ *  11. Log deep_analysis_completed event
  *
  * Never auto-runs. Always user-triggered.
  * Non-fatal at each step — partial results are still persisted.
+ *
+ * Migration 027: deprecated deep_scan_* columns removed from entities.
+ * processing_runs is now the sole source of truth for run history.
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { getEntityByLegacyDealId } from "@/lib/db/entities";
+import {
+  getEntityByLegacyDealId,
+  createProcessingRun,
+  updateProcessingRun,
+  getLatestProcessingRun,
+} from "@/lib/db/entities";
 import { runDeepScan } from "../facts/deepScanService";
 import { buildAnalysisContext } from "./analysisContextBuilder";
 import { runDeepAnalysis } from "./deepAnalysisService";
@@ -31,6 +41,7 @@ import { logEntityEvent } from "./entityEventService";
 export type DeepAnalysisOrchestratorResult = {
   success: boolean;
   snapshot_id: string | null;
+  run_id: string | null;
   facts_updated: number;
   deal_status_changed: boolean;
   error?: string;
@@ -55,6 +66,7 @@ export async function runDeepAnalysisForDeal(
   const result: DeepAnalysisOrchestratorResult = {
     success: false,
     snapshot_id: null,
+    run_id: null,
     facts_updated: 0,
     deal_status_changed: false,
   };
@@ -70,14 +82,29 @@ export async function runDeepAnalysisForDeal(
     }
 
     // ── 2. Concurrent-run guard ──────────────────────────────────────────────
-    // If a deep scan is already running (e.g. from a previous request that
-    // hasn't completed), return a clear error instead of stacking runs.
-    if (entity.deep_scan_status === "running") {
+    // processing_runs is the sole source of truth for active run detection.
+    const latestRun = await getLatestProcessingRun(entity.id, "deep_analysis");
+    if (latestRun?.status === "running") {
       result.error = "A deep analysis is already running for this deal. Please wait for it to complete.";
       return result;
     }
 
-    // ── 3. Transition deal status triaged → investigating ────────────────────
+    // ── 3. Create processing_run record ─────────────────────────────────────
+    const triggerType = trigger === "re_run" ? "re_run" : "user";
+    const processingRun = await createProcessingRun({
+      entity_id: entity.id,
+      run_type: "deep_analysis",
+      triggered_by_type: triggerType,
+      triggered_by_user_id: userId,
+    });
+    const runId = processingRun?.id ?? null;
+    result.run_id = runId;
+
+    if (runId) {
+      await updateProcessingRun(runId, { status: "running" });
+    }
+
+    // ── 4. Transition deal status triaged → investigating ────────────────────
     // Only transitions from exactly "triaged" — never downgrades other statuses.
     const { data: deal } = await supabase
       .from("deals")
@@ -100,10 +127,10 @@ export async function runDeepAnalysisForDeal(
       }
     }
 
-    // ── 4. Log start event ───────────────────────────────────────────────────
-    await logEntityEvent(entity.id, "deep_analysis_started", { trigger });
+    // ── 5. Log start event ───────────────────────────────────────────────────
+    await logEntityEvent(entity.id, "deep_analysis_started", { trigger }, undefined, undefined, { runId });
 
-    // ── 5. Deep fact scan (reuses stored text — no re-upload) ────────────────
+    // ── 6. Deep fact scan (reuses stored text — no re-upload) ────────────────
     const scanResult = await runDeepScan(entity.id, entity.entity_type_id, entity.title);
     result.facts_updated = scanResult.facts_inserted + scanResult.facts_updated;
 
@@ -111,15 +138,14 @@ export async function runDeepAnalysisForDeal(
       console.warn("[deepAnalysisOrchestrator] Deep scan had errors (continuing):", scanResult.error);
     }
 
-    // ── 6. Build analysis context ────────────────────────────────────────────
+    // ── 7. Build analysis context ────────────────────────────────────────────
     const context = await buildAnalysisContext(entity.id, entity.entity_type_id, entity.title);
 
-    // ── 7. Run deep AI analysis ──────────────────────────────────────────────
-    const snapshot = await runDeepAnalysis(entity.id, entity.title, context, trigger);
+    // ── 8. Run deep AI analysis — pass run_id for snapshot linkage ───────────
+    const snapshot = await runDeepAnalysis(entity.id, entity.title, context, trigger, runId);
     result.snapshot_id = snapshot?.id ?? null;
 
-    // ── 8. Mark entity as analyzed, clear stale flag ─────────────────────────
-    // Always update even if snapshot is null — the scan itself updated facts.
+    // ── 9. Mark entity as analyzed, clear stale flag ─────────────────────────
     await supabase
       .from("entities")
       .update({
@@ -128,23 +154,45 @@ export async function runDeepAnalysisForDeal(
       })
       .eq("id", entity.id);
 
-    // ── 9. Log completion event ──────────────────────────────────────────────
+    // ── 10. Update processing_run to completed ───────────────────────────────
+    if (runId) {
+      await updateProcessingRun(runId, {
+        status: "completed",
+        output_summary_json: {
+          snapshot_id: snapshot?.id ?? null,
+          facts_updated: result.facts_updated,
+          source_count: context.source_count,
+          total_text_chars: context.total_text_chars,
+          had_scan_error: !!scanResult.error,
+        },
+      });
+    }
+
+    // ── 11. Log completion event ─────────────────────────────────────────────
     await logEntityEvent(entity.id, "deep_analysis_completed", {
       trigger,
+      run_id: runId,
       snapshot_id: snapshot?.id ?? null,
       facts_updated: result.facts_updated,
       source_count: context.source_count,
       total_text_chars: context.total_text_chars,
       had_scan_error: !!scanResult.error,
-    });
+    }, undefined, undefined, { runId });
 
-    // Consider success even if the AI snapshot failed but facts were updated —
-    // the UI can show a partial state and let the user re-run.
     result.success = true;
     return result;
   } catch (err) {
     console.error("[deepAnalysisOrchestrator] runDeepAnalysisForDeal failed:", err);
     result.error = err instanceof Error ? err.message : "Unknown error";
+
+    // Update processing_run to failed if we have a run_id
+    if (result.run_id) {
+      await updateProcessingRun(result.run_id, {
+        status: "failed",
+        error_message: result.error,
+      }).catch(() => {});
+    }
+
     return result;
   }
 }

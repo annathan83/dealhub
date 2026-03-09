@@ -85,6 +85,10 @@ export async function getAuthorizedDriveClient(userId: string): Promise<drive_v3
     throw new Error("Google Drive is not connected for this user.");
   }
 
+  if (!tokenRow.refresh_token) {
+    throw new Error("Google Drive refresh token is missing. Please reconnect Google Drive in Settings → Integrations.");
+  }
+
   const oauth2Client = createOAuth2Client();
   oauth2Client.setCredentials({
     access_token: tokenRow.access_token,
@@ -92,17 +96,43 @@ export async function getAuthorizedDriveClient(userId: string): Promise<drive_v3
     expiry_date: tokenRow.expiry_date,
   });
 
-  // googleapis auto-refreshes using refresh_token when access_token is expired.
-  // Listen for token refresh events and persist the new token.
+  // If the access token is expired (or will expire within 60s), proactively refresh it
+  // before making any API calls. This avoids relying on the async 'tokens' event.
+  const isExpired = tokenRow.expiry_date
+    ? Date.now() > Number(tokenRow.expiry_date) - 60_000
+    : true;
+
+  if (isExpired) {
+    try {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      oauth2Client.setCredentials(credentials);
+
+      // Persist the refreshed token synchronously before returning
+      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (credentials.access_token) updates.access_token = credentials.access_token;
+      if (credentials.expiry_date) updates.expiry_date = credentials.expiry_date;
+      await supabase
+        .from("google_oauth_tokens")
+        .update(updates)
+        .eq("user_id", userId);
+    } catch (refreshErr) {
+      const msg = refreshErr instanceof Error ? refreshErr.message : String(refreshErr);
+      throw new Error(`Google Drive token refresh failed: ${msg}. Please reconnect Google Drive in Settings → Integrations.`);
+    }
+  }
+
+  // Also listen for any further token refreshes during the request lifetime
   oauth2Client.on("tokens", async (newTokens) => {
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (newTokens.access_token) updates.access_token = newTokens.access_token;
     if (newTokens.expiry_date) updates.expiry_date = newTokens.expiry_date;
-    // SECURITY NOTE: persist refreshed token back to Supabase
     await supabase
       .from("google_oauth_tokens")
       .update(updates)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .then(({ error: e }) => {
+        if (e) console.error("[drive] Failed to persist refreshed token:", e.message);
+      });
   });
 
   return google.drive({ version: "v3", auth: oauth2Client });

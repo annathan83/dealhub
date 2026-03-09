@@ -1,8 +1,17 @@
 /**
  * entities repository
  *
- * Read/write access to the new entity-fact-evidence tables.
+ * Read/write access to the entity-fact-evidence tables.
  * All functions are safe to call from server components and API routes.
+ *
+ * Architecture notes (migration 026):
+ * - file_text table renamed to file_texts; supports multiple text records per file
+ * - file_chunks now reference file_text_id (specific text record)
+ * - fact_definitions have fact_scope / stage metadata
+ * - entity_fact_values have richer value_source_type + review_status lifecycle
+ * - processing_runs table tracks all system operations explicitly
+ * - analysis_snapshots linked to processing_runs via run_id
+ * - entity_events have run_id + actor_user_id
  */
 
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +20,7 @@ import type {
   EntityType,
   EntityFile,
   FileText,
+  FileTextType,
   FileChunk,
   FactDefinition,
   EntityFactValue,
@@ -21,6 +31,12 @@ import type {
   EntityPageData,
   FactEditLogEntry,
   FactChangeType,
+  ProcessingRun,
+  ProcessingRunType,
+  ProcessingRunStatus,
+  ProcessingRunTrigger,
+  ValueSourceType,
+  ReviewStatus,
 } from "@/types/entity";
 
 // ─── Normalizers ──────────────────────────────────────────────────────────────
@@ -39,12 +55,7 @@ function normalizeEntity(row: Record<string, unknown>): Entity {
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
     archived_at: (row.archived_at as string | null) ?? null,
-    deep_scan_status: (row.deep_scan_status as Entity["deep_scan_status"]) ?? null,
-    deep_scan_started_at: (row.deep_scan_started_at as string | null) ?? null,
-    deep_scan_completed_at: (row.deep_scan_completed_at as string | null) ?? null,
-    deep_scan_facts_added: (row.deep_scan_facts_added as number | null) ?? null,
-    deep_scan_facts_updated: (row.deep_scan_facts_updated as number | null) ?? null,
-    deep_scan_conflicts_found: (row.deep_scan_conflicts_found as number | null) ?? null,
+    // Denormalized summary fields (source of truth for staleness UI)
     deep_analysis_run_at: (row.deep_analysis_run_at as string | null) ?? null,
     deep_analysis_stale: (row.deep_analysis_stale as boolean) ?? false,
     latest_source_at: (row.latest_source_at as string | null) ?? null,
@@ -76,6 +87,7 @@ function normalizeFileText(row: Record<string, unknown>): FileText {
   return {
     id: row.id as string,
     file_id: row.file_id as string,
+    text_type: (row.text_type as FileTextType) ?? "raw_extracted",
     full_text: (row.full_text as string | null) ?? null,
     language: (row.language as string | null) ?? null,
     extraction_method: (row.extraction_method as string | null) ?? null,
@@ -95,6 +107,11 @@ function normalizeFactDefinition(row: Record<string, unknown>): FactDefinition {
     data_type: row.data_type as FactDefinition["data_type"],
     is_critical: (row.is_critical as boolean) ?? false,
     is_multi_value: (row.is_multi_value as boolean) ?? false,
+    fact_scope: (row.fact_scope as FactDefinition["fact_scope"]) ?? "deep",
+    display_order: (row.display_order as number | null) ?? null,
+    is_user_visible_initially: (row.is_user_visible_initially as boolean) ?? false,
+    is_required_for_kpi: (row.is_required_for_kpi as boolean) ?? false,
+    industry_key: (row.industry_key as string | null) ?? null,
     metadata_json: (row.metadata_json as Record<string, unknown>) ?? {},
     created_at: row.created_at as string,
   };
@@ -110,10 +127,12 @@ function normalizeEntityFactValue(row: Record<string, unknown>): EntityFactValue
     status: (row.status as EntityFactValue["status"]) ?? "missing",
     confidence: (row.confidence as number | null) ?? null,
     current_evidence_id: (row.current_evidence_id as string | null) ?? null,
-    manual_override: (row.manual_override as boolean) ?? false,
-    override_note: (row.override_note as string | null) ?? null,
-    override_by: (row.override_by as string | null) ?? null,
-    override_at: (row.override_at as string | null) ?? null,
+    // Source/review lifecycle
+    value_source_type: (row.value_source_type as ValueSourceType) ?? "ai_extracted",
+    review_status: (row.review_status as ReviewStatus) ?? "unreviewed",
+    confirmed_by_user_id: (row.confirmed_by_user_id as string | null) ?? null,
+    confirmed_at: (row.confirmed_at as string | null) ?? null,
+    change_reason: (row.change_reason as string | null) ?? null,
     updated_at: row.updated_at as string,
   };
 }
@@ -131,8 +150,12 @@ function normalizeFactEvidence(row: Record<string, unknown>): FactEvidence {
     page_number: (row.page_number as number | null) ?? null,
     confidence: (row.confidence as number | null) ?? null,
     extractor_version: (row.extractor_version as string | null) ?? null,
-    evidence_status: (row.evidence_status as FactEvidence["evidence_status"]) ?? "raw",
+    evidence_status: (row.evidence_status as FactEvidence["evidence_status"]) ?? "candidate",
+    evidence_type: (row.evidence_type as FactEvidence["evidence_type"]) ?? "ai_extraction",
+    is_primary: (row.is_primary as boolean) ?? false,
+    evidence_rank: (row.evidence_rank as number | null) ?? null,
     is_superseded: (row.is_superseded as boolean) ?? false,
+    superseded_at: (row.superseded_at as string | null) ?? null,
     is_conflicting: (row.is_conflicting as boolean) ?? false,
     created_at: row.created_at as string,
   };
@@ -147,6 +170,7 @@ function normalizeAnalysisSnapshot(row: Record<string, unknown>): AnalysisSnapsh
     content_json: (row.content_json as Record<string, unknown>) ?? {},
     model_name: (row.model_name as string | null) ?? null,
     prompt_version: (row.prompt_version as string | null) ?? null,
+    run_id: (row.run_id as string | null) ?? null,
     created_at: row.created_at as string,
   };
 }
@@ -158,7 +182,32 @@ function normalizeEntityEvent(row: Record<string, unknown>): EntityEvent {
     event_type: row.event_type as EntityEvent["event_type"],
     file_id: (row.file_id as string | null) ?? null,
     fact_definition_id: (row.fact_definition_id as string | null) ?? null,
+    run_id: (row.run_id as string | null) ?? null,
+    actor_user_id: (row.actor_user_id as string | null) ?? null,
     metadata_json: (row.metadata_json as Record<string, unknown>) ?? {},
+    created_at: row.created_at as string,
+  };
+}
+
+function normalizeProcessingRun(row: Record<string, unknown>): ProcessingRun {
+  return {
+    id: row.id as string,
+    entity_id: row.entity_id as string,
+    run_type: row.run_type as ProcessingRunType,
+    status: row.status as ProcessingRunStatus,
+    triggered_by_type: (row.triggered_by_type as ProcessingRunTrigger) ?? "system",
+    triggered_by_user_id: (row.triggered_by_user_id as string | null) ?? null,
+    model_name: (row.model_name as string | null) ?? null,
+    model_version: (row.model_version as string | null) ?? null,
+    prompt_version: (row.prompt_version as string | null) ?? null,
+    input_hash: (row.input_hash as string | null) ?? null,
+    related_file_id: (row.related_file_id as string | null) ?? null,
+    related_text_id: (row.related_text_id as string | null) ?? null,
+    output_summary_json: (row.output_summary_json as Record<string, unknown>) ?? {},
+    error_message: (row.error_message as string | null) ?? null,
+    error_details_json: (row.error_details_json as Record<string, unknown> | null) ?? null,
+    started_at: (row.started_at as string | null) ?? null,
+    completed_at: (row.completed_at as string | null) ?? null,
     created_at: row.created_at as string,
   };
 }
@@ -221,13 +270,18 @@ export async function getFilesWithTextForEntity(entityId: string): Promise<Entit
   const fileIds = files.map((f) => f.id as string);
 
   const [textResult, chunkCountResult] = await Promise.all([
-    supabase.from("file_text").select("*").in("file_id", fileIds),
+    // Fetch all text records (multi-version); prefer raw_extracted for backward compat
+    supabase.from("file_texts").select("*").in("file_id", fileIds),
     supabase.from("file_chunks").select("file_id").in("file_id", fileIds),
   ]);
 
-  const textByFileId = new Map<string, FileText>();
+  // Group all text records by file_id
+  const textsByFileId = new Map<string, FileText[]>();
   for (const row of textResult.data ?? []) {
-    textByFileId.set(row.file_id as string, normalizeFileText(row as Record<string, unknown>));
+    const fileId = row.file_id as string;
+    const existing = textsByFileId.get(fileId) ?? [];
+    existing.push(normalizeFileText(row as Record<string, unknown>));
+    textsByFileId.set(fileId, existing);
   }
 
   const chunkCountByFileId = new Map<string, number>();
@@ -236,11 +290,22 @@ export async function getFilesWithTextForEntity(entityId: string): Promise<Entit
     chunkCountByFileId.set(id, (chunkCountByFileId.get(id) ?? 0) + 1);
   }
 
-  return files.map((f) => ({
-    ...normalizeEntityFile(f as Record<string, unknown>),
-    file_text: textByFileId.get(f.id as string) ?? null,
-    chunk_count: chunkCountByFileId.get(f.id as string) ?? 0,
-  }));
+  return files.map((f) => {
+    const allTexts = textsByFileId.get(f.id as string) ?? [];
+    // Prefer raw_extracted for the primary file_text field (backward compat)
+    const primaryText =
+      allTexts.find((t) => t.text_type === "raw_extracted") ??
+      allTexts.find((t) => t.text_type === "transcript") ??
+      allTexts[0] ??
+      null;
+
+    return {
+      ...normalizeEntityFile(f as Record<string, unknown>),
+      file_text: primaryText,
+      chunk_count: chunkCountByFileId.get(f.id as string) ?? 0,
+      all_texts: allTexts,
+    };
+  });
 }
 
 // ─── Fact queries ─────────────────────────────────────────────────────────────
@@ -261,6 +326,14 @@ export async function getFactDefinitionsForEntityType(
       return fd ? normalizeFactDefinition(fd as Record<string, unknown>) : null;
     })
     .filter((fd): fd is FactDefinition => fd !== null);
+}
+
+/** Returns only triage-scoped fact definitions (for initial review). */
+export async function getTriageFactDefinitions(
+  entityTypeId: string
+): Promise<FactDefinition[]> {
+  const all = await getFactDefinitionsForEntityType(entityTypeId);
+  return all.filter((fd) => fd.fact_scope === "triage" || fd.is_user_visible_initially);
 }
 
 export async function getCurrentFactsForEntity(entityId: string): Promise<EntityFactValue[]> {
@@ -291,24 +364,7 @@ export async function getFactEvidenceForEntity(
   }
 
   const { data } = await query;
-
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    entity_id: r.entity_id as string,
-    fact_definition_id: r.fact_definition_id as string,
-    file_id: r.file_id as string,
-    file_chunk_id: (r.file_chunk_id as string | null) ?? null,
-    extracted_value_raw: (r.extracted_value_raw as string | null) ?? null,
-    normalized_value_json: (r.normalized_value_json as Record<string, unknown>) ?? {},
-    snippet: (r.snippet as string | null) ?? null,
-    page_number: (r.page_number as number | null) ?? null,
-    confidence: (r.confidence as number | null) ?? null,
-    extractor_version: (r.extractor_version as string | null) ?? null,
-    evidence_status: (r.evidence_status as FactEvidence["evidence_status"]) ?? "candidate",
-    is_superseded: (r.is_superseded as boolean) ?? false,
-    is_conflicting: (r.is_conflicting as boolean) ?? false,
-    created_at: r.created_at as string,
-  }));
+  return (data ?? []).map((r) => normalizeFactEvidence(r as Record<string, unknown>));
 }
 
 // ─── Analysis snapshot queries ────────────────────────────────────────────────
@@ -349,6 +405,44 @@ export async function getLatestAnalysisSnapshot(
   return data ? normalizeAnalysisSnapshot(data as Record<string, unknown>) : null;
 }
 
+// ─── Processing run queries ───────────────────────────────────────────────────
+
+export async function getProcessingRunsForEntity(
+  entityId: string,
+  runType?: ProcessingRunType
+): Promise<ProcessingRun[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("processing_runs")
+    .select("*")
+    .eq("entity_id", entityId)
+    .order("created_at", { ascending: false });
+
+  if (runType) {
+    query = query.eq("run_type", runType);
+  }
+
+  const { data } = await query;
+  return (data ?? []).map((r) => normalizeProcessingRun(r as Record<string, unknown>));
+}
+
+export async function getLatestProcessingRun(
+  entityId: string,
+  runType: ProcessingRunType
+): Promise<ProcessingRun | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("processing_runs")
+    .select("*")
+    .eq("entity_id", entityId)
+    .eq("run_type", runType)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return data ? normalizeProcessingRun(data as Record<string, unknown>) : null;
+}
+
 // ─── Entity event queries ─────────────────────────────────────────────────────
 
 export async function getEntityHistory(
@@ -383,7 +477,6 @@ export async function getEntityPageData(
     getCurrentFactsForEntity(entity.id),
     getAnalysisSnapshotsForEntity(entity.id),
     getEntityHistory(entity.id),
-    // Load non-superseded evidence for source traceability in the Facts tab
     supabase
       .from("fact_evidence")
       .select("*")
@@ -461,42 +554,63 @@ export async function insertEntityFile(params: {
   return normalizeEntityFile(data as Record<string, unknown>);
 }
 
+/**
+ * Upsert a text record for a file.
+ * Migration 026: file_text renamed to file_texts; unique constraint is now (file_id, text_type).
+ * Defaults to text_type='raw_extracted' for backward compatibility.
+ */
 export async function upsertFileText(params: {
   file_id: string;
   full_text: string | null;
   extraction_method: string;
   extraction_status: FileText["extraction_status"];
+  text_type?: FileTextType;
   metadata_json?: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<FileText | null> {
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("file_text")
+  const textType = params.text_type ?? "raw_extracted";
+
+  const { data, error } = await supabase
+    .from("file_texts")
     .upsert(
       {
         file_id: params.file_id,
+        text_type: textType,
         full_text: params.full_text,
         extraction_method: params.extraction_method,
         extraction_status: params.extraction_status,
         extracted_at: params.extraction_status === "done" ? new Date().toISOString() : null,
         metadata_json: params.metadata_json ?? {},
       },
-      { onConflict: "file_id" }
-    );
+      { onConflict: "file_id,text_type" }
+    )
+    .select("*")
+    .single();
 
   if (error) {
     console.error("[entities] upsertFileText failed:", error.message);
+    return null;
   }
+
+  return normalizeFileText(data as Record<string, unknown>);
 }
 
+/**
+ * Insert file chunks.
+ * Migration 026: chunks now reference file_text_id for provenance.
+ * Provide file_text_id when available; file_id is kept for backward compat.
+ */
 export async function insertFileChunks(
   fileId: string,
-  chunks: Array<{ text: string; chunk_index: number; token_count?: number; page_number?: number }>
+  chunks: Array<{ text: string; chunk_index: number; token_count?: number; page_number?: number }>,
+  fileTextId?: string | null
 ): Promise<void> {
   if (chunks.length === 0) return;
   const supabase = await createClient();
   const { error } = await supabase.from("file_chunks").insert(
     chunks.map((c) => ({
       file_id: fileId,
+      file_text_id: fileTextId ?? null,
       chunk_index: c.chunk_index,
       text: c.text,
       token_count: c.token_count ?? null,
@@ -514,6 +628,8 @@ export async function insertEntityEvent(params: {
   event_type: EntityEvent["event_type"];
   file_id?: string | null;
   fact_definition_id?: string | null;
+  run_id?: string | null;
+  actor_user_id?: string | null;
   metadata_json?: Record<string, unknown>;
 }): Promise<void> {
   const supabase = await createClient();
@@ -522,6 +638,8 @@ export async function insertEntityEvent(params: {
     event_type: params.event_type,
     file_id: params.file_id ?? null,
     fact_definition_id: params.fact_definition_id ?? null,
+    run_id: params.run_id ?? null,
+    actor_user_id: params.actor_user_id ?? null,
     metadata_json: params.metadata_json ?? {},
   });
 
@@ -530,6 +648,11 @@ export async function insertEntityEvent(params: {
   }
 }
 
+/**
+ * Upsert a fact value.
+ * Respects manual_override (deprecated) and new value_source_type='user_override'.
+ * AI extractions will not overwrite user-confirmed values.
+ */
 export async function upsertEntityFactValue(params: {
   entity_id: string;
   fact_definition_id: string;
@@ -538,19 +661,20 @@ export async function upsertEntityFactValue(params: {
   status: EntityFactValue["status"];
   confidence?: number | null;
   current_evidence_id?: string | null;
+  value_source_type?: ValueSourceType;
 }): Promise<EntityFactValue | null> {
   const supabase = await createClient();
 
-  // Check if there is an existing manual override — if so, do not overwrite value/status.
-  // We still update the evidence pointer so the new evidence is recorded.
+  // Check if there is an existing user override — if so, do not overwrite value/status.
   const { data: existing } = await supabase
     .from("entity_fact_values")
-    .select("id, manual_override, value_raw, status")
+    .select("id, value_source_type, value_raw, status")
     .eq("entity_id", params.entity_id)
     .eq("fact_definition_id", params.fact_definition_id)
     .maybeSingle();
 
-  const isManuallyOverridden = (existing as Record<string, unknown> | null)?.manual_override === true;
+  const existingRow = existing as Record<string, unknown> | null;
+  const isUserOverride = existingRow?.value_source_type === "user_override";
 
   const upsertPayload: Record<string, unknown> = {
     entity_id: params.entity_id,
@@ -559,21 +683,22 @@ export async function upsertEntityFactValue(params: {
     current_evidence_id: params.current_evidence_id ?? null,
   };
 
-  if (isManuallyOverridden) {
+  if (isUserOverride) {
     // Preserve the user's confirmed value and status.
-    // Only update the evidence pointer so the new extraction is recorded.
     // If the extracted value conflicts, mark as conflicting but keep user value.
-    const existingRaw = (existing as Record<string, unknown>).value_raw as string | null;
+    const existingRaw = existingRow?.value_raw as string | null;
     const valuesMatch = existingRaw === params.value_raw;
     if (!valuesMatch) {
       upsertPayload.status = "conflicting";
     }
-    // Do NOT overwrite value_raw, confidence, or manual_override
+    // Do NOT overwrite value_raw, confidence, value_source_type, or review_status
   } else {
     upsertPayload.value_raw = params.value_raw;
     upsertPayload.value_normalized_json = params.value_normalized_json ?? {};
     upsertPayload.status = params.status;
     upsertPayload.confidence = params.confidence ?? null;
+    upsertPayload.value_source_type = params.value_source_type ?? "ai_extracted";
+    upsertPayload.review_status = "unreviewed";
   }
 
   const { data, error } = await supabase
@@ -601,6 +726,8 @@ export async function insertFactEvidence(params: {
   page_number?: number | null;
   confidence?: number | null;
   extractor_version?: string;
+  evidence_type?: FactEvidence["evidence_type"];
+  is_primary?: boolean;
 }): Promise<FactEvidence | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -617,6 +744,8 @@ export async function insertFactEvidence(params: {
       confidence: params.confidence ?? null,
       extractor_version: params.extractor_version ?? null,
       evidence_status: "candidate",
+      evidence_type: params.evidence_type ?? "ai_extraction",
+      is_primary: params.is_primary ?? false,
       is_superseded: false,
       is_conflicting: false,
     })
@@ -628,31 +757,55 @@ export async function insertFactEvidence(params: {
     return null;
   }
 
-  return {
-    id: data.id as string,
-    entity_id: data.entity_id as string,
-    fact_definition_id: data.fact_definition_id as string,
-    file_id: data.file_id as string,
-    file_chunk_id: (data.file_chunk_id as string | null) ?? null,
-    extracted_value_raw: (data.extracted_value_raw as string | null) ?? null,
-    normalized_value_json: (data.normalized_value_json as Record<string, unknown>) ?? {},
-    snippet: (data.snippet as string | null) ?? null,
-    page_number: (data.page_number as number | null) ?? null,
-    confidence: (data.confidence as number | null) ?? null,
-    extractor_version: (data.extractor_version as string | null) ?? null,
-    evidence_status: (data.evidence_status as FactEvidence["evidence_status"]) ?? "candidate",
-    is_superseded: (data.is_superseded as boolean) ?? false,
-    is_conflicting: (data.is_conflicting as boolean) ?? false,
-    created_at: data.created_at as string,
-  };
+  return normalizeFactEvidence(data as Record<string, unknown>);
+}
+
+/**
+ * Promote one evidence row to is_primary=true and demote all others for the
+ * same (entity_id, fact_definition_id) pair to is_primary=false.
+ *
+ * Called by reconcileFacts after determining the winning evidence row.
+ * Uses two separate updates rather than a single conditional to keep the
+ * query simple and avoid RLS issues with bulk updates.
+ */
+export async function promoteEvidenceToPrimary(
+  entityId: string,
+  factDefinitionId: string,
+  primaryEvidenceId: string
+): Promise<void> {
+  const supabase = await createClient();
+
+  // Demote all existing primary rows for this fact
+  const { error: demoteError } = await supabase
+    .from("fact_evidence")
+    .update({ is_primary: false })
+    .eq("entity_id", entityId)
+    .eq("fact_definition_id", factDefinitionId)
+    .eq("is_primary", true)
+    .neq("id", primaryEvidenceId);
+
+  if (demoteError) {
+    console.error("[entities] promoteEvidenceToPrimary (demote) failed:", demoteError.message);
+  }
+
+  // Promote the winning row
+  const { error: promoteError } = await supabase
+    .from("fact_evidence")
+    .update({ is_primary: true })
+    .eq("id", primaryEvidenceId);
+
+  if (promoteError) {
+    console.error("[entities] promoteEvidenceToPrimary (promote) failed:", promoteError.message);
+  }
 }
 
 // ─── Fact editing helpers ─────────────────────────────────────────────────────
 
 /**
  * Manually update a fact value (confirm, edit, override, mark_conflict, mark_missing).
- * Sets manual_override=true for confirm/edit/override so future AI extraction
- * will not silently overwrite the value.
+ * Sets value_source_type='user_override' and review_status='confirmed'/'edited'
+ * for confirm/edit/override actions so future AI extraction will not silently
+ * overwrite the value.
  */
 export async function manuallyUpdateFactValue(params: {
   entity_id: string;
@@ -668,6 +821,11 @@ export async function manuallyUpdateFactValue(params: {
   const supabase = await createClient();
   const isManual = ["confirm", "edit", "override"].includes(params.change_type);
 
+  const reviewStatus: ReviewStatus =
+    params.change_type === "confirm" ? "confirmed" :
+    params.change_type === "edit" || params.change_type === "override" ? "edited" :
+    "rejected";
+
   const { data, error } = await supabase
     .from("entity_fact_values")
     .upsert(
@@ -678,10 +836,12 @@ export async function manuallyUpdateFactValue(params: {
         value_normalized_json: {},
         status: params.status,
         confidence: isManual ? 1.0 : null,
-        manual_override: isManual,
-        override_note: params.note ?? null,
-        override_by: isManual ? params.changed_by : null,
-        override_at: isManual ? new Date().toISOString() : null,
+        // New fields
+        value_source_type: isManual ? "user_override" : "ai_extracted",
+        review_status: reviewStatus,
+        confirmed_by_user_id: isManual ? params.changed_by : null,
+        confirmed_at: isManual ? new Date().toISOString() : null,
+        change_reason: params.note ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "entity_id,fact_definition_id" }
@@ -742,45 +902,97 @@ export async function getFactEditLog(
   }));
 }
 
-// ─── Deep scan helpers ────────────────────────────────────────────────────────
+// ─── Processing run helpers ───────────────────────────────────────────────────
 
-export async function updateEntityDeepScanStatus(
-  entityId: string,
-  status: Entity["deep_scan_status"],
-  stats?: {
-    facts_added?: number;
-    facts_updated?: number;
-    conflicts_found?: number;
+/**
+ * Create a new processing run record.
+ * Call this at the start of any system operation to get an ID for traceability.
+ */
+export async function createProcessingRun(params: {
+  entity_id: string;
+  run_type: ProcessingRunType;
+  triggered_by_type?: ProcessingRunTrigger;
+  triggered_by_user_id?: string | null;
+  model_name?: string | null;
+  prompt_version?: string | null;
+  related_file_id?: string | null;
+  related_text_id?: string | null;
+  input_hash?: string | null;
+}): Promise<ProcessingRun | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("processing_runs")
+    .insert({
+      entity_id: params.entity_id,
+      run_type: params.run_type,
+      status: "queued",
+      triggered_by_type: params.triggered_by_type ?? "system",
+      triggered_by_user_id: params.triggered_by_user_id ?? null,
+      model_name: params.model_name ?? null,
+      prompt_version: params.prompt_version ?? null,
+      related_file_id: params.related_file_id ?? null,
+      related_text_id: params.related_text_id ?? null,
+      input_hash: params.input_hash ?? null,
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error("[entities] createProcessingRun failed:", error.message);
+    return null;
+  }
+
+  return normalizeProcessingRun(data as Record<string, unknown>);
+}
+
+/**
+ * Update a processing run's status and optional output/error details.
+ */
+export async function updateProcessingRun(
+  runId: string,
+  update: {
+    status: ProcessingRunStatus;
+    output_summary_json?: Record<string, unknown>;
+    error_message?: string | null;
+    error_details_json?: Record<string, unknown> | null;
+    model_name?: string | null;
+    model_version?: string | null;
+    prompt_version?: string | null;
   }
 ): Promise<void> {
   const supabase = await createClient();
   const now = new Date().toISOString();
 
-  const update: Record<string, unknown> = {
-    deep_scan_status: status,
-  };
+  const payload: Record<string, unknown> = { status: update.status };
 
-  if (status === "running") {
-    update.deep_scan_started_at = now;
-    update.deep_scan_completed_at = null;
-  } else if (status === "completed" || status === "failed") {
-    update.deep_scan_completed_at = now;
-    if (stats) {
-      update.deep_scan_facts_added = stats.facts_added ?? 0;
-      update.deep_scan_facts_updated = stats.facts_updated ?? 0;
-      update.deep_scan_conflicts_found = stats.conflicts_found ?? 0;
-    }
+  if (update.status === "running") {
+    payload.started_at = now;
+  } else if (update.status === "completed" || update.status === "failed") {
+    payload.completed_at = now;
+    if (!payload.started_at) payload.started_at = now; // safety
   }
+
+  if (update.output_summary_json !== undefined) {
+    payload.output_summary_json = update.output_summary_json;
+  }
+  if (update.error_message !== undefined) payload.error_message = update.error_message;
+  if (update.error_details_json !== undefined) payload.error_details_json = update.error_details_json;
+  if (update.model_name !== undefined) payload.model_name = update.model_name;
+  if (update.model_version !== undefined) payload.model_version = update.model_version;
+  if (update.prompt_version !== undefined) payload.prompt_version = update.prompt_version;
 
   const { error } = await supabase
-    .from("entities")
-    .update(update)
-    .eq("id", entityId);
+    .from("processing_runs")
+    .update(payload)
+    .eq("id", runId);
 
   if (error) {
-    console.error("[entities] updateEntityDeepScanStatus failed:", error.message);
+    console.error("[entities] updateProcessingRun failed:", error.message);
   }
 }
+
+
+// ─── Text retrieval helpers ───────────────────────────────────────────────────
 
 export async function getFileTextsForEntity(
   entityId: string
@@ -788,13 +1000,20 @@ export async function getFileTextsForEntity(
   const supabase = await createClient();
   const { data } = await supabase
     .from("entity_files")
-    .select("id, file_name, file_text(full_text, extraction_status)")
+    .select("id, file_name, file_texts(full_text, extraction_status, text_type)")
     .eq("entity_id", entityId);
 
   const results: Array<{ file_id: string; full_text: string; file_name: string }> = [];
   for (const row of data ?? []) {
-    const ft = (row as Record<string, unknown>).file_text as Record<string, unknown> | null;
-    const fullText = ft?.full_text as string | null;
+    // file_texts is now an array (multiple records per file)
+    const texts = (row as Record<string, unknown>).file_texts;
+    const textArr = Array.isArray(texts) ? texts : texts ? [texts] : [];
+    // Prefer raw_extracted, then transcript, then first available
+    const preferred =
+      textArr.find((t: Record<string, unknown>) => t.text_type === "raw_extracted") ??
+      textArr.find((t: Record<string, unknown>) => t.text_type === "transcript") ??
+      textArr[0];
+    const fullText = preferred?.full_text as string | null;
     if (fullText && fullText.trim().length > 0) {
       results.push({
         file_id: row.id as string,
@@ -819,7 +1038,7 @@ export async function getFileTextsWithMetaForEntity(
   const supabase = await createClient();
   const { data } = await supabase
     .from("entity_files")
-    .select("id, file_name, source_type, uploaded_at, file_text(full_text, extraction_status)")
+    .select("id, file_name, source_type, uploaded_at, file_texts(full_text, extraction_status, text_type)")
     .eq("entity_id", entityId)
     .order("uploaded_at", { ascending: true });
 
@@ -832,8 +1051,13 @@ export async function getFileTextsWithMetaForEntity(
   }> = [];
 
   for (const row of data ?? []) {
-    const ft = (row as Record<string, unknown>).file_text as Record<string, unknown> | null;
-    const fullText = ft?.full_text as string | null;
+    const texts = (row as Record<string, unknown>).file_texts;
+    const textArr = Array.isArray(texts) ? texts : texts ? [texts] : [];
+    const preferred =
+      textArr.find((t: Record<string, unknown>) => t.text_type === "raw_extracted") ??
+      textArr.find((t: Record<string, unknown>) => t.text_type === "transcript") ??
+      textArr[0];
+    const fullText = preferred?.full_text as string | null;
     if (fullText && fullText.trim().length > 0) {
       results.push({
         file_id: row.id as string,
@@ -854,6 +1078,7 @@ export async function insertAnalysisSnapshot(params: {
   content_json: Record<string, unknown>;
   model_name?: string | null;
   prompt_version?: string | null;
+  run_id?: string | null;
 }): Promise<AnalysisSnapshot | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -865,6 +1090,7 @@ export async function insertAnalysisSnapshot(params: {
       content_json: params.content_json,
       model_name: params.model_name ?? null,
       prompt_version: params.prompt_version ?? null,
+      run_id: params.run_id ?? null,
     })
     .select("*")
     .single();

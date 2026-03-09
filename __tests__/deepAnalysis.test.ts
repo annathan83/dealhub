@@ -7,9 +7,12 @@
  * 3. Staleness detection — latest_source_at vs deep_analysis_run_at
  * 4. Persistence of multiple analysis runs (no overwrite)
  * 5. Status transition: triaged → investigating
- * 6. Concurrent-run guard (deep_scan_status = "running")
+ * 6. Concurrent-run guard (via processing_runs status check)
  * 7. Context builder deduplication
- * 8. Context builder source ordering (newest-first)
+ * 8. Context builder source ordering
+ *
+ * Migration 027: deep_scan_status removed from entities.
+ * Concurrent-run guard now uses processing_runs where run_type='deep_analysis'.
  */
 
 import { describe, it, expect } from "vitest";
@@ -24,13 +27,17 @@ type DeepAnalysisOrchestratorResult = {
   error?: string;
 };
 
-type DeepScanStatus = "not_run" | "running" | "completed" | "failed";
+type ProcessingRunStatus = "queued" | "running" | "completed" | "failed" | "skipped";
+
+type ProcessingRun = {
+  id: string;
+  status: ProcessingRunStatus;
+};
 
 type Entity = {
   id: string;
   entity_type_id: string;
   title: string;
-  deep_scan_status: DeepScanStatus | null;
   deep_analysis_run_at: string | null;
   deep_analysis_stale: boolean;
   latest_source_at: string | null;
@@ -42,13 +49,15 @@ type DealRow = { id: string; status: string; user_id: string };
 
 function orchestratorDecision(
   entity: Entity | null,
-  deal: DealRow | null
+  deal: DealRow | null,
+  latestRun?: ProcessingRun | null
 ): Pick<DeepAnalysisOrchestratorResult, "error" | "deal_status_changed"> & { proceed: boolean } {
   if (!entity) {
     return { proceed: false, deal_status_changed: false, error: "Entity not found for this deal. Upload a document or paste text first." };
   }
 
-  if (entity.deep_scan_status === "running") {
+  // Concurrent-run guard: check processing_runs (migration 027 removed deep_scan_status)
+  if (latestRun?.status === "running") {
     return { proceed: false, deal_status_changed: false, error: "A deep analysis is already running for this deal. Please wait for it to complete." };
   }
 
@@ -104,19 +113,19 @@ function wouldOverwrite(existingSnapshotId: string, newSnapshotId: string): bool
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("orchestrator: first manual run", () => {
-  it("proceeds when entity exists and is not running", () => {
+  it("proceeds when entity exists and no run is active", () => {
     const entity: Entity = {
       id: "ent-1",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: "completed",
       deep_analysis_run_at: null,
       deep_analysis_stale: false,
       latest_source_at: null,
     };
     const deal: DealRow = { id: "deal-1", status: "triaged", user_id: "user-1" };
+    const latestRun: ProcessingRun = { id: "run-1", status: "completed" };
 
-    const decision = orchestratorDecision(entity, deal);
+    const decision = orchestratorDecision(entity, deal, latestRun);
 
     expect(decision.proceed).toBe(true);
     expect(decision.error).toBeUndefined();
@@ -134,14 +143,13 @@ describe("orchestrator: first manual run", () => {
       id: "ent-2",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: null,
       deep_analysis_run_at: null,
       deep_analysis_stale: false,
       latest_source_at: null,
     };
     const deal: DealRow = { id: "deal-2", status: "triaged", user_id: "user-1" };
 
-    const decision = orchestratorDecision(entity, deal);
+    const decision = orchestratorDecision(entity, deal, null);
 
     expect(decision.deal_status_changed).toBe(true);
   });
@@ -151,52 +159,68 @@ describe("orchestrator: first manual run", () => {
       id: "ent-3",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: "completed",
       deep_analysis_run_at: "2024-01-01T00:00:00Z",
       deep_analysis_stale: true,
       latest_source_at: "2024-01-02T00:00:00Z",
     };
     const deal: DealRow = { id: "deal-3", status: "investigating", user_id: "user-1" };
+    const latestRun: ProcessingRun = { id: "run-3", status: "completed" };
 
-    const decision = orchestratorDecision(entity, deal);
+    const decision = orchestratorDecision(entity, deal, latestRun);
 
     expect(decision.proceed).toBe(true);
     expect(decision.deal_status_changed).toBe(false);
   });
 });
 
-describe("orchestrator: concurrent-run guard", () => {
-  it("blocks a second run when deep_scan_status is 'running'", () => {
+describe("orchestrator: concurrent-run guard (via processing_runs)", () => {
+  it("blocks a second run when latest processing_run is 'running'", () => {
     const entity: Entity = {
       id: "ent-4",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: "running",
       deep_analysis_run_at: null,
       deep_analysis_stale: false,
       latest_source_at: null,
     };
     const deal: DealRow = { id: "deal-4", status: "investigating", user_id: "user-1" };
+    const latestRun: ProcessingRun = { id: "run-4", status: "running" };
 
-    const decision = orchestratorDecision(entity, deal);
+    const decision = orchestratorDecision(entity, deal, latestRun);
 
     expect(decision.proceed).toBe(false);
     expect(decision.error).toContain("already running");
   });
 
-  it("allows a run when deep_scan_status is 'completed'", () => {
+  it("allows a run when latest processing_run is 'completed'", () => {
     const entity: Entity = {
       id: "ent-5",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: "completed",
       deep_analysis_run_at: null,
       deep_analysis_stale: false,
       latest_source_at: null,
     };
     const deal: DealRow = { id: "deal-5", status: "triaged", user_id: "user-1" };
+    const latestRun: ProcessingRun = { id: "run-5", status: "completed" };
 
-    const decision = orchestratorDecision(entity, deal);
+    const decision = orchestratorDecision(entity, deal, latestRun);
+
+    expect(decision.proceed).toBe(true);
+  });
+
+  it("allows a run when no previous processing_run exists", () => {
+    const entity: Entity = {
+      id: "ent-5b",
+      entity_type_id: "et-1",
+      title: "Test Deal",
+      deep_analysis_run_at: null,
+      deep_analysis_stale: false,
+      latest_source_at: null,
+    };
+    const deal: DealRow = { id: "deal-5b", status: "triaged", user_id: "user-1" };
+
+    const decision = orchestratorDecision(entity, deal, null);
 
     expect(decision.proceed).toBe(true);
   });
@@ -208,7 +232,6 @@ describe("staleness detection", () => {
       id: "ent-6",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: null,
       deep_analysis_run_at: null,
       deep_analysis_stale: false,
       latest_source_at: "2024-01-01T00:00:00Z",
@@ -221,7 +244,6 @@ describe("staleness detection", () => {
       id: "ent-7",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: "completed",
       deep_analysis_run_at: "2024-01-02T00:00:00Z",
       deep_analysis_stale: false,
       latest_source_at: "2024-01-01T00:00:00Z",
@@ -234,7 +256,6 @@ describe("staleness detection", () => {
       id: "ent-8",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: "completed",
       deep_analysis_run_at: "2024-01-01T00:00:00Z",
       deep_analysis_stale: false,
       latest_source_at: "2024-01-02T00:00:00Z",
@@ -247,7 +268,6 @@ describe("staleness detection", () => {
       id: "ent-9",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: null,
       deep_analysis_run_at: null,
       deep_analysis_stale: true,
       latest_source_at: "2024-01-01T00:00:00Z",
@@ -260,7 +280,6 @@ describe("staleness detection", () => {
       id: "ent-10",
       entity_type_id: "et-1",
       title: "Test Deal",
-      deep_scan_status: "completed",
       deep_analysis_run_at: "2024-01-01T00:00:00Z",
       deep_analysis_stale: true,
       latest_source_at: "2024-01-02T00:00:00Z",
@@ -285,7 +304,6 @@ describe("multiple analysis runs: no overwrite", () => {
     );
 
     // insertAnalysisSnapshot must use INSERT, not UPSERT
-    // Find the function and check it uses .insert() not .upsert()
     const fnMatch = src.match(/function insertAnalysisSnapshot[\s\S]*?(?=\nexport|\nfunction|\n\/\*\*)/);
     if (fnMatch) {
       expect(fnMatch[0]).toContain(".insert(");
@@ -372,10 +390,8 @@ describe("re-run after new source text", () => {
       "utf-8"
     );
 
-    // The stale update must be conditional on deep_analysis_run_at not being null
     expect(src).toContain("deep_analysis_run_at");
     expect(src).toContain("deep_analysis_stale");
-    // Must also update latest_source_at unconditionally
     expect(src).toContain("latest_source_at");
   });
 });

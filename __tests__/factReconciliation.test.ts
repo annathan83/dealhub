@@ -114,15 +114,16 @@ describe("resolveStatus (reconciliation rules)", () => {
   });
 });
 
-describe("manual override protection (contract)", () => {
-  it("DB entities module guards manual_override facts from being overwritten", async () => {
-    // The actual guard lives in the DB layer (upsertEntityFactValue checks
-    // manual_override before updating). Verify the source contains the guard.
+describe("user override protection (contract)", () => {
+  it("DB entities module guards user_override facts from being overwritten", async () => {
+    // The guard lives in upsertEntityFactValue: checks value_source_type='user_override'
+    // (migration 027 removed the deprecated manual_override column).
     const fs = await import("fs/promises");
     const src = await fs.readFile(
       new URL("../lib/db/entities.ts", import.meta.url),
       "utf-8"
     );
-    expect(src).toContain("manual_override");
+    expect(src).toContain("user_override");
+    expect(src).toContain("value_source_type");
   });
 });

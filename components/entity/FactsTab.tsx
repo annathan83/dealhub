@@ -104,7 +104,7 @@ function KeyMetricCards({
               {formatValue(val?.value_raw ?? null, fd.data_type)}
             </div>
             <div className="mt-1.5">
-              <StatusPill status={status} isManual={val?.manual_override} />
+              <StatusPill status={status} isManual={val?.value_source_type === "user_override"} />
             </div>
           </div>
         );
@@ -227,7 +227,7 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
               <div className="text-[11px] text-slate-400 mb-1">Current value</div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-slate-700">{formatValue(val.value_raw, fd.data_type)}</span>
-                <StatusPill status={val.status} isManual={val.manual_override} />
+                <StatusPill status={val.status} isManual={val.value_source_type === "user_override"} />
               </div>
               {evidence?.snippet && (
                 <div className="mt-1.5 text-[11px] text-slate-400 italic">
@@ -348,7 +348,7 @@ type FactRowProps = {
 
 function FactRow({ fd, val, evidence, sourceName, dealId, onEdit }: FactRowProps) {
   const status: FactValueStatus = val?.status ?? "missing";
-  const isManual = val?.manual_override ?? false;
+  const isManual = val?.value_source_type === "user_override";
 
   return (
     <tr className="hover:bg-slate-50 transition-colors group">
@@ -378,9 +378,9 @@ function FactRow({ fd, val, evidence, sourceName, dealId, onEdit }: FactRowProps
             {Math.round(val.confidence * 100)}% confidence
           </div>
         )}
-        {val?.override_note && (
+        {val?.change_reason && (
           <div className="text-[10px] text-indigo-500 mt-0.5 italic">
-            &ldquo;{val.override_note}&rdquo;
+            &ldquo;{val.change_reason}&rdquo;
           </div>
         )}
       </td>
