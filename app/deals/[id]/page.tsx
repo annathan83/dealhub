@@ -25,7 +25,7 @@ export default async function DealPage({
 
   const {
     deal, entityData, kpiScorecard,
-    triageSummary,
+    triageSummary, triageSnapshot,
     deepAnalysis, deepAnalysisStale, deepAnalysisRunAt, latestSourceAt,
     entityEvents, entityFiles,
   } = vm;
@@ -46,6 +46,13 @@ export default async function DealPage({
     syncedFiles.length > 0 &&
     !triageSummary &&
     (deal.status === "new" || deal.status === "reviewing");
+
+  // Detect if new files were added after the last triage summary
+  const triageSummaryExists = !!triageSummary;
+  const triageRunAt = triageSnapshot?.created_at ?? null;
+  const newFilesAfterTriage = triageSummaryExists && triageRunAt
+    ? syncedFiles.some((f) => new Date(f.uploaded_at) > new Date(triageRunAt))
+    : false;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -79,6 +86,8 @@ export default async function DealPage({
           dealId={deal.id}
           isDriveConnected={isDriveConnected}
           files={syncedFiles}
+          triageSummaryExists={triageSummaryExists}
+          newFilesAfterTriage={newFilesAfterTriage}
         />
 
         {/* ── 3. Initial Review ─────────────────────────────────────────────── */}
