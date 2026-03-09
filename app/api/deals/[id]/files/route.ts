@@ -5,7 +5,7 @@ import { uploadFileToDealFolder, saveAIAssessmentToDrive } from "@/lib/google/dr
 import { analyzeAttachment, analyzeImageAttachment } from "@/lib/ai/analyzeAttachment";
 import { transcribeAudio, isAudioFile } from "@/lib/ai/transcribeAudio";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
-import { createDerivative } from "@/lib/db/derivatives";
+import { ingestFile } from "@/lib/services/DealFileIngestionService";
 import type { Deal, ExtractedFacts } from "@/types";
 import type { AttachmentAnalysisResult } from "@/types";
 
@@ -331,21 +331,23 @@ export async function POST(
         });
       }
 
-      // 3b. Create derivative row (extraction_status = 'pending')
-      //     Phase 3 will update this row with extracted_text / structured_fields.
+      // 3b. Register in deal_files + deal_file_derivatives via ingestion service
       try {
-        await createDerivative({
+        await ingestFile({
           dealId,
           userId: user.id,
-          dealSourceId: sourceId,
-          googleFileId: driveMeta.googleFileId,
-          googleFileName: driveMeta.googleFileName,
           originalFileName: file.name,
           mimeType: mimeType,
+          sourceKind: isImage ? "webcam_photo" : isAudio ? "audio_recording" : "uploaded_file",
+          googleFileId: driveMeta.googleFileId,
+          googleFileName: driveMeta.googleFileName,
+          webViewLink: driveMeta.webViewLink ?? null,
+          sizeBytes: file.size,
+          dealSourceId: sourceId,
         });
       } catch (derivErr) {
-        // Non-fatal — derivative row is best-effort at this stage
-        console.error("createDerivative failed (non-fatal):", derivErr);
+        // Non-fatal — ingestion record is best-effort
+        console.error("ingestFile failed (non-fatal):", derivErr);
       }
 
       // 4. Log the upload in deal_change_log (linked to entry when created)

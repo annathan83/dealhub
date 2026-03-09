@@ -50,6 +50,8 @@ export type CreateDerivativeInput = {
   googleFileName: string | null;
   originalFileName: string;
   mimeType: string | null;
+  /** Phase 3: FK to deal_files.id — optional for backward compat */
+  dealFileId?: string | null;
 };
 
 /**
@@ -79,6 +81,8 @@ export async function createDerivative(
       mime_type: input.mimeType,
       file_type: fileType,
       extraction_status: "pending" satisfies DerivativeStatus,
+      // Phase 3: link to deal_files if provided
+      ...(input.dealFileId ? { deal_file_id: input.dealFileId } : {}),
     })
     .select("*")
     .single();

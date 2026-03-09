@@ -283,6 +283,181 @@ export type DealValuationContext = {
   notes: string | null;
 };
 
+// ─── Phase 3: provider-agnostic file registry ────────────────────────────────
+
+export type FileIngestStatus =
+  | "uploaded"
+  | "queued"
+  | "processing"
+  | "processed"
+  | "failed";
+
+export type FileStorageProvider = "google_drive" | "s3" | "local" | "supabase_storage";
+
+export type FileSourceKind =
+  | "uploaded_file"
+  | "webcam_photo"
+  | "audio_recording"
+  | "pasted_text"
+  | "ai_assessment"
+  | "manual";
+
+/** Canonical file record (deal_files table). Supersedes DealDriveFile for new code. */
+export type DealFile = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  storage_provider: FileStorageProvider;
+  provider_file_id: string | null;
+  provider_file_name: string | null;
+  web_view_link: string | null;
+  original_file_name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  checksum_sha256: string | null;
+  source_kind: FileSourceKind;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  ingest_status: FileIngestStatus;
+  legacy_drive_file_id: string | null;
+  created_at: string;
+};
+
+// ─── Phase 3: analysis run versioning ────────────────────────────────────────
+
+export type AnalysisRunType = "file_extraction" | "deal_aggregation";
+export type AnalysisRunStatus = "pending" | "running" | "completed" | "failed";
+export type AnalysisRunTrigger = "upload" | "entry" | "manual" | "system" | "backfill";
+
+export type DealAnalysisRun = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  run_type: AnalysisRunType;
+  triggered_by: AnalysisRunTrigger;
+  status: AnalysisRunStatus;
+  started_at: string;
+  completed_at: string | null;
+  model_name: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cost_estimate: number | null;
+  notes: string | null;
+  error_message: string | null;
+  source_file_ids: string[];
+  derivative_ids: string[];
+  created_at: string;
+};
+
+// ─── Phase 3: source claims ───────────────────────────────────────────────────
+
+export type DealSourceClaim = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  analysis_run_id: string | null;
+  source_file_id: string | null;
+  source_derivative_id: string | null;
+  source_deal_source_id: string | null;
+  field_name: string;
+  raw_value: string | null;
+  numeric_value: number | null;
+  text_value: string | null;
+  unit: string | null;
+  confidence: number | null;
+  extraction_model: string | null;
+  extraction_run_id: string | null;
+  superseded_by: string | null;
+  is_active: boolean;
+  extracted_at: string;
+  created_at: string;
+};
+
+// ─── Phase 3: metric snapshots ────────────────────────────────────────────────
+
+export type DealMetricSnapshot = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  analysis_run_id: string;
+  asking_price: number | null;
+  revenue: number | null;
+  sde: number | null;
+  ebitda: number | null;
+  gross_profit: number | null;
+  net_income: number | null;
+  total_assets: number | null;
+  total_liabilities: number | null;
+  implied_multiple: number | null;
+  revenue_multiple: number | null;
+  sde_multiple: number | null;
+  employee_count: number | null;
+  year_established: number | null;
+  years_in_business: number | null;
+  currency: string;
+  snapshot_notes: string | null;
+  source_claim_ids: string[];
+  created_at: string;
+};
+
+// ─── Phase 3: deal opinions (supersedes DealInsight for new runs) ─────────────
+
+export type DealOpinion = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  analysis_run_id: string;
+  metric_snapshot_id: string | null;
+  ai_deal_score: number | null;
+  ai_verdict: AIDealVerdict | null;
+  risk_flags: DealRiskFlag[];
+  missing_information: string[];
+  broker_questions: string[];
+  running_summary: string | null;
+  valuation_context: DealValuationContext | null;
+  model_name: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  derivative_ids_used: string[];
+  created_at: string;
+};
+
+// ─── Phase 3: opinion deltas ──────────────────────────────────────────────────
+
+export type MetricChange = {
+  before: number | null;
+  after: number | null;
+};
+
+export type DealOpinionDelta = {
+  id: string;
+  deal_id: string;
+  user_id: string;
+  from_opinion_id: string | null;
+  to_opinion_id: string;
+  score_before: number | null;
+  score_after: number | null;
+  score_change: number | null;
+  verdict_before: AIDealVerdict | null;
+  verdict_after: AIDealVerdict | null;
+  verdict_changed: boolean;
+  changed_metrics: Record<string, MetricChange>;
+  added_risks: DealRiskFlag[];
+  removed_risks: DealRiskFlag[];
+  resolved_missing: string[];
+  new_missing: string[];
+  triggering_file_ids: string[];
+  created_at: string;
+};
+
+// ─── Phase 3: extended Deal type ─────────────────────────────────────────────
+
+/** Extends the base Deal with Phase 3 pointer columns */
+export type DealWithIntelligence = Deal & {
+  last_analysis_run_id: string | null;
+  current_opinion_id: string | null;
+};
+
 // ─── AI helper return type ────────────────────────────────────────────────────
 
 export type AnalysisResult = {

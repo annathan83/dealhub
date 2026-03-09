@@ -13,6 +13,7 @@
 
 import type {
   DealInsight,
+  DealOpinion,
   DealSourceAnalysis,
   ExtractedFacts,
   SourceType,
@@ -69,6 +70,31 @@ export function insightToAnalysis(insight: DealInsight): DealSourceAnalysis {
     missing_information: insight.missing_information,
     broker_questions: insight.broker_questions,
     created_at: insight.created_at,
+  };
+}
+
+// ─── DealOpinion → DealSourceAnalysis ────────────────────────────────────────
+
+/**
+ * Map a DealOpinion (Phase 3+) to the DealSourceAnalysis shape consumed by
+ * DealIntelligencePanel. Preferred over insightToAnalysis for new analysis runs.
+ */
+export function opinionToAnalysis(opinion: DealOpinion): DealSourceAnalysis {
+  return {
+    id: opinion.id,
+    deal_source_id: "",
+    deal_id: opinion.deal_id,
+    user_id: opinion.user_id,
+    generated_title: opinion.ai_verdict
+      ? `${opinion.ai_verdict} — Score ${opinion.ai_deal_score ?? "?"}/100`
+      : "AI Deal Analysis",
+    detected_type: "unknown" as SourceType,
+    summary: opinion.running_summary ?? null,
+    extracted_facts: EMPTY_FACTS,
+    red_flags: opinion.risk_flags.map((f) => f.flag),
+    missing_information: opinion.missing_information,
+    broker_questions: opinion.broker_questions,
+    created_at: opinion.created_at,
   };
 }
 

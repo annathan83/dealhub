@@ -8,18 +8,11 @@ import DealFilesPanel from "@/components/DealFilesPanel";
 import DealHeader from "@/components/DealHeader";
 import DealIntakeActions from "@/components/DealIntakeActions";
 import DealIntelligencePanel from "@/components/DealIntelligencePanel";
+import DealScorePanel from "@/components/DealScorePanel";
 import DownloadEntriesButton from "@/components/DownloadEntriesButton";
 import WorkspacePanel from "@/components/WorkspacePanel";
 import { syncAndListDealDriveFiles } from "@/lib/google/drive";
-import { getLatestInsight } from "@/lib/db/insights";
-import type {
-  Deal,
-  DealSource,
-  DealSourceAnalysis,
-  DealChangeLogItem,
-  DealDriveFile,
-  DealInsight,
-} from "@/types";
+import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 
 export default async function DealPage({
   params,
@@ -35,62 +28,19 @@ export default async function DealPage({
 
   if (!user) redirect("/signin");
 
-  // ── Deal ──────────────────────────────────────────────────────────────────
-  const { data: dealData, error: dealError } = await supabase
-    .from("deals")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+  // ── Build view model (single call assembles all data) ─────────────────────
+  const vm = await buildDealPageViewModel(id, user.id).catch(() => null);
+  if (!vm) notFound();
 
-  if (dealError || !dealData) notFound();
-  const deal = dealData as Deal;
+  const { deal, sources, analyses, changeLog, driveFiles, latestInsight, latestOpinion, latestDelta } = vm;
 
-  // ── Sources (newest first) ────────────────────────────────────────────────
-  const { data: sourcesData } = await supabase
-    .from("deal_sources")
-    .select("*")
-    .eq("deal_id", id)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  const sources = (sourcesData ?? []) as DealSource[];
-
-  // ── Analyses ──────────────────────────────────────────────────────────────
-  const { data: analysesData } = await supabase
-    .from("deal_source_analyses")
-    .select("*")
-    .eq("deal_id", id)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  const analyses = (analysesData ?? []) as DealSourceAnalysis[];
-  const analysisMap = new Map<string, DealSourceAnalysis>();
-  for (const a of analyses) {
-    if (!analysisMap.has(a.deal_source_id)) {
-      analysisMap.set(a.deal_source_id, a);
-    }
-  }
-
+  const analysisMap = new Map(analyses.map((a) => [a.deal_source_id, a]));
   const sourcesWithAnalysis = sources.map((s) => ({
     ...s,
     analysis: analysisMap.get(s.id) ?? null,
   }));
 
-  // ── Change log ─────────────────────────────────────────────────────────────
-  const { data: changeLogData } = await supabase
-    .from("deal_change_log")
-    .select("*")
-    .eq("deal_id", id)
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
-
-  const changeLog = (changeLogData ?? []) as DealChangeLogItem[];
-
-  // ── Latest AI insight (Phase 3 populates this; graceful null until then) ──
-  const latestInsight: DealInsight | null = await getLatestInsight(id, user.id).catch(() => null);
-
-  // ── Google Drive ──────────────────────────────────────────────────────────
+  // ── Google Drive connection check ─────────────────────────────────────────
   const { data: tokenRow } = await supabase
     .from("google_oauth_tokens")
     .select("id")
@@ -99,9 +49,10 @@ export default async function DealPage({
 
   const isDriveConnected = !!tokenRow;
 
-  const driveFiles = isDriveConnected
-    ? (await syncAndListDealDriveFiles(user.id, id)) as DealDriveFile[]
-    : [] as DealDriveFile[];
+  // Sync Drive files (may differ from cached driveFiles in vm if new uploads)
+  const syncedDriveFiles = isDriveConnected
+    ? await syncAndListDealDriveFiles(user.id, id).catch(() => driveFiles)
+    : driveFiles;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -145,21 +96,38 @@ export default async function DealPage({
             <DealFilesPanel
               isConnected={isDriveConnected}
               dealFolderId={deal.google_drive_folder_id}
-              files={driveFiles}
+              files={syncedDriveFiles}
               fileAnalyses={[]}
               dealId={deal.id}
             />
           </div>
 
-          {/* Right column — sticky intelligence panel */}
-          {/* Phase 3: replace DealIntelligencePanel with DealScorePanel once
-              deal_insights rows exist. latestInsight is already fetched above. */}
+          {/* Right column — sticky panels */}
           <div className="flex flex-col gap-5 lg:sticky lg:top-20">
-            <DealIntelligencePanel
-              analyses={analyses}
-              changeLog={changeLog}
-              latestInsight={latestInsight}
+            {/* Phase 3 score panel — shown when an opinion exists */}
+            <DealScorePanel
+              dealId={deal.id}
+              opinion={latestOpinion}
+              delta={latestDelta}
             />
+
+            {/* Legacy intelligence panel — shown when no opinion yet */}
+            {!latestOpinion && (
+              <DealIntelligencePanel
+                analyses={analyses}
+                changeLog={changeLog}
+                latestInsight={latestInsight}
+              />
+            )}
+
+            {/* Change log is always shown */}
+            {latestOpinion && (
+              <DealIntelligencePanel
+                analyses={[]}
+                changeLog={changeLog}
+                latestInsight={null}
+              />
+            )}
           </div>
         </div>
       </main>
