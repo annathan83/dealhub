@@ -20,29 +20,30 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// ─── Icon node ────────────────────────────────────────────────────────────────
+// ─── Node styles ──────────────────────────────────────────────────────────────
+// Each event type gets a distinct colored ring + background so nodes read as
+// meaningful markers, not just generic circles.
 
 const NODE_STYLES: Record<TimelineIconType, { ring: string; bg: string; icon: string }> = {
-  file:        { ring: "ring-slate-200",   bg: "bg-white",       icon: "text-slate-400" },
-  note:        { ring: "ring-amber-200",   bg: "bg-amber-50",    icon: "text-amber-500" },
-  audio:       { ring: "ring-violet-200",  bg: "bg-violet-50",   icon: "text-violet-500" },
-  image:       { ring: "ring-sky-200",     bg: "bg-sky-50",      icon: "text-sky-500" },
-  pdf:         { ring: "ring-red-200",     bg: "bg-red-50",      icon: "text-red-500" },
-  spreadsheet: { ring: "ring-emerald-200", bg: "bg-emerald-50",  icon: "text-emerald-600" },
-  analysis:    { ring: "ring-indigo-200",  bg: "bg-indigo-50",   icon: "text-indigo-600" },
-  fact:        { ring: "ring-blue-200",    bg: "bg-blue-50",     icon: "text-blue-600" },
-  status:      { ring: "ring-slate-200",   bg: "bg-white",       icon: "text-slate-400" },
-  pass:        { ring: "ring-red-200",     bg: "bg-red-50",      icon: "text-red-500" },
-  processing:  { ring: "ring-amber-200",   bg: "bg-amber-50",    icon: "text-amber-500" },
-  check:       { ring: "ring-slate-200",   bg: "bg-white",       icon: "text-slate-400" },
+  file:        { ring: "ring-slate-300",   bg: "bg-white",       icon: "text-slate-500" },
+  note:        { ring: "ring-amber-300",   bg: "bg-amber-50",    icon: "text-amber-600" },
+  audio:       { ring: "ring-violet-300",  bg: "bg-violet-50",   icon: "text-violet-600" },
+  image:       { ring: "ring-sky-300",     bg: "bg-sky-50",      icon: "text-sky-600" },
+  pdf:         { ring: "ring-red-300",     bg: "bg-red-50",      icon: "text-red-600" },
+  spreadsheet: { ring: "ring-emerald-300", bg: "bg-emerald-50",  icon: "text-emerald-700" },
+  analysis:    { ring: "ring-indigo-300",  bg: "bg-indigo-50",   icon: "text-indigo-700" },
+  fact:        { ring: "ring-blue-300",    bg: "bg-blue-50",     icon: "text-blue-700" },
+  status:      { ring: "ring-slate-300",   bg: "bg-white",       icon: "text-slate-500" },
+  pass:        { ring: "ring-red-300",     bg: "bg-red-50",      icon: "text-red-600" },
+  processing:  { ring: "ring-amber-300",   bg: "bg-amber-50",    icon: "text-amber-600" },
+  check:       { ring: "ring-slate-300",   bg: "bg-white",       icon: "text-slate-500" },
 };
 
 function NodeIcon({ type }: { type: TimelineIconType }) {
   const { ring, bg, icon } = NODE_STYLES[type];
   return (
-    <div
-      className={`w-7 h-7 rounded-full ring-2 flex items-center justify-center shrink-0 z-10 ${ring} ${bg} ${icon}`}
-    >
+    // Shadow ring (white) sits behind the colored ring so nodes pop off the spine
+    <div className={`w-7 h-7 rounded-full ring-2 shadow-[0_0_0_3px_white] flex items-center justify-center shrink-0 relative z-10 ${ring} ${bg} ${icon}`}>
       {(type === "file" || type === "pdf" || type === "spreadsheet") ? (
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -88,58 +89,81 @@ function NodeIcon({ type }: { type: TimelineIconType }) {
 
 function TimelineEntry({
   item,
+  isFirst,
   isLast,
   onFileClick,
 }: {
   item: TimelineItem;
+  isFirst: boolean;
   isLast: boolean;
   onFileClick?: (fileId: string) => void;
 }) {
   const isClickable = !!(item.fileId && onFileClick);
 
   return (
-    /* Row: left spine column + content column */
     <div className="flex gap-0">
 
       {/* ── Left: spine + node ─────────────────────────────────────────────── */}
-      <div className="flex flex-col items-center" style={{ width: 36, minWidth: 36 }}>
-        {/* Top connector — hidden for first item, shown for all others */}
-        <div className="w-px bg-slate-200 flex-none" style={{ height: 10 }} />
+      <div className="flex flex-col items-center" style={{ width: 32, minWidth: 32 }}>
+        {/* Top connector: hidden for the very first item */}
+        <div
+          className="flex-none"
+          style={{
+            width: 1.5,
+            height: isFirst ? 8 : 10,
+            background: isFirst ? "transparent" : "#cbd5e1", // slate-300
+          }}
+        />
         {/* Node */}
         <NodeIcon type={item.icon} />
-        {/* Bottom connector — extends down to next item */}
+        {/* Bottom connector: extends to next item */}
         {!isLast && (
-          <div className="w-px bg-slate-200 flex-1 min-h-[12px]" />
+          <div
+            className="flex-1 min-h-[16px]"
+            style={{ width: 1.5, background: "#cbd5e1" }} // slate-300
+          />
         )}
       </div>
 
       {/* ── Right: content ─────────────────────────────────────────────────── */}
-      <div className={`flex-1 min-w-0 pl-3 ${isLast ? "pb-0" : "pb-5"}`} style={{ paddingTop: 6 }}>
+      <div
+        className={`flex-1 min-w-0 pl-3 ${isLast ? "pb-1" : "pb-4"}`}
+        style={{ paddingTop: 5 }}
+      >
         <button
           type="button"
           onClick={isClickable ? () => onFileClick!(item.fileId!) : undefined}
           disabled={!isClickable}
           className={`w-full text-left group ${isClickable ? "cursor-pointer" : "cursor-default"}`}
         >
-          <div className="flex items-baseline justify-between gap-2">
-            <p className={`text-sm font-semibold leading-snug ${isClickable ? "text-slate-800 group-hover:text-indigo-700 transition-colors" : "text-slate-800"}`}>
-              {item.title}
-            </p>
-            <span className="text-[11px] text-slate-400 shrink-0 whitespace-nowrap tabular-nums">
-              {relativeTime(item.timestamp)}
-            </span>
-          </div>
+          {/* Title row */}
+          <p className={`text-sm font-semibold leading-snug ${
+            isClickable
+              ? "text-slate-800 group-hover:text-indigo-700 transition-colors"
+              : "text-slate-800"
+          }`}>
+            {item.title}
+          </p>
+
+          {/* Summary */}
           <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
             {item.summary}
           </p>
-          {isClickable && (
-            <span className="inline-flex items-center gap-1 mt-1 text-[11px] text-indigo-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-              View file
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
+
+          {/* Timestamp + optional link — on its own line, right-aligned */}
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-[11px] text-slate-400 tabular-nums">
+              {relativeTime(item.timestamp)}
             </span>
-          )}
+            {isClickable && (
+              <span className="inline-flex items-center gap-0.5 text-[11px] text-indigo-500 font-medium">
+                View
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+            )}
+          </div>
         </button>
       </div>
 
@@ -165,8 +189,11 @@ export default function TimelineSection({
 
   if (items.length === 0) {
     return (
-      <div className="px-1 py-4">
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">History</p>
+      <div className="pt-2 pb-4">
+        <div className="flex items-center gap-3 mb-3">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">History</p>
+          <div className="flex-1 h-px bg-slate-100" />
+        </div>
         <p className="text-xs text-slate-400 pl-1">
           Activity will appear here as files are added and processed.
         </p>
@@ -176,47 +203,50 @@ export default function TimelineSection({
 
   return (
     <div>
-      {/* Section label */}
-      <div className="flex items-center gap-3 mb-3">
+      {/* Section label — visually lighter than the file pane toolbar */}
+      <div className="flex items-center gap-3 mb-4">
         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
           History
         </p>
-        <div className="flex-1 h-px bg-slate-200" />
-        <span className="text-[11px] text-slate-400 shrink-0">{items.length} events</span>
+        <div className="flex-1 h-px bg-slate-100" />
+        <span className="text-[11px] text-slate-400 shrink-0 tabular-nums">
+          {items.length} {items.length === 1 ? "event" : "events"}
+        </span>
       </div>
 
-      {/* Timeline entries — left-aligned with spine */}
+      {/* Timeline — left-padded so the spine has breathing room from the page edge */}
       <div className="pl-1">
         {visible.map((item, idx) => (
           <TimelineEntry
             key={item.id}
             item={item}
+            isFirst={idx === 0}
             isLast={idx === visible.length - 1}
             onFileClick={onFileClick}
           />
         ))}
       </div>
 
-      {/* Expand / collapse */}
+      {/* Expand / collapse — inline text link, not a button block */}
       {hasMore && (
-        <div className="pl-1 mt-1">
+        <div className="pl-9 mt-0.5">
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 transition-colors py-1"
+            className="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-indigo-600 transition-colors py-1"
           >
             {expanded ? (
               <>
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
                 </svg>
                 Show less
               </>
             ) : (
               <>
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                 </svg>
-                Show {items.length - DEFAULT_VISIBLE} more
+                {items.length - DEFAULT_VISIBLE} more
               </>
             )}
           </button>
