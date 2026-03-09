@@ -555,3 +555,24 @@ export async function listDealDriveFiles(userId: string, dealId: string) {
 export function getDriveFolderUrl(folderId: string): string {
   return `https://drive.google.com/drive/folders/${folderId}`;
 }
+
+// ─── File download ────────────────────────────────────────────────────────────
+
+/**
+ * Download a file from Google Drive and return its content as a Buffer.
+ * Used by DerivativeProcessingService to fetch files for AI extraction.
+ * Throws if the file cannot be downloaded.
+ */
+export async function downloadDriveFile(
+  userId: string,
+  googleFileId: string
+): Promise<Buffer> {
+  const drive = await getAuthorizedDriveClient(userId);
+
+  const response = await drive.files.get(
+    { fileId: googleFileId, alt: "media" },
+    { responseType: "arraybuffer" }
+  );
+
+  return Buffer.from(response.data as ArrayBuffer);
+}

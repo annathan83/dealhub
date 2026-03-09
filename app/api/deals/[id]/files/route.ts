@@ -6,6 +6,7 @@ import { analyzeAttachment, analyzeImageAttachment } from "@/lib/ai/analyzeAttac
 import { transcribeAudio, isAudioFile } from "@/lib/ai/transcribeAudio";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
 import { ingestFile } from "@/lib/services/DealFileIngestionService";
+import { processDerivative } from "@/lib/services/DerivativeProcessingService";
 import type { Deal, ExtractedFacts } from "@/types";
 import type { AttachmentAnalysisResult } from "@/types";
 
@@ -331,9 +332,10 @@ export async function POST(
         });
       }
 
-      // 3b. Register in deal_files + deal_file_derivatives via ingestion service
+      // 3b. Register in deal_files + deal_file_derivatives, then immediately
+      //     process image/audio derivatives (extraction happens inline here).
       try {
-        await ingestFile({
+        const { derivative } = await ingestFile({
           dealId,
           userId: user.id,
           originalFileName: file.name,
@@ -345,6 +347,14 @@ export async function POST(
           sizeBytes: file.size,
           dealSourceId: sourceId,
         });
+
+        // Run extraction immediately for image and audio — these are fast enough
+        // to do inline (Vision API ~2s, Whisper ~5s). PDF/spreadsheet stay pending.
+        if (isImage || isAudio) {
+          processDerivative(derivative).catch((err) => {
+            console.error("processDerivative failed (non-fatal):", err);
+          });
+        }
       } catch (derivErr) {
         // Non-fatal — ingestion record is best-effort
         console.error("ingestFile failed (non-fatal):", derivErr);

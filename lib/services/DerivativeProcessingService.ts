@@ -4,21 +4,19 @@
  * State-machine processor for deal_file_derivatives rows.
  * Drives a derivative from 'pending' → 'processing' → 'done' | 'failed'.
  *
- * Architecture:
- *  - Each file type has a dedicated extractor stub.
- *  - Extractors are called synchronously inside the API route for now.
- *  - In Phase 4 these will be moved to background jobs / edge functions.
- *
- * Current extractor status:
- *  - text    → extracts content from deal_sources.content (no AI)
- *  - pdf     → stub (returns null) — Phase 4 will call pdf-parse
- *  - image   → stub (returns null) — Phase 4 will call GPT-4o Vision
- *  - audio   → stub (returns null) — Phase 4 will call Whisper
- *  - spreadsheet → stub (returns null) — Phase 4 will call xlsx
+ * Extractor status:
+ *  - text        → reads deal_sources.content directly (no AI, no Drive)
+ *  - image       → downloads from Drive, calls GPT-4o Vision
+ *  - audio       → downloads from Drive, calls Whisper transcription
+ *  - pdf         → stub — Phase 4 will add pdf-parse
+ *  - spreadsheet → stub — Phase 4 will add xlsx
  */
 
 import { updateDerivative, listPendingDerivatives } from "@/lib/db/derivatives";
 import { createClient } from "@/lib/supabase/server";
+import { downloadDriveFile } from "@/lib/google/drive";
+import { analyzeImageAttachment } from "@/lib/ai/analyzeAttachment";
+import { transcribeAudio } from "@/lib/ai/transcribeAudio";
 import type { DealFileDerivative, DerivativeFileType } from "@/types";
 
 // ─── Extractor stubs ──────────────────────────────────────────────────────────
@@ -55,35 +53,101 @@ async function extractText(
   }
 }
 
-/** PDF extraction stub — Phase 4 will implement pdf-parse + structured extraction. */
+/** PDF extraction stub — Phase 4 will add pdf-parse + GPT-4o-mini structured extraction. */
 async function extractPdf(
   _derivative: DealFileDerivative
 ): Promise<ExtractorResult> {
-  // TODO Phase 4: download from Drive, run pdf-parse, call GPT-4o-mini for fields
   return { extractedText: null, structuredFields: null, model: null };
 }
 
-/** Image extraction stub — Phase 4 will call GPT-4o Vision. */
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;  // 4 MB — GPT-4o Vision limit
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024; // 25 MB — Whisper limit
+
+/**
+ * Download image from Drive and run GPT-4o Vision analysis.
+ * Stores the AI summary as extracted_text and key signals as structured_fields.
+ */
 async function extractImage(
-  _derivative: DealFileDerivative
+  derivative: DealFileDerivative
 ): Promise<ExtractorResult> {
-  // TODO Phase 4: download from Drive, call analyzeAttachment with vision model
-  return { extractedText: null, structuredFields: null, model: null };
+  if (!derivative.google_file_id) {
+    return { extractedText: null, structuredFields: null, model: null };
+  }
+
+  const buffer = await downloadDriveFile(derivative.user_id, derivative.google_file_id);
+
+  if (buffer.length > MAX_IMAGE_BYTES) {
+    return {
+      extractedText: `Image too large for Vision API (${(buffer.length / 1024 / 1024).toFixed(1)} MB > 4 MB limit).`,
+      structuredFields: null,
+      model: null,
+    };
+  }
+
+  const mimeType = derivative.mime_type ?? "image/jpeg";
+  const imageBase64 = buffer.toString("base64");
+
+  const result = await analyzeImageAttachment({
+    dealName: "",
+    driveFileName: derivative.google_file_name ?? derivative.original_file_name,
+    originalFileName: derivative.original_file_name,
+    mimeType,
+    imageBase64,
+  });
+
+  return {
+    extractedText: result.summary,
+    structuredFields: {
+      detected_kind: result.detected_kind,
+      generated_title: result.generated_title,
+      confidence: result.confidence,
+      keywords: result.extracted_signals.keywords,
+    },
+    model: "gpt-4o-mini",
+  };
 }
 
-/** Audio extraction stub — Phase 4 will call Whisper. */
+/**
+ * Download audio from Drive and transcribe with Whisper.
+ * Stores the full transcript as extracted_text.
+ */
 async function extractAudio(
-  _derivative: DealFileDerivative
+  derivative: DealFileDerivative
 ): Promise<ExtractorResult> {
-  // TODO Phase 4: download from Drive, call transcribeAudio, then extract fields
-  return { extractedText: null, structuredFields: null, model: null };
+  if (!derivative.google_file_id) {
+    return { extractedText: null, structuredFields: null, model: null };
+  }
+
+  const buffer = await downloadDriveFile(derivative.user_id, derivative.google_file_id);
+
+  if (buffer.length > MAX_AUDIO_BYTES) {
+    return {
+      extractedText: `Audio too large for Whisper API (${(buffer.length / 1024 / 1024).toFixed(1)} MB > 25 MB limit).`,
+      structuredFields: null,
+      model: null,
+    };
+  }
+
+  const transcript = await transcribeAudio(buffer, derivative.original_file_name);
+
+  if (!transcript) {
+    return { extractedText: null, structuredFields: null, model: null };
+  }
+
+  return {
+    extractedText: transcript,
+    structuredFields: {
+      transcript_length: transcript.length,
+      word_count: transcript.split(/\s+/).filter(Boolean).length,
+    },
+    model: "whisper-1",
+  };
 }
 
-/** Spreadsheet extraction stub — Phase 4 will call xlsx. */
+/** Spreadsheet extraction stub — Phase 4 will add xlsx + financial row parsing. */
 async function extractSpreadsheet(
   _derivative: DealFileDerivative
 ): Promise<ExtractorResult> {
-  // TODO Phase 4: download from Drive, parse with xlsx, extract financial rows
   return { extractedText: null, structuredFields: null, model: null };
 }
 
