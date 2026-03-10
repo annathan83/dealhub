@@ -299,7 +299,9 @@ export type AnalysisType =
   | "kpi_scorecard"
   | "triage_summary"
   | "deep_analysis"
-  | "revaluation";
+  | "revaluation"
+  | "swot_analysis"
+  | "missing_info";
 
 export type AnalysisSnapshot = {
   id: string;

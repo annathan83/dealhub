@@ -28,8 +28,7 @@ import { chunkAndStoreText } from "./textChunkingService";
 import { logFileUploaded, logTextExtracted, logFactsExtracted } from "./entityEventService";
 import { extractFactsFromText } from "../facts/factExtractionService";
 import { reconcileFacts } from "../facts/factReconciliationService";
-import { runIncrementalRevaluation } from "./incrementalRevaluationService";
-import { scoreAndPersistKpis } from "@/lib/kpi/kpiScoringService";
+import { runPostFactPipeline } from "../analysis/postFactOrchestrator";
 import type { Entity } from "@/types/entity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -166,20 +165,18 @@ async function runFactExtraction(
       model: extractionResult.model_name,
     }, { runId });
 
-    // Recalculate KPI scorecard after facts are updated (non-fatal, fire-and-forget)
+    // Run the full post-fact pipeline: score → SWOT → missing info (non-fatal, fire-and-forget)
     const factsFound = extractionResult.candidates.length;
-    scoreAndPersistKpis(entity.id, entity.entity_type_id, {
+    const industry = (entity as { industry?: string | null }).industry ?? null;
+    runPostFactPipeline({
+      entityId: entity.id,
+      entityTypeId: entity.entity_type_id,
+      entityTitle: entity.title,
+      industry,
       triggerType: "extraction",
       triggerReason: `${factsFound} fact${factsFound !== 1 ? "s" : ""} extracted from ${fileName ?? "file"}`,
     }).catch((err) => {
-      console.error("[entityFileService] KPI rescore after extraction failed (non-fatal):", err);
-    });
-
-    // Trigger incremental revaluation after facts are updated (non-fatal, fire-and-forget).
-    // This is the default analysis path — efficient, focused on what changed.
-    // Deep Scan (full corpus resend) is a separate explicit user action.
-    runIncrementalRevaluation(entity.id, entity.title, "extraction_complete").catch((err) => {
-      console.error("[entityFileService] incremental revaluation failed (non-fatal):", err);
+      console.error("[entityFileService] post-fact pipeline after extraction failed (non-fatal):", err);
     });
   } catch (err) {
     if (runId) {

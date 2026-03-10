@@ -8,6 +8,7 @@
  * No duplication: facts appear exactly once.
  *
  * Sections:
+ *   0. Conflict banner    — any conflicting facts shown first, must be resolved
  *   1. Score Input Sheet  — progress header + 5 fact cards
  *   2. Additional Facts   — secondary facts, collapsible
  *   3. Calculated Metrics — derived values, read-only
@@ -356,6 +357,243 @@ function EditModal({ fd, meta, val, evidence, sourceName, dealId, onClose, onSav
   );
 }
 
+// ─── Conflict resolution modal ────────────────────────────────────────────────
+// Shown when a fact has status === "conflicting". Lets user pick which value to keep.
+
+type ConflictModalProps = {
+  fd: FactDefinition;
+  currentVal: EntityFactValue;
+  allEvidence: FactEvidence[];
+  fileNameMap: Map<string, string>;
+  dealId: string;
+  onClose: () => void;
+  onResolved: (updated: EntityFactValue) => void;
+};
+
+function ConflictModal({
+  fd,
+  currentVal,
+  allEvidence,
+  fileNameMap,
+  dealId,
+  onClose,
+  onResolved,
+}: ConflictModalProps) {
+  // Gather all non-superseded evidence for this fact
+  const evidenceItems = allEvidence
+    .filter((ev) => ev.fact_definition_id === fd.id && !ev.is_superseded)
+    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+
+  const [selectedValue, setSelectedValue] = useState<string>(
+    currentVal.value_raw ?? evidenceItems[0]?.extracted_value_raw ?? ""
+  );
+  const [customValue, setCustomValue] = useState("");
+  const [mode, setMode] = useState<"pick" | "custom">("pick");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  async function handleResolve() {
+    const valueToSave = mode === "custom" ? customValue.trim() : selectedValue;
+    if (!valueToSave) {
+      setError("Please select or enter a value.");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/deals/${dealId}/facts/${fd.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            change_type: "override",
+            value_raw: valueToSave,
+            note: note.trim() || "Conflict resolved",
+            old_value: currentVal.value_raw ?? null,
+            old_status: "conflicting",
+          }),
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          setError(d.error ?? "Failed to resolve.");
+          return;
+        }
+        const d = await res.json();
+        onResolved(d.fact as EntityFactValue);
+        onClose();
+      } catch {
+        setError("Network error. Please try again.");
+      }
+    });
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-amber-100 bg-amber-50">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <svg className="w-4 h-4 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <p className="font-semibold text-amber-800 text-sm">Conflicting Values</p>
+            </div>
+            <p className="text-xs text-amber-600">{fd.label} — pick the correct value</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-amber-100 text-amber-400 shrink-0">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Evidence options */}
+          {mode === "pick" && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-slate-500 mb-2">Sources found:</p>
+              {evidenceItems.length > 0 ? (
+                evidenceItems.map((ev, i) => {
+                  const sourceName = ev.file_id ? fileNameMap.get(ev.file_id) ?? "Unknown file" : "Unknown source";
+                  const isSelected = selectedValue === ev.extracted_value_raw;
+                  return (
+                    <button
+                      key={ev.id ?? i}
+                      type="button"
+                      onClick={() => setSelectedValue(ev.extracted_value_raw)}
+                      className={`w-full text-left rounded-xl border px-4 py-3 transition-all ${
+                        isSelected
+                          ? "border-[#1F7A63] bg-[#F0FAF7]"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-lg font-bold tabular-nums ${isSelected ? "text-[#1F7A63]" : "text-slate-800"}`}>
+                          {formatValue(ev.extracted_value_raw, fd.data_type)}
+                        </span>
+                        {isSelected && (
+                          <svg className="w-4 h-4 text-[#1F7A63] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 truncate">from {sourceName}</p>
+                      {ev.snippet && (
+                        <p className="text-[11px] text-slate-400 italic mt-0.5 line-clamp-1">&ldquo;{ev.snippet.slice(0, 80)}&rdquo;</p>
+                      )}
+                      {ev.confidence !== null && (
+                        <p className="text-[10px] text-slate-300 mt-0.5">{confidenceLabel(ev.confidence)} confidence</p>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-slate-400">No evidence details available.</p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setMode("custom")}
+                className="w-full text-left rounded-xl border border-dashed border-slate-200 px-4 py-2.5 text-sm text-slate-400 hover:border-slate-300 hover:text-slate-600 transition-colors"
+              >
+                + Enter a different value
+              </button>
+            </div>
+          )}
+
+          {/* Custom value entry */}
+          {mode === "custom" && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setMode("pick")}
+                className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1"
+              >
+                ← Back to sources
+              </button>
+              <input
+                type="text"
+                value={customValue}
+                onChange={(e) => setCustomValue(e.target.value)}
+                placeholder={`Enter correct value (${fd.data_type})`}
+                className="w-full px-3.5 py-3 text-base border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1F7A63]/30 focus:border-[#1F7A63] transition"
+                autoFocus
+              />
+            </div>
+          )}
+
+          {/* Note */}
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Note (optional) — e.g. confirmed with broker"
+            className="w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1F7A63]/30 focus:border-[#1F7A63] transition text-slate-600 placeholder-slate-300"
+          />
+
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+          )}
+
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={handleResolve}
+            className="w-full py-3 rounded-xl bg-[#1F7A63] text-white font-semibold text-sm hover:bg-[#1a6654] disabled:opacity-50 transition-colors"
+          >
+            {isPending ? "Resolving…" : "Resolve conflict"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Conflict banner ──────────────────────────────────────────────────────────
+// Shown at the top of the tab when any facts have conflicting values.
+
+function ConflictBanner({
+  conflictingFacts,
+  onResolve,
+}: {
+  conflictingFacts: { fd: FactDefinition; val: EntityFactValue }[];
+  onResolve: (fd: FactDefinition) => void;
+}) {
+  if (conflictingFacts.length === 0) return null;
+
+  return (
+    <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span className="text-xs font-semibold text-amber-700">
+          {conflictingFacts.length} conflicting value{conflictingFacts.length !== 1 ? "s" : ""} — resolve to improve scoring
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {conflictingFacts.map(({ fd }) => (
+          <button
+            key={fd.key}
+            type="button"
+            onClick={() => onResolve(fd)}
+            className="px-2.5 py-1 bg-white border border-amber-200 text-amber-700 text-xs rounded-lg font-medium hover:bg-amber-100 transition-colors"
+          >
+            ⚠ {fd.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Score input card ─────────────────────────────────────────────────────────
 // One card per scoring fact. Three visual states: Missing / Filled / AI Suggested.
 
@@ -573,6 +811,7 @@ function CalculatedMetricsSection({
 
 export default function FactsTab({ factDefinitions, factValues, factEvidence, files, dealId }: Props) {
   const [editingFact, setEditingFact] = useState<FactDefinition | null>(null);
+  const [resolvingConflict, setResolvingConflict] = useState<FactDefinition | null>(null);
   const [showAllOptional, setShowAllOptional] = useState(false);
   const [localOverrides, setLocalOverrides] = useState<Map<string, EntityFactValue>>(new Map());
 
@@ -611,6 +850,13 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
   const totalCount = scoringFacts.length;
   const pct = totalCount > 0 ? Math.round((filledCount / totalCount) * 100) : 0;
 
+  // Conflicting facts — all facts (not just scoring) that need user resolution
+  const conflictingFacts = factDefinitions
+    .map((fd) => ({ fd, val: valueMap.get(fd.id) }))
+    .filter((x): x is { fd: FactDefinition; val: EntityFactValue } =>
+      !!x.val && x.val.status === "conflicting"
+    );
+
   // Optional facts
   const scoringKeys = new Set(SCORING_FACTS.map((m) => m.key));
   const optionalFacts = OPTIONAL_FACT_KEYS
@@ -646,8 +892,19 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
     );
   }
 
+  // Conflict resolution context
+  const resolvingVal = resolvingConflict ? valueMap.get(resolvingConflict.id) : undefined;
+
   return (
-    <div className="px-4 py-4">
+    <div className="px-0 py-4">
+
+      {/* ── Conflict banner ─────────────────────────────────────────────── */}
+      <ConflictBanner
+        conflictingFacts={conflictingFacts}
+        onResolve={setResolvingConflict}
+      />
+
+      <div className="px-4">
 
       {/* ── Score Input Sheet header ────────────────────────────────────── */}
       <div className="mb-5">
@@ -758,6 +1015,27 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
           dealId={dealId}
           onClose={() => setEditingFact(null)}
           onSaved={(updated) => {
+            setLocalOverrides((prev) => {
+              const next = new Map(prev);
+              next.set(updated.fact_definition_id, updated);
+              return next;
+            });
+          }}
+        />
+      )}
+
+      </div>{/* end px-4 */}
+
+      {/* ── Conflict resolution modal ────────────────────────────────────── */}
+      {resolvingConflict && resolvingVal && (
+        <ConflictModal
+          fd={resolvingConflict}
+          currentVal={resolvingVal}
+          allEvidence={factEvidence}
+          fileNameMap={fileNameMap}
+          dealId={dealId}
+          onClose={() => setResolvingConflict(null)}
+          onResolved={(updated) => {
             setLocalOverrides((prev) => {
               const next = new Map(prev);
               next.set(updated.fact_definition_id, updated);

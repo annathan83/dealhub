@@ -9,14 +9,14 @@
  *   value_raw?:  string | null   (required for edit/override, omit for confirm/mark_*)
  *   note?:       string          (optional user note)
  *
- * After update, recalculates KPI scorecard (non-fatal).
+ * After update, runs the full post-fact pipeline (score → SWOT → missing info).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getEntityByLegacyDealId, manuallyUpdateFactValue } from "@/lib/db/entities";
-import { scoreAndPersistKpis } from "@/lib/kpi/kpiScoringService";
+import { runPostFactPipeline } from "@/lib/services/analysis/postFactOrchestrator";
 import { insertEntityEvent } from "@/lib/db/entities";
 import type { FactChangeType, FactValueStatus } from "@/types/entity";
 
@@ -113,22 +113,28 @@ export async function PATCH(
     },
   }).catch(() => {});
 
-  // Recalculate KPI scorecard after fact change (non-fatal)
-  // Pass trigger context so score_history records what caused the change
+  // Run the full post-fact pipeline: score → SWOT → missing info (all non-fatal)
   const triggerReason = note
     ? `${change_type} — ${note}`
     : change_type === "confirm"
-      ? `Fact confirmed`
+      ? "Fact confirmed"
       : change_type === "edit" || change_type === "override"
         ? `Fact updated${newValue ? ` to ${newValue}` : ""}`
         : `Fact marked ${change_type.replace("mark_", "")}`;
 
-  scoreAndPersistKpis(entity.id, entity.entity_type_id, {
+  // Fetch industry from entity metadata for missing info detection
+  const industry = (entity as { industry?: string | null }).industry ?? null;
+
+  runPostFactPipeline({
+    entityId: entity.id,
+    entityTypeId: entity.entity_type_id,
+    entityTitle: entity.title,
+    industry,
     triggerType: "fact_change",
     triggerReason,
     changedFactKey: factDefinitionId,
   }).catch((err) => {
-    console.error("[facts/route] KPI rescore failed (non-fatal):", err);
+    console.error("[facts/route] post-fact pipeline failed (non-fatal):", err);
   });
 
   return NextResponse.json({ success: true, fact: updated });

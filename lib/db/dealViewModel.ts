@@ -8,6 +8,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getEntityPageData, getEntityHistory } from "@/lib/db/entities";
 import { getLatestKpiScorecard, getScoreHistory, type ScoreHistoryEntry } from "@/lib/kpi/kpiScoringService";
+import { getLatestSwotAnalysis, type SwotAnalysisContent } from "@/lib/services/analysis/swotAnalysisService";
+import { getLatestMissingInfo, type MissingInfoResult } from "@/lib/services/analysis/missingInfoService";
 import type { Deal } from "@/types";
 import type { AnalysisSnapshot, EntityPageData, EntityEvent, EntityFile } from "@/types/entity";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
@@ -32,6 +34,9 @@ export type DealPageViewModel = {
   lastRevaluationAt: string | null;
   entityEvents: EntityEvent[];
   entityFiles: EntityFile[];
+  // Auto-generated analysis
+  swotAnalysis: SwotAnalysisContent | null;
+  missingInfo: MissingInfoResult | null;
 };
 
 export async function buildDealPageViewModel(
@@ -47,7 +52,7 @@ export async function buildDealPageViewModel(
 
   if (!dealResult.data) return null;
 
-  const [kpiScorecard, scoreHistory, entityEvents] = await Promise.all([
+  const [kpiScorecard, scoreHistory, entityEvents, swotAnalysis, missingInfo] = await Promise.all([
     entityData?.entity
       ? getLatestKpiScorecard(entityData.entity.id).catch(() => null)
       : Promise.resolve(null),
@@ -57,6 +62,12 @@ export async function buildDealPageViewModel(
     entityData?.entity
       ? getEntityHistory(entityData.entity.id, 50).catch(() => [])
       : Promise.resolve([]),
+    entityData?.entity
+      ? getLatestSwotAnalysis(entityData.entity.id).catch(() => null)
+      : Promise.resolve(null),
+    entityData?.entity
+      ? getLatestMissingInfo(entityData.entity.id).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   // Extract the most recent triage_summary snapshot for the Initial Review panel
@@ -105,5 +116,7 @@ export async function buildDealPageViewModel(
     lastRevaluationAt,
     entityEvents,
     entityFiles,
+    swotAnalysis,
+    missingInfo,
   };
 }

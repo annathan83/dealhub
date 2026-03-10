@@ -35,6 +35,8 @@ export default async function DealPage({
     latestSourceAt,
     entityEvents,
     entityFiles,
+    swotAnalysis,
+    missingInfo,
   } = vm;
 
   const { data: tokenRow } = await supabase
@@ -107,6 +109,8 @@ export default async function DealPage({
             deepAnalysisStale={deepAnalysisStale}
             deepAnalysisRunAt={deepAnalysisRunAt}
             latestSourceAt={latestSourceAt}
+            swotAnalysis={swotAnalysis}
+            missingInfo={missingInfo}
           />
         </div>
 

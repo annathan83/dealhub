@@ -29,6 +29,8 @@ import FactsTab from "./entity/FactsTab";
 import KpiScorecardTab from "./entity/KpiScorecardTab";
 import DeepAnalysisPanel from "./DeepAnalysisPanel";
 import { computeDerivedMetrics } from "@/lib/kpi/derivedMetricsService";
+import type { SwotAnalysisContent } from "@/lib/services/analysis/swotAnalysisService";
+import type { MissingInfoResult } from "@/lib/services/analysis/missingInfoService";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +52,8 @@ export type DealPageTabsProps = {
   deepAnalysisStale: boolean;
   deepAnalysisRunAt: string | null;
   latestSourceAt: string | null;
+  swotAnalysis: SwotAnalysisContent | null;
+  missingInfo: MissingInfoResult | null;
 };
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
@@ -310,6 +314,131 @@ function DerivedMetricsPanel({ entityData }: { entityData: EntityPageData | null
   );
 }
 
+// ─── SWOT panel ───────────────────────────────────────────────────────────────
+
+function SwotPanel({ swot }: { swot: SwotAnalysisContent }) {
+  const categories: { key: keyof SwotAnalysisContent; label: string; color: string; bg: string }[] = [
+    { key: "strengths",     label: "Strengths",     color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
+    { key: "weaknesses",    label: "Weaknesses",    color: "text-red-700",     bg: "bg-red-50 border-red-100" },
+    { key: "opportunities", label: "Opportunities", color: "text-blue-700",    bg: "bg-blue-50 border-blue-100" },
+    { key: "threats",       label: "Threats",       color: "text-amber-700",   bg: "bg-amber-50 border-amber-100" },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {categories.map(({ key, label, color, bg }) => {
+        const bullets = swot[key] as { text: string; fact_key: string | null }[];
+        return (
+          <div key={key} className={`rounded-xl border p-3.5 ${bg}`}>
+            <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${color}`}>{label}</p>
+            {bullets.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No data available yet.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {bullets.map((b, i) => (
+                  <li key={i} className="flex items-start gap-1.5">
+                    <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${color.replace("text-", "bg-")}`} />
+                    <span className="text-xs text-slate-700 leading-relaxed">{b.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Missing info panel ───────────────────────────────────────────────────────
+
+function MissingInfoPanel({ info }: { info: MissingInfoResult }) {
+  const [showAll, setShowAll] = useState(false);
+
+  const critical = info.missing.filter((m) => m.priority === "critical");
+  const important = info.missing.filter((m) => m.priority === "important");
+  const niceToHave = info.missing.filter((m) => m.priority === "nice_to_have");
+
+  if (info.missing.length === 0) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex items-center gap-2">
+        <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        <p className="text-sm text-emerald-700 font-medium">All key information collected</p>
+      </div>
+    );
+  }
+
+  const PriorityGroup = ({
+    items,
+    label,
+    dotColor,
+  }: {
+    items: typeof info.missing;
+    label: string;
+    dotColor: string;
+  }) => {
+    if (items.length === 0) return null;
+    const visible = showAll ? items : items.slice(0, 4);
+    return (
+      <div>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{label}</p>
+        <div className="space-y-1">
+          {visible.map((item) => (
+            <div key={item.key} className="flex items-start gap-2 py-1.5 border-b border-slate-50 last:border-0">
+              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-700">{item.label}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">{item.why}</p>
+              </div>
+              <span className={`text-[10px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full ${
+                item.category === "financial"  ? "bg-blue-50 text-blue-600" :
+                item.category === "legal"      ? "bg-red-50 text-red-600" :
+                item.category === "deal_terms" ? "bg-purple-50 text-purple-600" :
+                                                  "bg-slate-100 text-slate-500"
+              }`}>
+                {item.category.replace("_", " ")}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Missing Information</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {info.critical_count > 0 && <span className="text-red-500 font-semibold">{info.critical_count} critical</span>}
+            {info.critical_count > 0 && info.important_count > 0 && " · "}
+            {info.important_count > 0 && <span>{info.important_count} important</span>}
+            {" "}of {info.total_checked} checked
+          </p>
+        </div>
+      </div>
+      <div className="px-4 py-3 space-y-4">
+        <PriorityGroup items={critical}   label="Critical"   dotColor="bg-red-400" />
+        <PriorityGroup items={important}  label="Important"  dotColor="bg-amber-400" />
+        {showAll && <PriorityGroup items={niceToHave} label="Nice to Have" dotColor="bg-slate-300" />}
+      </div>
+      {(info.missing.length > 8 || niceToHave.length > 0) && (
+        <div className="px-4 py-2 border-t border-slate-50">
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className="text-[11px] text-slate-400 hover:text-[#1F7A63] transition-colors"
+          >
+            {showAll ? "Show less" : `Show all ${info.missing.length} items`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Analysis tab ─────────────────────────────────────────────────────────────
 
 function AnalysisTabContent({
@@ -322,6 +451,8 @@ function AnalysisTabContent({
   deepAnalysisRunAt,
   latestSourceAt,
   entityData,
+  swotAnalysis,
+  missingInfo,
 }: {
   dealId: string;
   dealStatus: DealStatus;
@@ -332,6 +463,8 @@ function AnalysisTabContent({
   deepAnalysisRunAt: string | null;
   latestSourceAt: string | null;
   entityData: EntityPageData | null;
+  swotAnalysis: SwotAnalysisContent | null;
+  missingInfo: MissingInfoResult | null;
 }) {
   return (
     <div className="flex flex-col gap-5 py-4">
@@ -358,9 +491,39 @@ function AnalysisTabContent({
         <KpiScorecardTab scorecard={kpiScorecard} dealId={dealId} />
       </section>
 
+      {/* ── SWOT Analysis ───────────────────────────────────────────────── */}
+      {swotAnalysis ? (
+        <section>
+          <div className="flex items-center gap-3 mb-3">
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">SWOT Analysis</p>
+            <div className="flex-1 h-px bg-slate-100" />
+            <span className="text-[10px] text-slate-300 shrink-0">
+              from {swotAnalysis.facts_used} facts · {new Date(swotAnalysis.generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            </span>
+          </div>
+          <SwotPanel swot={swotAnalysis} />
+        </section>
+      ) : (
+        <section>
+          <SectionLabel label="SWOT Analysis" />
+          <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-5 text-center">
+            <p className="text-sm text-slate-400">SWOT analysis generates automatically after facts are filled.</p>
+            <p className="text-xs text-slate-300 mt-1">Add at least 2 facts to trigger analysis.</p>
+          </div>
+        </section>
+      )}
+
+      {/* ── Missing Information ─────────────────────────────────────────── */}
+      {missingInfo && (
+        <section>
+          <SectionLabel label="Missing Information" />
+          <MissingInfoPanel info={missingInfo} />
+        </section>
+      )}
+
       {/* ── Deep Analysis ───────────────────────────────────────────────── */}
       <section>
-        <SectionLabel label="AI Analysis" />
+        <SectionLabel label="AI Deep Analysis" />
         <DeepAnalysisPanel
           dealId={dealId}
           dealStatus={dealStatus}
@@ -413,6 +576,8 @@ export default function DealPageTabs({
   deepAnalysisStale,
   deepAnalysisRunAt,
   latestSourceAt,
+  swotAnalysis,
+  missingInfo,
 }: DealPageTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
 
@@ -510,6 +675,8 @@ export default function DealPageTabs({
             deepAnalysisRunAt={deepAnalysisRunAt}
             latestSourceAt={latestSourceAt}
             entityData={entityData}
+            swotAnalysis={swotAnalysis}
+            missingInfo={missingInfo}
           />
         </div>
       )}
