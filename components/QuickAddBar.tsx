@@ -41,31 +41,39 @@ type ActionVariant = "upload" | "note" | "photo" | "audio";
 
 const ACTION_STYLES: Record<
   ActionVariant,
-  { bg: string; border: string; text: string; hover: string }
+  { bg: string; border: string; text: string; hoverBg: string; hoverBorder: string; shadow: string }
 > = {
   upload: {
-    bg: "bg-[#F0FAF7]",
-    border: "border-[#C6E4DC]",
-    text: "text-[#1F7A63]",
-    hover: "hover:bg-[#E4F5EF] hover:border-[#1F7A63]",
+    bg:          "bg-[#E8F2FF]",
+    border:      "border-[#3B82F6]",
+    text:        "text-[#2563EB]",
+    hoverBg:     "hover:bg-[#DCEBFF]",
+    hoverBorder: "hover:border-[#2563EB]",
+    shadow:      "hover:shadow-[0_2px_8px_rgba(37,99,235,0.18)]",
   },
   note: {
-    bg: "bg-[#F8FAF9]",
-    border: "border-[#E5E7EB]",
-    text: "text-[#374151]",
-    hover: "hover:bg-[#F3F4F6] hover:border-[#9CA3AF]",
+    bg:          "bg-[#F3E8FF]",
+    border:      "border-[#8B5CF6]",
+    text:        "text-[#7C3AED]",
+    hoverBg:     "hover:bg-[#E9D5FF]",
+    hoverBorder: "hover:border-[#7C3AED]",
+    shadow:      "hover:shadow-[0_2px_8px_rgba(124,58,237,0.18)]",
   },
   photo: {
-    bg: "bg-[#F8FAF9]",
-    border: "border-[#E5E7EB]",
-    text: "text-[#374151]",
-    hover: "hover:bg-[#F3F4F6] hover:border-[#9CA3AF]",
+    bg:          "bg-[#ECFDF5]",
+    border:      "border-[#10B981]",
+    text:        "text-[#059669]",
+    hoverBg:     "hover:bg-[#D1FAE5]",
+    hoverBorder: "hover:border-[#059669]",
+    shadow:      "hover:shadow-[0_2px_8px_rgba(5,150,105,0.18)]",
   },
   audio: {
-    bg: "bg-[#F8FAF9]",
-    border: "border-[#E5E7EB]",
-    text: "text-[#374151]",
-    hover: "hover:bg-[#F3F4F6] hover:border-[#9CA3AF]",
+    bg:          "bg-[#FFF7ED]",
+    border:      "border-[#F97316]",
+    text:        "text-[#EA580C]",
+    hoverBg:     "hover:bg-[#FFE7D1]",
+    hoverBorder: "hover:border-[#EA580C]",
+    shadow:      "hover:shadow-[0_2px_8px_rgba(234,88,12,0.18)]",
   },
 };
 
@@ -88,7 +96,14 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3 text-xs font-semibold transition-colors disabled:opacity-40 flex-1 min-w-0 ${s.bg} ${s.border} ${s.text} ${s.hover}`}
+      className={[
+        "flex flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3",
+        "text-xs font-semibold flex-1 min-w-0",
+        "transition-all duration-150 ease-out",
+        "hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+        "disabled:opacity-40 disabled:pointer-events-none",
+        s.bg, s.border, s.text, s.hoverBg, s.hoverBorder, s.shadow,
+      ].join(" ")}
     >
       <svg
         className="w-5 h-5"

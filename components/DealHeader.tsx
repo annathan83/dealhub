@@ -101,17 +101,23 @@ function formatMultiple(val: string | null): string {
 // ─── Score badge ──────────────────────────────────────────────────────────────
 
 function ScoreBadge({ score100 }: { score100: number | null }) {
-  if (score100 === null) return <span className="text-[#D1D5DB] text-sm font-medium">—</span>;
+  if (score100 === null) {
+    return (
+      <span className="text-[#9CA3AF] text-xl font-semibold tabular-nums leading-tight" title="No score yet">
+        —
+      </span>
+    );
+  }
   // Convert 0–100 to 1–10 display
   const display = Math.round(score100 / 10);
   const color =
-    display >= 8 ? "bg-[#1F7A63] text-white" :
-    display >= 5 ? "bg-[#EAB308] text-white" :
+    display >= 8 ? "bg-[#059669] text-white" :
+    display >= 5 ? "bg-[#D97706] text-white" :
                    "bg-[#DC2626] text-white";
   return (
-    <span className={`inline-flex items-baseline gap-0.5 rounded px-2 py-0.5 text-base font-bold tabular-nums leading-tight ${color}`}>
+    <span className={`inline-flex items-baseline gap-0.5 rounded-md px-2.5 py-1 text-lg font-bold tabular-nums leading-tight ${color}`}>
       {display}
-      <span className="text-[10px] font-normal opacity-75">/10</span>
+      <span className="text-[11px] font-normal opacity-80">/10</span>
     </span>
   );
 }
@@ -130,17 +136,17 @@ function MetricCell({
   primary?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
-      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none">
+    <div className="flex flex-col gap-1 min-w-0">
+      <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-widest leading-none">
         {label}
       </p>
       <p
         className={`tabular-nums leading-tight ${
           empty
-            ? "text-[#D1D5DB] text-sm font-medium"
+            ? "text-[#9CA3AF] text-xl font-semibold"
             : primary
-            ? "text-[#1E1E1E] text-lg font-bold"
-            : "text-[#374151] text-base font-semibold"
+            ? "text-[#1E1E1E] text-xl font-bold"
+            : "text-[#374151] text-lg font-semibold"
         }`}
       >
         {value}
@@ -210,7 +216,7 @@ export default function DealHeader({
 
         {/* ── Metrics strip ───────────────────────────────────────────── */}
         {hasAnyMetric || score100 !== null ? (
-          <div className="border-t border-[#E5E7EB] px-4 py-3 grid grid-cols-4 gap-3">
+          <div className="border-t border-[#E5E7EB] px-4 py-4 grid grid-cols-4 gap-3">
             <MetricCell label="SDE" value={formatCurrency(deal.sde)} empty={!deal.sde} primary />
             <div className="relative pl-3">
               <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
