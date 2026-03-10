@@ -1,5 +1,17 @@
 "use client";
 
+/**
+ * FactsTab
+ *
+ * The structured score-input sheet for a deal.
+ * Architecture:
+ *   1. Summary cards  — the 5 key scoring inputs at a glance
+ *   2. Missing facts  — only scoring-relevant gaps, red-tinted
+ *   3. Core scoring facts — ordered by KPI weight, editable rows with weight badge
+ *   4. Optional facts — secondary facts the user can review/edit
+ *   5. Calculated metrics — derived values, visually distinct, read-only
+ */
+
 import { useState, useTransition } from "react";
 import type {
   FactDefinition,
@@ -21,40 +33,45 @@ type Props = {
   dealId: string;
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Scoring fact registry ────────────────────────────────────────────────────
+// Ordered by KPI weight (highest first). These are the facts that drive scoring.
+// Each entry maps a fact key → the KPI(s) it feeds and its display weight.
 
-const CATEGORY_LABELS: Record<string, string> = {
-  financial:   "Financial",
-  deal_terms:  "Deal Terms",
-  operations:  "Operations",
-  people:      "People",
-  real_estate: "Real Estate",
+type ScoringFactMeta = {
+  key: string;
+  kpiLabel: string;       // which KPI this primarily feeds
+  weight: number;         // KPI weight (0–1) for display
+  weightLabel: string;    // e.g. "12%"
 };
 
-const CATEGORY_ORDER = ["financial", "deal_terms", "operations", "people", "real_estate"];
+const SCORING_FACTS: ScoringFactMeta[] = [
+  { key: "sde_latest",      kpiLabel: "SDE / EBITDA",     weight: 0.12, weightLabel: "12%" },
+  { key: "asking_price",    kpiLabel: "Price Multiple",   weight: 0.12, weightLabel: "12%" },
+  { key: "revenue_latest",  kpiLabel: "Revenue",          weight: 0.10, weightLabel: "10%" },
+  { key: "employees_ft",    kpiLabel: "Management Depth", weight: 0.07, weightLabel: "7%"  },
+  { key: "years_in_business", kpiLabel: "Stability",      weight: 0.05, weightLabel: "5%"  },
+];
 
-const STATUS_CONFIG: Record<FactValueStatus, { label: string; classes: string; dot: string }> = {
-  confirmed:   { label: "Confirmed",   classes: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  estimated:   { label: "Estimated",   classes: "bg-blue-50 text-blue-700 border-blue-200",          dot: "bg-blue-400"   },
-  unclear:     { label: "Unclear",     classes: "bg-amber-50 text-amber-700 border-amber-200",        dot: "bg-amber-400"  },
-  conflicting: { label: "Conflicting", classes: "bg-red-50 text-red-700 border-red-200",              dot: "bg-red-500"    },
-  missing:     { label: "Missing",     classes: "bg-slate-50 text-slate-500 border-slate-200",        dot: "bg-slate-300"  },
-};
+// Fact keys that are DERIVED (not editable raw inputs)
+const DERIVED_KEYS = new Set(["purchase_multiple", "sde_margin", "revenue_per_employee", "sde_per_employee"]);
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// Fact keys that are "optional" — shown in a secondary section
+const OPTIONAL_FACT_KEYS = [
+  "ebitda_latest",
+  "revenue_year_1",
+  "sde_year_1",
+  "employees_pt",
+  "manager_in_place",
+  "owner_hours_per_week",
+  "customer_concentration_top1_pct",
+  "recurring_revenue_pct",
+  "deal_structure",
+  "seller_financing",
+  "lease_monthly_rent",
+  "years_in_business",
+];
 
-function StatusPill({ status, isManual }: { status: FactValueStatus; isManual?: boolean }) {
-  const cfg = STATUS_CONFIG[status];
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full border ${cfg.classes}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-      {cfg.label}
-      {isManual && (
-        <span className="ml-0.5 text-[10px] opacity-70" title="Manually confirmed or edited">✎</span>
-      )}
-    </span>
-  );
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatValue(raw: string | null, dataType: string): string {
   if (!raw) return "—";
@@ -68,7 +85,7 @@ function formatValue(raw: string | null, dataType: string): string {
   }
   if (dataType === "percent") {
     const n = parseFloat(raw);
-    if (!isNaN(n)) return `${(n * 100).toFixed(1)}%`;
+    if (!isNaN(n)) return `${(n > 1 ? n : n * 100).toFixed(1)}%`;
   }
   if (dataType === "boolean") {
     return raw.toLowerCase() === "true" ? "Yes" : "No";
@@ -76,104 +93,45 @@ function formatValue(raw: string | null, dataType: string): string {
   return raw;
 }
 
-// ─── Derived metrics strip ────────────────────────────────────────────────────
+function isMissing(val: EntityFactValue | undefined): boolean {
+  return !val || val.status === "missing" || val.status === "unclear";
+}
 
-function DerivedMetricsStrip({
-  factDefs,
-  factValues,
-}: {
-  factDefs: FactDefinition[];
-  factValues: EntityFactValue[];
-}) {
-  const metrics = computeDerivedMetrics(factValues, factDefs);
-  const items = Object.values(metrics);
+function isFilled(val: EntityFactValue | undefined): boolean {
+  return !!val && val.status !== "missing" && val.status !== "unclear";
+}
 
-  if (!items.some((m) => m.available)) return null;
+// ─── Status dot ───────────────────────────────────────────────────────────────
 
+function StatusDot({ status, isManual }: { status: FactValueStatus; isManual?: boolean }) {
+  const cfg: Record<FactValueStatus, { dot: string; label: string }> = {
+    confirmed:   { dot: "bg-emerald-500", label: "Confirmed" },
+    estimated:   { dot: "bg-blue-400",    label: "Estimated" },
+    unclear:     { dot: "bg-amber-400",   label: "Unclear"   },
+    conflicting: { dot: "bg-red-500",     label: "Conflict"  },
+    missing:     { dot: "bg-slate-200",   label: "Missing"   },
+  };
+  const c = cfg[status];
   return (
-    <div className="mb-6 bg-[#F0FAF7] border border-[#C6E8DF] rounded-xl px-4 py-3">
-      <div className="text-[10px] font-bold text-[#1F7A63] uppercase tracking-widest mb-2">
-        Derived Metrics
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {items.map((m) => (
-          <div key={m.key}>
-            <div className="text-[11px] text-[#3B8F78] mb-0.5">{m.label}</div>
-            <div className={`text-base font-bold tabular-nums ${m.available ? "text-[#1E1E1E]" : "text-slate-300"}`}>
-              {m.formatted}
-            </div>
-            <div className="text-[10px] text-slate-400">{m.description}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
+      {c.label}
+      {isManual && <span className="text-[10px] opacity-60" title="Manually set">✎</span>}
+    </span>
   );
 }
 
-// ─── Key metric cards ─────────────────────────────────────────────────────────
+// ─── Weight badge ─────────────────────────────────────────────────────────────
 
-const KEY_METRIC_KEYS = ["asking_price", "revenue_latest", "sde_latest", "ebitda_latest"];
-
-function KeyMetricCards({
-  factDefs,
-  valueMap,
-}: {
-  factDefs: FactDefinition[];
-  valueMap: Map<string, EntityFactValue>;
-}) {
-  const metrics = KEY_METRIC_KEYS
-    .map((key) => factDefs.find((fd) => fd.key === key))
-    .filter((fd): fd is FactDefinition => !!fd);
-
-  if (metrics.length === 0) return null;
-
+function WeightBadge({ label }: { label: string }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-      {metrics.map((fd) => {
-        const val = valueMap.get(fd.id);
-        const status: FactValueStatus = val?.status ?? "missing";
-        return (
-          <div key={fd.key} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="text-xs text-slate-500 mb-1">{fd.label}</div>
-            <div className={`text-lg font-bold ${status === "missing" ? "text-slate-300" : "text-slate-800"}`}>
-              {formatValue(val?.value_raw ?? null, fd.data_type)}
-            </div>
-            <div className="mt-1.5">
-              <StatusPill status={status} isManual={val?.value_source_type === "user_override"} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 tabular-nums">
+      {label}
+    </span>
   );
 }
 
-// ─── Missing critical facts ───────────────────────────────────────────────────
-
-function MissingCriticalFacts({ missingFacts }: { missingFacts: FactDefinition[] }) {
-  if (missingFacts.length === 0) return null;
-  return (
-    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-      <div className="flex items-center gap-2 mb-2">
-        <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <span className="text-sm font-semibold text-amber-800">
-          {missingFacts.length} critical fact{missingFacts.length !== 1 ? "s" : ""} missing
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {missingFacts.map((fd) => (
-          <span key={fd.key} className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-lg font-medium">
-            {fd.label}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Inline edit drawer ───────────────────────────────────────────────────────
+// ─── Edit drawer ──────────────────────────────────────────────────────────────
 
 type EditDrawerProps = {
   fd: FactDefinition;
@@ -187,7 +145,7 @@ type EditDrawerProps = {
 
 function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }: EditDrawerProps) {
   const [changeType, setChangeType] = useState<FactChangeType>(
-    val?.status === "missing" ? "edit" : "confirm"
+    isMissing(val) ? "edit" : "confirm"
   );
   const [newValue, setNewValue] = useState(val?.value_raw ?? "");
   const [note, setNote] = useState("");
@@ -199,12 +157,10 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
     if (!isMarkAction && changeType !== "confirm" && !newValue.trim()) {
       setError("Please enter a value.");
       return;
     }
-
     startTransition(async () => {
       try {
         const res = await fetch(`/api/deals/${dealId}/facts/${fd.id}`, {
@@ -218,13 +174,11 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
             old_status: val?.status ?? null,
           }),
         });
-
         if (!res.ok) {
           const data = await res.json();
           setError(data.error ?? "Failed to save.");
           return;
         }
-
         const data = await res.json();
         onSaved(data.fact as EntityFactValue);
         onClose();
@@ -235,7 +189,10 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
@@ -248,7 +205,10 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
               <div className="text-[11px] text-slate-400 mt-0.5">{fd.description}</div>
             )}
           </div>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400">
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400"
+          >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -256,13 +216,13 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Current extracted value (if any) */}
+          {/* Current extracted value */}
           {val && val.status !== "missing" && (
             <div className="bg-slate-50 rounded-lg px-3 py-2.5 text-sm">
               <div className="text-[11px] text-slate-400 mb-1">Current value</div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-slate-700">{formatValue(val.value_raw, fd.data_type)}</span>
-                <StatusPill status={val.status} isManual={val.value_source_type === "user_override"} />
+                <StatusDot status={val.status} isManual={val.value_source_type === "user_override"} />
               </div>
               {evidence?.snippet && (
                 <div className="mt-1.5 text-[11px] text-slate-400 italic">
@@ -281,11 +241,11 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
             <label className="block text-xs font-medium text-slate-600 mb-2">Action</label>
             <div className="grid grid-cols-2 gap-1.5">
               {([
-                { type: "confirm",       label: "Confirm",        desc: "Value is correct" },
-                { type: "edit",          label: "Edit",           desc: "Update the value" },
-                { type: "override",      label: "Override",       desc: "Replace with my value" },
-                { type: "mark_conflict", label: "Mark Conflict",  desc: "Values disagree" },
-                { type: "mark_missing",  label: "Mark Missing",   desc: "This fact is absent" },
+                { type: "confirm",       label: "Confirm",       desc: "Value is correct" },
+                { type: "edit",          label: "Edit",          desc: "Update the value" },
+                { type: "override",      label: "Override",      desc: "Replace with my value" },
+                { type: "mark_conflict", label: "Mark Conflict", desc: "Values disagree" },
+                { type: "mark_missing",  label: "Mark Missing",  desc: "This fact is absent" },
               ] as { type: FactChangeType; label: string; desc: string }[]).map(({ type, label, desc }) => (
                 <button
                   key={type}
@@ -293,7 +253,7 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
                   onClick={() => setChangeType(type)}
                   className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
                     changeType === type
-                      ? "bg-indigo-50 border-indigo-300 text-indigo-700"
+                      ? "bg-[#F0FAF7] border-[#1F7A63] text-[#1F7A63]"
                       : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
                   }`}
                 >
@@ -304,7 +264,7 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
             </div>
           </div>
 
-          {/* Value input (not shown for confirm/mark actions) */}
+          {/* Value input */}
           {!isMarkAction && changeType !== "confirm" && (
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1.5">
@@ -321,7 +281,7 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
                   : fd.data_type === "boolean" ? "true or false"
                   : "Enter value"
                 }
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1F7A63]/30 focus:border-[#1F7A63]"
                 autoFocus
               />
             </div>
@@ -336,8 +296,8 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder={`e.g. "Broker confirmed on call" or "From amended lease"`}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+              placeholder={`e.g. "Broker confirmed on call"`}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1F7A63]/30 focus:border-[#1F7A63]"
             />
           </div>
 
@@ -347,7 +307,6 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-2 pt-1">
             <button
               type="button"
@@ -359,7 +318,7 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
             <button
               type="submit"
               disabled={isPending}
-              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-[#1F7A63] rounded-lg hover:bg-[#1a6654] disabled:opacity-50 transition-colors"
             >
               {isPending ? "Saving…" : "Save"}
             </button>
@@ -370,116 +329,340 @@ function EditDrawer({ fd, val, evidence, sourceName, dealId, onClose, onSaved }:
   );
 }
 
-// ─── Fact row ─────────────────────────────────────────────────────────────────
+// ─── Summary cards ────────────────────────────────────────────────────────────
+// Top 5 scoring inputs shown as compact cards
 
-type FactRowProps = {
+const SUMMARY_CARD_KEYS = ["asking_price", "sde_latest", "revenue_latest", "employees_ft", "years_in_business"];
+
+function SummaryCards({
+  factDefs,
+  valueMap,
+  onEdit,
+}: {
+  factDefs: FactDefinition[];
+  valueMap: Map<string, EntityFactValue>;
+  onEdit: (fd: FactDefinition) => void;
+}) {
+  const cards = SUMMARY_CARD_KEYS
+    .map((key) => factDefs.find((fd) => fd.key === key))
+    .filter((fd): fd is FactDefinition => !!fd);
+
+  if (cards.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-5">
+      {cards.map((fd) => {
+        const val = valueMap.get(fd.id);
+        const filled = isFilled(val);
+        const isManual = val?.value_source_type === "user_override";
+
+        return (
+          <button
+            key={fd.key}
+            type="button"
+            onClick={() => onEdit(fd)}
+            className={`text-left rounded-xl border p-3.5 transition-all group ${
+              filled
+                ? "bg-white border-slate-200 hover:border-[#1F7A63]/40 hover:shadow-sm"
+                : "bg-red-50/60 border-red-200 hover:border-red-300"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] text-slate-500 font-medium">{fd.label}</span>
+              <svg
+                className={`w-3 h-3 transition-opacity ${filled ? "text-slate-300 group-hover:text-[#1F7A63]" : "text-red-300"}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </div>
+            <div className={`text-base font-bold tabular-nums leading-tight ${filled ? "text-slate-800" : "text-red-400"}`}>
+              {filled ? formatValue(val!.value_raw, fd.data_type) : "Missing"}
+            </div>
+            {filled && (
+              <div className="mt-1">
+                <StatusDot status={val!.status} isManual={isManual} />
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Missing facts banner ─────────────────────────────────────────────────────
+
+function MissingFactsBanner({
+  missingFacts,
+  onEdit,
+}: {
+  missingFacts: { fd: FactDefinition; meta: ScoringFactMeta }[];
+  onEdit: (fd: FactDefinition) => void;
+}) {
+  if (missingFacts.length === 0) return null;
+
+  return (
+    <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+      <div className="flex items-center gap-2 mb-2">
+        <svg className="w-3.5 h-3.5 text-red-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        <span className="text-xs font-semibold text-red-700">
+          {missingFacts.length} scoring fact{missingFacts.length !== 1 ? "s" : ""} still needed
+        </span>
+        <span className="text-[11px] text-red-400 ml-auto">Tap to fill in</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {missingFacts.map(({ fd }) => (
+          <button
+            key={fd.key}
+            type="button"
+            onClick={() => onEdit(fd)}
+            className="px-2.5 py-1 bg-white border border-red-200 text-red-600 text-xs rounded-lg font-medium hover:bg-red-100 transition-colors"
+          >
+            + {fd.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Scoring fact row ─────────────────────────────────────────────────────────
+
+function ScoringFactRow({
+  fd,
+  val,
+  meta,
+  evidence,
+  sourceName,
+  onEdit,
+}: {
+  fd: FactDefinition;
+  val: EntityFactValue | undefined;
+  meta: ScoringFactMeta;
+  evidence: FactEvidence | null;
+  sourceName: string | null;
+  onEdit: () => void;
+}) {
+  const filled = isFilled(val);
+  const isManual = val?.value_source_type === "user_override";
+  const status: FactValueStatus = val?.status ?? "missing";
+
+  return (
+    <div
+      className={`flex items-center gap-3 px-4 py-3 border-b border-slate-100 last:border-0 group cursor-pointer transition-colors ${
+        filled ? "hover:bg-slate-50" : "bg-red-50/40 hover:bg-red-50"
+      }`}
+      onClick={onEdit}
+    >
+      {/* Status indicator */}
+      <div className="w-1.5 shrink-0">
+        <div className={`w-1.5 h-1.5 rounded-full ${
+          filled
+            ? status === "confirmed" ? "bg-emerald-500"
+              : status === "estimated" ? "bg-blue-400"
+              : status === "conflicting" ? "bg-red-500"
+              : "bg-amber-400"
+            : "bg-red-300"
+        }`} />
+      </div>
+
+      {/* Fact name */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-700 truncate">{fd.label}</span>
+          <span className="text-[10px] text-slate-400 hidden sm:inline shrink-0">{meta.kpiLabel}</span>
+        </div>
+        {filled && sourceName && (
+          <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+            from {sourceName}
+          </div>
+        )}
+        {filled && val?.change_reason && (
+          <div className="text-[10px] text-[#1F7A63] mt-0.5 italic truncate">&ldquo;{val.change_reason}&rdquo;</div>
+        )}
+      </div>
+
+      {/* Value */}
+      <div className="text-right shrink-0">
+        {filled ? (
+          <>
+            <div className="text-sm font-semibold text-slate-800 tabular-nums">
+              {formatValue(val!.value_raw, fd.data_type)}
+            </div>
+            <div className="mt-0.5">
+              <StatusDot status={status} isManual={isManual} />
+            </div>
+          </>
+        ) : (
+          <span className="text-xs text-red-400 font-medium">Missing</span>
+        )}
+      </div>
+
+      {/* Weight badge */}
+      <div className="shrink-0 hidden sm:block">
+        <WeightBadge label={meta.weightLabel} />
+      </div>
+
+      {/* Edit chevron */}
+      <svg
+        className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors shrink-0"
+        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </div>
+  );
+}
+
+// ─── Optional fact row ────────────────────────────────────────────────────────
+
+function OptionalFactRow({
+  fd,
+  val,
+  evidence,
+  sourceName,
+  onEdit,
+}: {
   fd: FactDefinition;
   val: EntityFactValue | undefined;
   evidence: FactEvidence | null;
   sourceName: string | null;
-  dealId: string;
   onEdit: () => void;
-};
-
-function FactRow({ fd, val, evidence, sourceName, dealId, onEdit }: FactRowProps) {
-  const status: FactValueStatus = val?.status ?? "missing";
+}) {
+  const filled = isFilled(val);
   const isManual = val?.value_source_type === "user_override";
+  const status: FactValueStatus = val?.status ?? "missing";
 
   return (
-    <tr className="hover:bg-slate-50 transition-colors group">
-      {/* Fact label */}
-      <td className="px-4 py-3 w-2/5">
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium text-slate-700 text-sm">{fd.label}</span>
-          {fd.is_critical && (
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Critical fact" />
-          )}
-        </div>
-        {fd.description && (
-          <div className="text-[11px] text-slate-400 mt-0.5">{fd.description}</div>
-        )}
-      </td>
+    <div
+      className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 group cursor-pointer hover:bg-slate-50 transition-colors"
+      onClick={onEdit}
+    >
+      <div className="w-1.5 shrink-0">
+        <div className={`w-1.5 h-1.5 rounded-full ${filled ? "bg-emerald-400" : "bg-slate-200"}`} />
+      </div>
 
-      {/* Value + status */}
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`font-medium tabular-nums text-sm ${status === "missing" ? "text-slate-300" : "text-slate-800"}`}>
-            {formatValue(val?.value_raw ?? null, fd.data_type)}
-          </span>
-          <StatusPill status={status} isManual={isManual} />
-        </div>
-        {val?.confidence !== null && val?.confidence !== undefined && (
-          <div className="text-[10px] text-slate-400 mt-0.5">
-            {Math.round(val.confidence * 100)}% confidence
-          </div>
+      <div className="flex-1 min-w-0">
+        <span className="text-sm text-slate-600 truncate">{fd.label}</span>
+        {filled && sourceName && (
+          <div className="text-[10px] text-slate-400 mt-0.5 truncate">from {sourceName}</div>
         )}
-        {val?.change_reason && (
-          <div className="text-[10px] text-indigo-500 mt-0.5 italic">
-            &ldquo;{val.change_reason}&rdquo;
-          </div>
-        )}
-      </td>
+      </div>
 
-      {/* Source */}
-      <td className="px-4 py-3 hidden sm:table-cell">
-        {sourceName ? (
-          <div className="flex items-center gap-1 max-w-[160px]">
-            <svg className="w-3 h-3 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
-            <span className="text-[11px] text-slate-400 truncate" title={sourceName}>
-              {sourceName}
-            </span>
+      <div className="text-right shrink-0">
+        {filled ? (
+          <div className="text-sm font-medium text-slate-700 tabular-nums">
+            {formatValue(val!.value_raw, fd.data_type)}
           </div>
         ) : (
-          <span className="text-[11px] text-slate-200">—</span>
+          <span className="text-[11px] text-slate-300">—</span>
         )}
-        {evidence?.snippet && (
-          <div className="text-[10px] text-slate-400 mt-0.5 italic line-clamp-1 max-w-[160px]" title={evidence.snippet}>
-            &ldquo;{evidence.snippet}&rdquo;
-          </div>
-        )}
-      </td>
+      </div>
 
-      {/* Edit action */}
-      <td className="px-3 py-3 w-10">
-        <button
-          onClick={onEdit}
-          className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-          title="Edit fact"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        </button>
-      </td>
-    </tr>
+      {filled && (
+        <div className="shrink-0 hidden sm:block">
+          <StatusDot status={status} isManual={isManual} />
+        </div>
+      )}
+
+      <svg
+        className="w-3.5 h-3.5 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0"
+        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </div>
+  );
+}
+
+// ─── Calculated metrics section ───────────────────────────────────────────────
+
+function CalculatedMetricsSection({
+  factDefs,
+  factValues,
+}: {
+  factDefs: FactDefinition[];
+  factValues: EntityFactValue[];
+}) {
+  const metrics = computeDerivedMetrics(factValues, factDefs);
+  const items = Object.values(metrics);
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center gap-3 mb-2">
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
+          Calculated Metrics
+        </p>
+        <div className="flex-1 h-px bg-slate-100" />
+        <span className="text-[10px] text-slate-300 shrink-0">auto-computed from facts above</span>
+      </div>
+
+      <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+        {items.map((m, i) => (
+          <div
+            key={m.key}
+            className={`flex items-center gap-3 px-4 py-3 ${i < items.length - 1 ? "border-b border-slate-100" : ""}`}
+          >
+            {/* Fx badge */}
+            <div className="w-6 h-6 rounded bg-slate-200 flex items-center justify-center shrink-0">
+              <span className="text-[9px] font-bold text-slate-500 font-mono">fx</span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-slate-600">{m.label}</div>
+              <div className="text-[10px] text-slate-400">{m.description}</div>
+            </div>
+
+            <div className="text-right shrink-0">
+              {m.available ? (
+                <span className="text-sm font-bold text-slate-800 tabular-nums">{m.formatted}</span>
+              ) : (
+                <span className="text-xs text-slate-300">
+                  Need {m.inputs.slice(0, 2).join(" + ")}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Section label ────────────────────────────────────────────────────────────
+
+function SectionLabel({ label, count }: { label: string; count?: number }) {
+  return (
+    <div className="flex items-center gap-3 mb-2">
+      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">{label}</p>
+      <div className="flex-1 h-px bg-slate-100" />
+      {count !== undefined && (
+        <span className="text-[11px] text-slate-400 tabular-nums shrink-0">{count}</span>
+      )}
+    </div>
   );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function FactsTab({ factDefinitions, factValues, factEvidence, files, dealId }: Props) {
-  const [filter, setFilter] = useState<"all" | "confirmed" | "missing" | "conflicting">("all");
   const [editingFact, setEditingFact] = useState<FactDefinition | null>(null);
-  // Local overrides: track fact values updated in this session without a full page reload
+  const [showAllOptional, setShowAllOptional] = useState(false);
   const [localOverrides, setLocalOverrides] = useState<Map<string, EntityFactValue>>(new Map());
 
   // Merge server values with local overrides
   const effectiveValues = [...factValues];
   for (const [factDefId, override] of localOverrides) {
     const idx = effectiveValues.findIndex((v) => v.fact_definition_id === factDefId);
-    if (idx >= 0) {
-      effectiveValues[idx] = override;
-    } else {
-      effectiveValues.push(override);
-    }
+    if (idx >= 0) effectiveValues[idx] = override;
+    else effectiveValues.push(override);
   }
 
   const valueMap = new Map<string, EntityFactValue>();
-  for (const v of effectiveValues) {
-    valueMap.set(v.fact_definition_id, v);
-  }
+  for (const v of effectiveValues) valueMap.set(v.fact_definition_id, v);
 
   // Best non-superseded evidence per fact_definition_id
   const evidenceMap = new Map<string, FactEvidence>();
@@ -493,139 +676,169 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
   }
 
   const fileNameMap = new Map<string, string>();
-  for (const f of files) {
-    fileNameMap.set(f.id, f.file_name ?? "Unknown file");
-  }
+  for (const f of files) fileNameMap.set(f.id, f.file_name ?? "Unknown file");
 
-  const missingCritical = factDefinitions.filter((fd) => {
-    if (!fd.is_critical) return false;
-    const val = valueMap.get(fd.id);
-    return !val || val.status === "missing" || val.status === "unclear";
+  // Build scoring facts with their definitions
+  const scoringFacts = SCORING_FACTS.flatMap((meta) => {
+    const fd = factDefinitions.find((d) => d.key === meta.key);
+    if (!fd) return [];
+    return [{ fd, meta }];
   });
 
-  const filteredDefs = factDefinitions.filter((fd) => {
-    if (filter === "all") return true;
-    const val = valueMap.get(fd.id);
-    const status: FactValueStatus = val?.status ?? "missing";
-    if (filter === "confirmed") return status === "confirmed" || status === "estimated";
-    if (filter === "missing") return status === "missing" || status === "unclear";
-    if (filter === "conflicting") return status === "conflicting";
-    return true;
-  });
+  // Missing scoring facts
+  const missingScoringFacts = scoringFacts.filter(({ fd }) => isMissing(valueMap.get(fd.id)));
 
-  const filteredByCategory = new Map<string, FactDefinition[]>();
-  for (const fd of filteredDefs) {
-    const cat = fd.category ?? "other";
-    const list = filteredByCategory.get(cat) ?? [];
-    list.push(fd);
-    filteredByCategory.set(cat, list);
-  }
+  // Optional facts (exclude scoring keys and derived keys)
+  const scoringKeys = new Set(SCORING_FACTS.map((m) => m.key));
+  const optionalFacts = OPTIONAL_FACT_KEYS
+    .filter((key) => !scoringKeys.has(key) && !DERIVED_KEYS.has(key))
+    .flatMap((key) => {
+      const fd = factDefinitions.find((d) => d.key === key);
+      return fd ? [fd] : [];
+    });
 
-  const orderedCategories = CATEGORY_ORDER.filter((c) => filteredByCategory.has(c));
+  const OPTIONAL_INITIAL = 5;
+  const visibleOptional = showAllOptional ? optionalFacts : optionalFacts.slice(0, OPTIONAL_INITIAL);
 
   const editingVal = editingFact ? valueMap.get(editingFact.id) : undefined;
   const editingEvidence = editingFact ? (evidenceMap.get(editingFact.id) ?? null) : null;
   const editingSource = editingEvidence?.file_id ? (fileNameMap.get(editingEvidence.file_id) ?? null) : null;
 
-  // Count by status for filter badges
-  const counts = { confirmed: 0, missing: 0, conflicting: 0 };
-  for (const fd of factDefinitions) {
-    const status = valueMap.get(fd.id)?.status ?? "missing";
-    if (status === "confirmed" || status === "estimated") counts.confirmed++;
-    else if (status === "missing" || status === "unclear") counts.missing++;
-    else if (status === "conflicting") counts.conflicting++;
+  const filledCount = scoringFacts.filter(({ fd }) => isFilled(valueMap.get(fd.id))).length;
+
+  // Empty state
+  if (factDefinitions.length === 0) {
+    return (
+      <div className="py-16 text-center px-4">
+        <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center">
+          <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        </div>
+        <p className="text-slate-500 text-sm font-medium">No facts extracted yet</p>
+        <p className="text-slate-400 text-xs mt-1">Upload documents or paste text to extract structured facts.</p>
+      </div>
+    );
   }
 
   return (
-    <div>
-      <DerivedMetricsStrip factDefs={factDefinitions} factValues={effectiveValues} />
-      <KeyMetricCards factDefs={factDefinitions} valueMap={valueMap} />
-      <MissingCriticalFacts missingFacts={missingCritical} />
+    <div className="px-4 py-4">
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {([
-          { key: "all",         label: "All facts",   count: factDefinitions.length },
-          { key: "confirmed",   label: "Confirmed",   count: counts.confirmed },
-          { key: "missing",     label: "Missing",     count: counts.missing },
-          { key: "conflicting", label: "Conflicts",   count: counts.conflicting },
-        ] as { key: typeof filter; label: string; count: number }[]).map(({ key, label, count }) => (
-          <button
-            key={key}
-            onClick={() => setFilter(key)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors flex items-center gap-1.5 ${
-              filter === key
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-            }`}
-          >
-            {label}
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-              filter === key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
-            }`}>
-              {count}
-            </span>
-          </button>
-        ))}
-        <span className="ml-auto text-[11px] text-slate-400 flex items-center gap-1">
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-          Hover a row to edit
-        </span>
+      {/* ── Coverage indicator ─────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-700">Score Input Sheet</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
+            {filledCount} of {scoringFacts.length} scoring facts filled
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                filledCount === scoringFacts.length ? "bg-emerald-500"
+                : filledCount >= scoringFacts.length / 2 ? "bg-amber-400"
+                : "bg-red-400"
+              }`}
+              style={{ width: `${scoringFacts.length > 0 ? (filledCount / scoringFacts.length) * 100 : 0}%` }}
+            />
+          </div>
+          <span className="text-xs font-semibold text-slate-500 tabular-nums">
+            {scoringFacts.length > 0 ? Math.round((filledCount / scoringFacts.length) * 100) : 0}%
+          </span>
+        </div>
       </div>
 
-      {/* Facts table by category */}
-      {orderedCategories.length === 0 ? (
-        <div className="text-center py-12 text-slate-400 text-sm">
-          No facts match this filter.
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {orderedCategories.map((cat) => {
-            const catFacts = filteredByCategory.get(cat) ?? [];
+      {/* ── Summary cards ──────────────────────────────────────────────── */}
+      <SummaryCards
+        factDefs={factDefinitions}
+        valueMap={valueMap}
+        onEdit={setEditingFact}
+      />
+
+      {/* ── Missing facts banner ───────────────────────────────────────── */}
+      <MissingFactsBanner
+        missingFacts={missingScoringFacts}
+        onEdit={setEditingFact}
+      />
+
+      {/* ── Core scoring facts ─────────────────────────────────────────── */}
+      <div className="mb-5">
+        <SectionLabel
+          label="Core Scoring Facts"
+          count={scoringFacts.length}
+        />
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* Column header */}
+          <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 border-b border-slate-100">
+            <div className="w-1.5 shrink-0" />
+            <div className="flex-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Fact</div>
+            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider text-right shrink-0">Value</div>
+            <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0 hidden sm:block w-10 text-right">Weight</div>
+            <div className="w-3.5 shrink-0" />
+          </div>
+
+          {scoringFacts.map(({ fd, meta }) => {
+            const val = valueMap.get(fd.id);
+            const evidence = evidenceMap.get(fd.id) ?? null;
+            const sourceName = evidence?.file_id ? fileNameMap.get(evidence.file_id) ?? null : null;
             return (
-              <div key={cat}>
-                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  {CATEGORY_LABELS[cat] ?? cat}
-                </h3>
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-sm">
-                    <tbody className="divide-y divide-slate-100">
-                      {catFacts.map((fd) => {
-                        const val = valueMap.get(fd.id);
-                        const evidence = val?.current_evidence_id ? evidenceMap.get(fd.id) ?? null : null;
-                        const sourceName = evidence?.file_id ? fileNameMap.get(evidence.file_id) ?? null : null;
-                        return (
-                          <FactRow
-                            key={fd.id}
-                            fd={fd}
-                            val={val}
-                            evidence={evidence}
-                            sourceName={sourceName}
-                            dealId={dealId}
-                            onEdit={() => setEditingFact(fd)}
-                          />
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <ScoringFactRow
+                key={fd.id}
+                fd={fd}
+                val={val}
+                meta={meta}
+                evidence={evidence}
+                sourceName={sourceName}
+                onEdit={() => setEditingFact(fd)}
+              />
             );
           })}
         </div>
-      )}
+      </div>
 
-      {factDefinitions.length === 0 && (
-        <div className="text-center py-12">
-          <div className="text-slate-400 text-sm">
-            No facts have been extracted yet. Upload a document or paste text to start.
+      {/* ── Optional facts ─────────────────────────────────────────────── */}
+      {optionalFacts.length > 0 && (
+        <div className="mb-5">
+          <SectionLabel label="Additional Facts" count={optionalFacts.length} />
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {visibleOptional.map((fd) => {
+              const val = valueMap.get(fd.id);
+              const evidence = evidenceMap.get(fd.id) ?? null;
+              const sourceName = evidence?.file_id ? fileNameMap.get(evidence.file_id) ?? null : null;
+              return (
+                <OptionalFactRow
+                  key={fd.id}
+                  fd={fd}
+                  val={val}
+                  evidence={evidence}
+                  sourceName={sourceName}
+                  onEdit={() => setEditingFact(fd)}
+                />
+              );
+            })}
           </div>
+          {optionalFacts.length > OPTIONAL_INITIAL && (
+            <button
+              type="button"
+              onClick={() => setShowAllOptional((v) => !v)}
+              className="mt-2 text-[11px] text-slate-400 hover:text-[#1F7A63] transition-colors w-full text-center"
+            >
+              {showAllOptional
+                ? "Show less"
+                : `Show all ${optionalFacts.length} additional facts`}
+            </button>
+          )}
         </div>
       )}
 
-      {/* Edit drawer */}
+      {/* ── Calculated metrics ─────────────────────────────────────────── */}
+      <CalculatedMetricsSection
+        factDefs={factDefinitions}
+        factValues={effectiveValues}
+      />
+
+      {/* ── Edit drawer ────────────────────────────────────────────────── */}
       {editingFact && (
         <EditDrawer
           fd={editingFact}

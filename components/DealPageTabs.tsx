@@ -416,11 +416,18 @@ export default function DealPageTabs({
 }: DealPageTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
 
-  // Badge: count of missing/conflicting critical facts
+  // Badge: count of missing core scoring facts (asking_price, sde_latest, revenue_latest, employees_ft, years_in_business)
+  const CORE_SCORING_KEYS = ["asking_price", "sde_latest", "revenue_latest", "employees_ft", "years_in_business"];
   const factsBadge = entityData
-    ? entityData.fact_values.filter(
-        (v) => v.status === "missing" || v.status === "conflicting"
-      ).length
+    ? (() => {
+        const valueMap = new Map(entityData.fact_values.map((v) => [v.fact_definition_id, v]));
+        return entityData.fact_definitions
+          .filter((fd) => CORE_SCORING_KEYS.includes(fd.key))
+          .filter((fd) => {
+            const v = valueMap.get(fd.id);
+            return !v || v.status === "missing" || v.status === "unclear";
+          }).length;
+      })()
     : 0;
 
   // Badge: show score if available
