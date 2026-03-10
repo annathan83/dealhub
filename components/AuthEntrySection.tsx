@@ -5,7 +5,7 @@ export default function AuthEntrySection() {
     <section className="py-24 px-6 bg-white">
       <div className="max-w-2xl mx-auto text-center">
 
-        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500 mb-4">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#1F7A63] mb-4">
           Get started
         </p>
         <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-4 tracking-tight">
@@ -20,7 +20,7 @@ export default function AuthEntrySection() {
           {/* Primary CTA */}
           <Link
             href="/signup"
-            className="inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-6 py-3.5 text-base font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200 mb-4"
+            className="inline-flex w-full items-center justify-center rounded-xl bg-[#1F7A63] px-6 py-3.5 text-base font-semibold text-white hover:bg-[#1a6854] transition-colors shadow-sm shadow-[#1F7A63]/20 mb-4"
           >
             Start your first deal — it&apos;s free
           </Link>

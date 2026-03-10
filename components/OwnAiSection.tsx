@@ -49,12 +49,12 @@ export default function OwnAiSection() {
 
           {/* Left: copy */}
           <div className="flex-1 max-w-lg">
-            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500 mb-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#1F7A63] mb-4">
               Open by design
             </p>
             <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-5 tracking-tight leading-tight">
               Use DealHub with any AI,{" "}
-              <span className="text-indigo-600">not just ours</span>
+              <span className="text-[#1F7A63]">not just ours</span>
             </h2>
             <p className="text-slate-500 text-base leading-relaxed mb-8">
               DealHub organizes the messy part of deal evaluation first. Once your files, notes, facts, and timeline are in one place, you can use our built-in analysis — or bring the deal into ChatGPT, Claude, NotebookLM, or your preferred workflow.
@@ -79,7 +79,7 @@ export default function OwnAiSection() {
               {/* Header */}
               <div className="px-5 py-4 border-b border-slate-100">
                 <div className="flex items-center gap-2.5 mb-1">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-lg bg-[#1F7A63] flex items-center justify-center">
                     <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                     </svg>

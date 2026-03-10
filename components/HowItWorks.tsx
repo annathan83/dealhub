@@ -24,7 +24,7 @@ export default function HowItWorks() {
     <section className="py-24 px-6 bg-white" id="how-it-works">
       <div className="max-w-5xl mx-auto">
 
-        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500 mb-4 text-center">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#1F7A63] mb-4 text-center">
           How it works
         </p>
 
@@ -37,14 +37,14 @@ export default function HowItWorks() {
 
         <div className="relative">
           {/* Connector line (desktop only) */}
-          <div className="hidden md:block absolute top-10 left-[calc(16.67%+1.5rem)] right-[calc(16.67%+1.5rem)] h-px bg-indigo-100" />
+          <div className="hidden md:block absolute top-10 left-[calc(16.67%+1.5rem)] right-[calc(16.67%+1.5rem)] h-px bg-[#A3DFD0]" />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
             {steps.map((step, i) => (
               <div key={i} className="flex flex-col items-center text-center gap-4">
                 {/* Step bubble */}
-                <div className="relative z-10 flex items-center justify-center w-20 h-20 rounded-full bg-white border-2 border-indigo-100 shadow-sm">
-                  <span className="text-2xl font-extrabold text-indigo-600">{step.number}</span>
+                <div className="relative z-10 flex items-center justify-center w-20 h-20 rounded-full bg-white border-2 border-[#A3DFD0] shadow-sm">
+                  <span className="text-2xl font-extrabold text-[#1F7A63]">{step.number}</span>
                 </div>
                 <h3 className="text-base font-semibold text-slate-900">{step.title}</h3>
                 <p className="text-sm text-slate-500 leading-relaxed max-w-xs">{step.description}</p>

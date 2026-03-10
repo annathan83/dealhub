@@ -61,7 +61,7 @@ export default function ProblemSection() {
     <section className="py-24 px-6 bg-slate-50">
       <div className="max-w-5xl mx-auto">
 
-        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500 mb-4 text-center">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#1F7A63] mb-4 text-center">
           The problem
         </p>
 
@@ -91,7 +91,7 @@ export default function ProblemSection() {
         </div>
 
         {/* Resolution callout */}
-        <div className="rounded-2xl bg-white border border-indigo-100 px-8 py-7 text-center shadow-sm">
+        <div className="rounded-2xl bg-white border border-[#A3DFD0] px-8 py-7 text-center shadow-sm">
           <p className="text-base font-semibold text-slate-800 mb-1">
             DealHub gives you one structured place for the whole deal.
           </p>

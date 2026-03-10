@@ -21,10 +21,10 @@ const pillars = [
   },
   {
     tab: "Facts",
-    color: "bg-indigo-600",
+    color: "bg-[#1F7A63]",
     textColor: "text-white",
-    accentBg: "bg-indigo-50",
-    accentBorder: "border-indigo-100",
+    accentBg: "bg-[#F0FAF7]",
+    accentBorder: "border-[#A3DFD0]",
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -41,10 +41,10 @@ const pillars = [
   },
   {
     tab: "Analysis",
-    color: "bg-violet-600",
+    color: "bg-slate-700",
     textColor: "text-white",
-    accentBg: "bg-violet-50",
-    accentBorder: "border-violet-100",
+    accentBg: "bg-slate-50",
+    accentBorder: "border-slate-200",
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -66,7 +66,7 @@ export default function SolutionSection() {
     <section className="py-24 px-6 bg-white" id="pillars">
       <div className="max-w-5xl mx-auto">
 
-        <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500 mb-4 text-center">
+        <p className="text-xs font-semibold uppercase tracking-widest text-[#1F7A63] mb-4 text-center">
           How DealHub works
         </p>
 
@@ -97,7 +97,7 @@ export default function SolutionSection() {
                 <ul className="mt-auto space-y-2 pt-3">
                   {pillar.bullets.map((b) => (
                     <li key={b} className="flex items-start gap-2 text-sm text-slate-600">
-                      <svg className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-4 h-4 text-[#1F7A63] shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                       {b}

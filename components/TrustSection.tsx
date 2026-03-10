@@ -46,12 +46,12 @@ export default function TrustSection() {
 
           {/* Left: headline */}
           <div className="flex-1 max-w-md">
-            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400 mb-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#4CAF8F] mb-4">
               Our philosophy
             </p>
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-5 tracking-tight leading-tight">
               Built for serious buyers,{" "}
-              <span className="text-indigo-400">not AI hype</span>
+              <span className="text-[#4CAF8F]">not AI hype</span>
             </h2>
             <p className="text-slate-400 text-base leading-relaxed">
               DealHub does not ask you to blindly trust a black box. It gives you a clean workspace, transparent facts, evidence-backed deal knowledge, and optional AI support. You stay in control of your process.
@@ -65,7 +65,7 @@ export default function TrustSection() {
                 key={i}
                 className="flex items-start gap-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 px-5 py-4"
               >
-                <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600/20 text-indigo-400 mt-0.5">
+                <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-[#1F7A63]/20 text-[#4CAF8F] mt-0.5">
                   {p.icon}
                 </div>
                 <div>

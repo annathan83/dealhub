@@ -23,7 +23,7 @@ function ProductMockup() {
           <div className="h-3 w-28 bg-slate-200 rounded" />
         </div>
         <div className="flex items-center gap-1.5 rounded-full bg-slate-100 px-1 py-1">
-          <span className="rounded-full bg-indigo-600 text-white text-[10px] font-semibold px-3 py-1">Active</span>
+          <span className="rounded-full bg-[#1F7A63] text-white text-[10px] font-semibold px-3 py-1">Active</span>
           <span className="text-[10px] font-medium text-slate-400 px-3 py-1">Closed</span>
           <span className="text-[10px] font-medium text-slate-400 px-3 py-1">Passed</span>
         </div>
@@ -40,14 +40,14 @@ function ProductMockup() {
             key={tab.label}
             className={`flex-1 py-2.5 text-center text-xs font-semibold flex items-center justify-center gap-1.5 ${
               tab.active
-                ? "text-indigo-600 border-b-2 border-indigo-600 -mb-px"
+                ? "text-[#1F7A63] border-b-2 border-[#1F7A63] -mb-px"
                 : "text-slate-400"
             }`}
           >
             {tab.label}
             {tab.badge && (
               <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-                tab.label === "Facts" ? "bg-amber-100 text-amber-700" : "bg-indigo-100 text-indigo-700"
+                tab.label === "Facts" ? "bg-amber-100 text-amber-700" : "bg-[#D1F0E8] text-[#1F7A63]"
               }`}>
                 {tab.badge}
               </span>
@@ -63,7 +63,7 @@ function ProductMockup() {
         <div className="grid grid-cols-4 gap-2">
           {[
             { label: "Note", color: "bg-slate-50 border-slate-200 text-slate-600" },
-            { label: "File", color: "bg-indigo-50 border-indigo-200 text-indigo-700" },
+            { label: "File", color: "bg-[#F0FAF7] border-[#A3DFD0] text-[#1F7A63]" },
             { label: "Photo", color: "bg-slate-50 border-slate-200 text-slate-600" },
             { label: "Audio", color: "bg-slate-50 border-slate-200 text-slate-600" },
           ].map((btn) => (
@@ -104,12 +104,12 @@ function ProductMockup() {
           {[
             { icon: "bg-red-50 text-red-500", label: "PDF uploaded", sub: "CIM processed, 8 facts extracted.", time: "2d ago" },
             { icon: "bg-emerald-50 text-emerald-600", label: "Document analyzed", sub: "Spreadsheet uploaded, text extracted.", time: "2d ago" },
-            { icon: "bg-indigo-50 text-indigo-600", label: "Deal created", sub: "Metro HVAC Services added to pipeline.", time: "3d ago", anchor: true },
+            { icon: "bg-[#F0FAF7] text-[#1F7A63]", label: "Deal created", sub: "Metro HVAC Services added to pipeline.", time: "3d ago", anchor: true },
           ].map((event, i) => (
             <div key={i} className="flex gap-0">
               <div className="flex flex-col items-center" style={{ width: 24, minWidth: 24 }}>
                 <div style={{ width: 1.5, height: 8, background: i === 0 ? "transparent" : "#cbd5e1" }} />
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ring-2 shadow-[0_0_0_2px_white] z-10 ${event.anchor ? "bg-indigo-600 ring-indigo-300" : `${event.icon} ring-slate-200`}`}>
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ring-2 shadow-[0_0_0_2px_white] z-10 ${event.anchor ? "bg-[#1F7A63] ring-[#A3DFD0]" : `${event.icon} ring-slate-200`}`}>
                   {event.anchor ? (
                     <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -152,9 +152,9 @@ export default function Hero() {
           <div className="flex-1 text-center lg:text-left max-w-xl mx-auto lg:mx-0">
 
             {/* Label */}
-            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 border border-indigo-100 px-3.5 py-1.5 mb-7">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-              <span className="text-xs font-semibold text-indigo-700 tracking-wide">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#F0FAF7] border border-[#A3DFD0] px-3.5 py-1.5 mb-7">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#1F7A63]" />
+              <span className="text-xs font-semibold text-[#1F7A63] tracking-wide">
                 Built for acquisition buyers
               </span>
             </div>
@@ -162,7 +162,7 @@ export default function Hero() {
             {/* Headline */}
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-5">
               The workspace for{" "}
-              <span className="text-indigo-600">acquisition deals</span>
+              <span className="text-[#1F7A63]">acquisition deals</span>
             </h1>
 
             {/* Subheadline */}
@@ -174,7 +174,7 @@ export default function Hero() {
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
               <Link
                 href="/signup"
-                className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-indigo-600 px-7 py-3.5 text-base font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
+                className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-[#1F7A63] px-7 py-3.5 text-base font-semibold text-white hover:bg-[#1a6854] transition-colors shadow-sm shadow-[#1F7A63]/20"
               >
                 Start a deal
               </Link>
