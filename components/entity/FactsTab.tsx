@@ -119,7 +119,9 @@ type EditModalProps = {
 };
 
 function EditModal({ fd, meta, val, evidence, sourceName, dealId, onClose, onSaved }: EditModalProps) {
-  const hasSuggestion = !!val && val.status !== "missing" && val.value_source_type !== "user_override";
+  // Show the AI suggestion panel for ai_extracted and ai_inferred values (not for user-entered ones)
+  const hasSuggestion = !!val && val.status !== "missing" &&
+    (val.value_source_type === "ai_extracted" || val.value_source_type === "ai_inferred");
   const suggestedRaw = hasSuggestion ? val!.value_raw : null;
   const suggestedFormatted = suggestedRaw ? formatValue(suggestedRaw, fd.data_type) : null;
   const confidence = hasSuggestion ? val!.confidence ?? null : null;
@@ -196,33 +198,46 @@ function EditModal({ fd, meta, val, evidence, sourceName, dealId, onClose, onSav
 
         <div className="p-5 space-y-4">
           {/* ── AI suggestion block ── */}
-          {hasSuggestion && mode !== "reasoning" && (
-            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">
-                  AI Suggested
-                </span>
-                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
-                  confidenceLabel(confidence) === "High"   ? "bg-emerald-100 text-emerald-700" :
-                  confidenceLabel(confidence) === "Medium" ? "bg-amber-100 text-amber-700" :
-                                                             "bg-slate-100 text-slate-500"
-                }`}>
-                  {confidenceLabel(confidence)} confidence
-                </span>
-              </div>
-              <p className="text-xl font-bold text-slate-800 tabular-nums leading-tight">
-                {suggestedFormatted}
-              </p>
-              {sourceName && (
-                <p className="text-[11px] text-slate-400 mt-1 truncate">from {sourceName}</p>
-              )}
-              {evidence?.snippet && (
-                <p className="text-[11px] text-slate-400 mt-1 italic line-clamp-2">
-                  &ldquo;{evidence.snippet.slice(0, 140)}&rdquo;
+          {hasSuggestion && mode !== "reasoning" && (() => {
+            const isExtractedSrc = val?.value_source_type === "ai_extracted";
+            const blockStyle = isExtractedSrc
+              ? "border-emerald-100 bg-emerald-50"
+              : "border-blue-100 bg-blue-50";
+            const labelStyle = isExtractedSrc ? "text-emerald-700" : "text-blue-600";
+            const sourceLabel = isExtractedSrc ? "Extracted from document" : "AI Estimate";
+            return (
+              <div className={`rounded-xl border px-4 py-3 ${blockStyle}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-[11px] font-semibold uppercase tracking-wide ${labelStyle}`}>
+                    {sourceLabel}
+                  </span>
+                  <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
+                    confidenceLabel(confidence) === "High"   ? "bg-emerald-100 text-emerald-700" :
+                    confidenceLabel(confidence) === "Medium" ? "bg-amber-100 text-amber-700" :
+                                                               "bg-slate-100 text-slate-500"
+                  }`}>
+                    {confidenceLabel(confidence)} confidence
+                  </span>
+                </div>
+                <p className="text-xl font-bold text-slate-800 tabular-nums leading-tight">
+                  {suggestedFormatted}
                 </p>
-              )}
-            </div>
-          )}
+                {sourceName && (
+                  <p className="text-[11px] text-slate-400 mt-1 truncate">from {sourceName}</p>
+                )}
+                {evidence?.snippet && (
+                  <p className="text-[11px] text-slate-400 mt-1 italic line-clamp-2">
+                    &ldquo;{evidence.snippet.slice(0, 140)}&rdquo;
+                  </p>
+                )}
+                {!evidence?.snippet && !isExtractedSrc && (
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Estimated from available context — no direct quote found.
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── Reasoning panel ── */}
           {mode === "reasoning" && (
@@ -245,6 +260,11 @@ function EditModal({ fd, meta, val, evidence, sourceName, dealId, onClose, onSav
                     <p className="mt-1.5 text-[11px] text-slate-400 not-italic">— {sourceName}</p>
                   )}
                 </div>
+              ) : val?.value_source_type === "ai_inferred" ? (
+                <p className="text-[12px] text-slate-400">
+                  No direct quote found. The AI estimated this value from the overall context of the document.
+                  Verify before relying on it.
+                </p>
               ) : (
                 <p className="text-[12px] text-slate-400">
                   No source excerpt available. The value was extracted from document text.
@@ -613,43 +633,66 @@ function ScoreInputCard({
   onEdit: () => void;
 }) {
   const filled = isFilled(val);
-  const isAiSuggested = filled && val!.value_source_type !== "user_override";
-  const isManual = filled && val!.value_source_type === "user_override";
+  const sourceType = val?.value_source_type ?? null;
   const status: FactValueStatus = val?.status ?? "missing";
 
-  // Card border/bg by state
-  const cardStyle = filled
-    ? isAiSuggested
-      ? "bg-blue-50/60 border-blue-200 hover:border-blue-400"
-      : "bg-white border-slate-200 hover:border-[#1F7A63]/50"
-    : "bg-red-50/50 border-red-200 hover:border-red-400";
+  // Three distinct source states:
+  // ai_extracted  = found directly in source material (has evidence snippet)
+  // ai_inferred   = AI best guess from context (no direct snippet)
+  // user_override = manually entered by user
+  const isExtracted = filled && sourceType === "ai_extracted";
+  const isInferred  = filled && sourceType === "ai_inferred";
+  const isManual    = filled && sourceType === "user_override";
+  const isConflict  = filled && status === "conflicting";
 
-  // Status badge
-  const badge = filled ? (
-    isAiSuggested ? (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
-        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.353A3.75 3.75 0 0112 18.75a3.75 3.75 0 01-2.652-1.097l-.347-.353z" />
-        </svg>
-        Suggested
-      </span>
-    ) : isManual ? (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
-        ✓ Confirmed
-      </span>
-    ) : (
-      <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-        status === "confirmed"   ? "text-emerald-700 bg-emerald-100" :
-        status === "conflicting" ? "text-red-700 bg-red-100" :
-                                   "text-slate-500 bg-slate-100"
-      }`}>
-        {status === "confirmed" ? "✓ Confirmed" : status === "conflicting" ? "⚠ Conflict" : "Estimated"}
-      </span>
-    )
-  ) : (
+  // Card border/bg by state
+  const cardStyle = !filled
+    ? "bg-red-50/50 border-red-200 hover:border-red-400"
+    : isManual
+      ? "bg-white border-slate-200 hover:border-[#1F7A63]/50"
+      : isExtracted
+        ? "bg-emerald-50/40 border-emerald-200 hover:border-emerald-400"
+        : isInferred
+          ? "bg-blue-50/50 border-blue-200 hover:border-blue-400"
+          : "bg-white border-slate-200 hover:border-slate-400";
+
+  // Status badge — clearly communicates the source of the value
+  const badge = !filled ? (
     <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full">
       <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0" />
       Missing
+    </span>
+  ) : isConflict ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+      ⚠ Conflict
+    </span>
+  ) : isManual ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+      {/* Pencil icon */}
+      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+      </svg>
+      Manual
+    </span>
+  ) : isExtracted ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+      {/* Document icon */}
+      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+      Extracted
+    </span>
+  ) : isInferred ? (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
+      {/* Sparkle/lightbulb icon */}
+      <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.353A3.75 3.75 0 0112 18.75a3.75 3.75 0 01-2.652-1.097l-.347-.353z" />
+      </svg>
+      AI Estimate
+    </span>
+  ) : (
+    <span className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+      Filled
     </span>
   );
 
@@ -708,8 +751,16 @@ function OptionalFactRow({
   onEdit: () => void;
 }) {
   const filled = isFilled(val);
-  const isManual = val?.value_source_type === "user_override";
+  const sourceType = val?.value_source_type ?? null;
   const status: FactValueStatus = val?.status ?? "missing";
+
+  // Source indicator: ✎ manual, ✓ extracted, ~ inferred, ⚠ conflict
+  const sourceIndicator = !filled ? null
+    : status === "conflicting"      ? { icon: "⚠", cls: "text-amber-500" }
+    : sourceType === "user_override"? { icon: "✎", cls: "text-emerald-600" }
+    : sourceType === "ai_extracted" ? { icon: "✓", cls: "text-emerald-500" }
+    : sourceType === "ai_inferred"  ? { icon: "~", cls: "text-blue-400" }
+    :                                 { icon: "·", cls: "text-slate-400" };
 
   return (
     <div
@@ -735,14 +786,16 @@ function OptionalFactRow({
         )}
       </div>
 
-      {filled && (
-        <span className={`text-[10px] font-medium shrink-0 hidden sm:inline ${
-          status === "confirmed"   ? "text-emerald-600" :
-          isManual                 ? "text-emerald-600" :
-          status === "conflicting" ? "text-red-500" :
-                                     "text-slate-400"
-        }`}>
-          {status === "confirmed" || isManual ? "✓" : status === "conflicting" ? "⚠" : "~"}
+      {sourceIndicator && (
+        <span className={`text-[11px] font-medium shrink-0 hidden sm:inline ${sourceIndicator.cls}`}
+          title={
+            sourceType === "user_override" ? "Manually entered" :
+            sourceType === "ai_extracted"  ? "Extracted from document" :
+            sourceType === "ai_inferred"   ? "AI estimate" :
+            status === "conflicting"       ? "Conflict — needs review" : ""
+          }
+        >
+          {sourceIndicator.icon}
         </span>
       )}
 

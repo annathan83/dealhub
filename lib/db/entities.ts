@@ -721,7 +721,7 @@ export async function upsertEntityFactValue(params: {
 export async function insertFactEvidence(params: {
   entity_id: string;
   fact_definition_id: string;
-  file_id: string;
+  file_id?: string | null;
   file_chunk_id?: string | null;
   extracted_value_raw: string | null;
   normalized_value_json?: Record<string, unknown>;
@@ -738,7 +738,7 @@ export async function insertFactEvidence(params: {
     .insert({
       entity_id: params.entity_id,
       fact_definition_id: params.fact_definition_id,
-      file_id: params.file_id,
+      file_id: params.file_id ?? null,
       file_chunk_id: params.file_chunk_id ?? null,
       extracted_value_raw: params.extracted_value_raw,
       normalized_value_json: params.normalized_value_json ?? {},
@@ -869,6 +869,30 @@ export async function manuallyUpdateFactValue(params: {
     new_status: params.status,
     note: params.note ?? null,
   });
+
+  // Write a fact_evidence row for user-entered values so the evidence table
+  // has a complete record of all fact sources, not just AI extractions.
+  if (isManual && params.value_raw) {
+    const evidenceRow = await insertFactEvidence({
+      entity_id: params.entity_id,
+      fact_definition_id: params.fact_definition_id,
+      file_id: null,
+      extracted_value_raw: params.value_raw,
+      snippet: params.note ?? null,
+      confidence: 1.0,
+      evidence_type: "user_input",
+      is_primary: true,
+    });
+
+    // Point the fact value at this new evidence row
+    if (evidenceRow) {
+      await supabase
+        .from("entity_fact_values")
+        .update({ current_evidence_id: evidenceRow.id })
+        .eq("entity_id", params.entity_id)
+        .eq("fact_definition_id", params.fact_definition_id);
+    }
+  }
 
   return normalizeEntityFactValue(data as Record<string, unknown>);
 }

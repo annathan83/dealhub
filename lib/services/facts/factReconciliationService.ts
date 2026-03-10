@@ -193,6 +193,10 @@ export async function reconcileFacts(
       }
 
       // 3. Upsert entity_fact_value
+      // ai_extracted = direct quote/number found in source material (has snippet)
+      // ai_inferred  = AI estimated from context without a direct evidence snippet
+      const sourceType = candidate.snippet ? "ai_extracted" : "ai_inferred";
+
       await upsertEntityFactValue({
         entity_id: input.entityId,
         fact_definition_id: factDef.id,
@@ -201,6 +205,7 @@ export async function reconcileFacts(
         status: newStatus,
         confidence: newConfidence,
         current_evidence_id: newEvidenceId,
+        value_source_type: sourceType,
       });
 
       // 4. Promote the winning evidence row to is_primary=true, demote others.
