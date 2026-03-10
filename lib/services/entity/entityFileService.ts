@@ -29,6 +29,7 @@ import { logFileUploaded, logTextExtracted, logFactsExtracted } from "./entityEv
 import { extractFactsFromText } from "../facts/factExtractionService";
 import { reconcileFacts } from "../facts/factReconciliationService";
 import { runIncrementalRevaluation } from "./incrementalRevaluationService";
+import { scoreAndPersistKpis } from "@/lib/kpi/kpiScoringService";
 import type { Entity } from "@/types/entity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -102,7 +103,8 @@ async function runFactExtraction(
   entityFileId: string,
   text: string,
   dealId: string,
-  fileTextId?: string | null
+  fileTextId?: string | null,
+  fileName?: string | null
 ): Promise<void> {
   // Create a processing_run record for this fact extraction
   const run = await createProcessingRun({
@@ -163,6 +165,15 @@ async function runFactExtraction(
       facts_conflicted: reconcileResult.facts_conflicted,
       model: extractionResult.model_name,
     }, { runId });
+
+    // Recalculate KPI scorecard after facts are updated (non-fatal, fire-and-forget)
+    const factsFound = extractionResult.candidates.length;
+    scoreAndPersistKpis(entity.id, entity.entity_type_id, {
+      triggerType: "extraction",
+      triggerReason: `${factsFound} fact${factsFound !== 1 ? "s" : ""} extracted from ${fileName ?? "file"}`,
+    }).catch((err) => {
+      console.error("[entityFileService] KPI rescore after extraction failed (non-fatal):", err);
+    });
 
     // Trigger incremental revaluation after facts are updated (non-fatal, fire-and-forget).
     // This is the default analysis path — efficient, focused on what changed.
@@ -256,7 +267,7 @@ export async function ingestFromDealUpload(
         markDeepAnalysisStale(entity.id).catch(() => {});
 
         // 6. Extract facts (critical subset, non-fatal)
-        await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId, fileTextRecord.id);
+        await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId, fileTextRecord.id, params.originalFileName);
       }
     } else {
       // No text — mark as skipped so we know it was processed
@@ -334,7 +345,7 @@ export async function ingestFromDealEntry(
     markDeepAnalysisStale(entity.id).catch(() => {});
 
     // Extract facts from pasted text (critical subset, non-fatal)
-    await runFactExtraction(entity, entityFile.id, params.entryContent, params.dealId, fileTextRecord?.id ?? null);
+    await runFactExtraction(entity, entityFile.id, params.entryContent, params.dealId, fileTextRecord?.id ?? null, "note");
   } catch (err) {
     console.error("[entityFileService] ingestFromDealEntry failed (non-fatal):", err);
   }

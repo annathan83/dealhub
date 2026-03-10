@@ -9,6 +9,7 @@ import type {
   EntityFileWithText,
   FactChangeType,
 } from "@/types/entity";
+import { computeDerivedMetrics } from "@/lib/kpi/derivedMetricsService";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,40 @@ function formatValue(raw: string | null, dataType: string): string {
     return raw.toLowerCase() === "true" ? "Yes" : "No";
   }
   return raw;
+}
+
+// ─── Derived metrics strip ────────────────────────────────────────────────────
+
+function DerivedMetricsStrip({
+  factDefs,
+  factValues,
+}: {
+  factDefs: FactDefinition[];
+  factValues: EntityFactValue[];
+}) {
+  const metrics = computeDerivedMetrics(factValues, factDefs);
+  const items = Object.values(metrics);
+
+  if (!items.some((m) => m.available)) return null;
+
+  return (
+    <div className="mb-6 bg-[#F0FAF7] border border-[#C6E8DF] rounded-xl px-4 py-3">
+      <div className="text-[10px] font-bold text-[#1F7A63] uppercase tracking-widest mb-2">
+        Derived Metrics
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {items.map((m) => (
+          <div key={m.key}>
+            <div className="text-[11px] text-[#3B8F78] mb-0.5">{m.label}</div>
+            <div className={`text-base font-bold tabular-nums ${m.available ? "text-[#1E1E1E]" : "text-slate-300"}`}>
+              {m.formatted}
+            </div>
+            <div className="text-[10px] text-slate-400">{m.description}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─── Key metric cards ─────────────────────────────────────────────────────────
@@ -503,6 +538,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
 
   return (
     <div>
+      <DerivedMetricsStrip factDefs={factDefinitions} factValues={effectiveValues} />
       <KeyMetricCards factDefs={factDefinitions} valueMap={valueMap} />
       <MissingCriticalFacts missingFacts={missingCritical} />
 

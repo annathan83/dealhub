@@ -114,7 +114,20 @@ export async function PATCH(
   }).catch(() => {});
 
   // Recalculate KPI scorecard after fact change (non-fatal)
-  scoreAndPersistKpis(entity.id, entity.entity_type_id).catch((err) => {
+  // Pass trigger context so score_history records what caused the change
+  const triggerReason = note
+    ? `${change_type} — ${note}`
+    : change_type === "confirm"
+      ? `Fact confirmed`
+      : change_type === "edit" || change_type === "override"
+        ? `Fact updated${newValue ? ` to ${newValue}` : ""}`
+        : `Fact marked ${change_type.replace("mark_", "")}`;
+
+  scoreAndPersistKpis(entity.id, entity.entity_type_id, {
+    triggerType: "fact_change",
+    triggerReason,
+    changedFactKey: factDefinitionId,
+  }).catch((err) => {
     console.error("[facts/route] KPI rescore failed (non-fatal):", err);
   });
 

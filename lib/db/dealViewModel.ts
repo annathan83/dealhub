@@ -7,7 +7,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getEntityPageData, getEntityHistory } from "@/lib/db/entities";
-import { getLatestKpiScorecard } from "@/lib/kpi/kpiScoringService";
+import { getLatestKpiScorecard, getScoreHistory, type ScoreHistoryEntry } from "@/lib/kpi/kpiScoringService";
 import type { Deal } from "@/types";
 import type { AnalysisSnapshot, EntityPageData, EntityEvent, EntityFile } from "@/types/entity";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
@@ -18,6 +18,7 @@ export type DealPageViewModel = {
   deal: Deal;
   entityData: EntityPageData | null;
   kpiScorecard: KpiScorecardResult | null;
+  scoreHistory: ScoreHistoryEntry[];
   triageSummary: TriageSummaryContent | null;
   triageSnapshot: AnalysisSnapshot | null;
   deepAnalysis: DeepAnalysisContent | null;
@@ -46,13 +47,17 @@ export async function buildDealPageViewModel(
 
   if (!dealResult.data) return null;
 
-  const kpiScorecard = entityData?.entity
-    ? await getLatestKpiScorecard(entityData.entity.id).catch(() => null)
-    : null;
-
-  const entityEvents = entityData?.entity
-    ? await getEntityHistory(entityData.entity.id, 50).catch(() => [])
-    : [];
+  const [kpiScorecard, scoreHistory, entityEvents] = await Promise.all([
+    entityData?.entity
+      ? getLatestKpiScorecard(entityData.entity.id).catch(() => null)
+      : Promise.resolve(null),
+    entityData?.entity
+      ? getScoreHistory(entityData.entity.id, 20).catch(() => [])
+      : Promise.resolve([]),
+    entityData?.entity
+      ? getEntityHistory(entityData.entity.id, 50).catch(() => [])
+      : Promise.resolve([]),
+  ]);
 
   // Extract the most recent triage_summary snapshot for the Initial Review panel
   const triageSnapshot =
@@ -87,6 +92,7 @@ export async function buildDealPageViewModel(
     deal: dealResult.data as Deal,
     entityData,
     kpiScorecard,
+    scoreHistory,
     triageSummary,
     triageSnapshot,
     deepAnalysis,

@@ -24,6 +24,80 @@ import { extractFactInputs } from "./factRegistry";
 import { KPI_DEFINITIONS, type KpiFactInputs, type KpiScorecardResult, type KpiScore } from "./kpiConfig";
 import type { EntityFactValue } from "@/types/entity";
 
+// ─── Score history helpers ────────────────────────────────────────────────────
+
+export type ScoreTriggerType = "fact_change" | "manual" | "file_upload" | "extraction" | "deep_scan" | "system";
+
+/**
+ * Append a row to score_history for every KPI recalculation.
+ * Non-fatal — errors are logged but never thrown.
+ */
+async function writeScoreHistory(params: {
+  entityId: string;
+  scorecard: KpiScorecardResult;
+  triggerType: ScoreTriggerType;
+  triggerReason?: string | null;
+  changedFactKey?: string | null;
+  snapshotId?: string | null;
+}): Promise<void> {
+  try {
+    const supabase = await createClient();
+    const overall10 = params.scorecard.overall_score !== null
+      ? Math.round(params.scorecard.overall_score * 2 * 10) / 10  // 1–5 → 1–10
+      : null;
+
+    await supabase.from("score_history").insert({
+      entity_id:         params.entityId,
+      overall_score:     params.scorecard.overall_score,
+      overall_score_10:  overall10,
+      overall_score_100: params.scorecard.overall_score_100,
+      coverage_pct:      params.scorecard.coverage_pct,
+      kpi_count:         params.scorecard.kpis.length,
+      missing_count:     params.scorecard.missing_count,
+      trigger_type:      params.triggerType,
+      trigger_reason:    params.triggerReason ?? null,
+      changed_fact_key:  params.changedFactKey ?? null,
+      snapshot_id:       params.snapshotId ?? null,
+    });
+  } catch (err) {
+    console.error("[kpiScoringService] writeScoreHistory failed (non-fatal):", err);
+  }
+}
+
+/**
+ * Fetch the last N score history entries for an entity, newest first.
+ */
+export async function getScoreHistory(
+  entityId: string,
+  limit = 20
+): Promise<ScoreHistoryEntry[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("score_history")
+    .select("*")
+    .eq("entity_id", entityId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return (data ?? []) as ScoreHistoryEntry[];
+}
+
+export type ScoreHistoryEntry = {
+  id: string;
+  entity_id: string;
+  overall_score: number | null;
+  overall_score_10: number | null;
+  overall_score_100: number | null;
+  coverage_pct: number | null;
+  kpi_count: number | null;
+  missing_count: number | null;
+  trigger_type: ScoreTriggerType;
+  trigger_reason: string | null;
+  changed_fact_key: string | null;
+  snapshot_id: string | null;
+  created_at: string;
+};
+
 // ─── Main scoring function ────────────────────────────────────────────────────
 
 /**
@@ -111,12 +185,20 @@ export function computeKpiScorecard(
 /**
  * Compute KPI scorecard for an entity and persist it as an analysis_snapshot.
  * Creates a processing_run record for full pipeline visibility.
+ * Writes a score_history row with trigger context.
  * Returns the scorecard result (whether or not persistence succeeded).
  */
 export async function scoreAndPersistKpis(
   entityId: string,
-  entityTypeId: string
+  entityTypeId: string,
+  options?: {
+    triggerType?: ScoreTriggerType;
+    triggerReason?: string | null;
+    changedFactKey?: string | null;
+  }
 ): Promise<KpiScorecardResult> {
+  const triggerType = options?.triggerType ?? "system";
+
   // Create processing_run before starting
   const processingRun = await createProcessingRun({
     entity_id: entityId,
@@ -142,7 +224,7 @@ export async function scoreAndPersistKpis(
     const scorecard = computeKpiScorecard(factValues, factDefIdToKey);
 
     // Persist as analysis_snapshot (linked to processing_run)
-    await insertAnalysisSnapshot({
+    const snapshot = await insertAnalysisSnapshot({
       entity_id: entityId,
       analysis_type: "kpi_scorecard",
       title: "KPI Scorecard",
@@ -158,6 +240,17 @@ export async function scoreAndPersistKpis(
       run_id: runId,
     }).catch((err) => {
       console.error("[kpiScoringService] Failed to persist KPI scorecard:", err);
+      return null;
+    });
+
+    // Write score history entry
+    await writeScoreHistory({
+      entityId,
+      scorecard,
+      triggerType,
+      triggerReason: options?.triggerReason ?? null,
+      changedFactKey: options?.changedFactKey ?? null,
+      snapshotId: (snapshot as { id?: string } | null)?.id ?? null,
     });
 
     if (runId) {

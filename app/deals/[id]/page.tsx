@@ -26,6 +26,7 @@ export default async function DealPage({
     deal,
     entityData,
     kpiScorecard,
+    scoreHistory,
     triageSummary,
     triageSnapshot,
     deepAnalysis,
@@ -101,6 +102,7 @@ export default async function DealPage({
             entityEvents={entityEvents}
             analysisSnapshots={entityData?.analysis_snapshots ?? []}
             kpiScorecard={kpiScorecard}
+            scoreHistory={scoreHistory}
             deepAnalysis={deepAnalysis}
             deepAnalysisStale={deepAnalysisStale}
             deepAnalysisRunAt={deepAnalysisRunAt}
