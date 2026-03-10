@@ -1,20 +1,17 @@
 /**
  * POST /api/deals/[id]/deep-scan
  *
- * Triggers a full fact extraction pass over all stored file_text for a deal entity.
- * Unlike the initial upload path (critical facts only), this extracts the full
- * supported fact set from already-stored extracted text — no re-upload needed.
+ * Explicit premium/manual feature: resends the full extracted text corpus for
+ * a deal to AI for a comprehensive fresh fact extraction pass.
  *
- * Behavior:
- *   1. Marks entity.deep_scan_status = 'running'
- *   2. Reads all file_text rows for the entity
- *   3. Runs extractFactsFromText with ALL fact definitions (not just critical)
- *   4. Reconciles results — respects manual_override facts
- *   5. Recalculates KPI scorecard
- *   6. Marks entity.deep_scan_status = 'completed' with stats
+ * Unlike incremental revaluation (which processes only what changed), Deep Scan:
+ *   1. Reads ALL file_text rows for the entity
+ *   2. Runs extractFactsFromText with the full supported fact set
+ *   3. Reconciles results — respects user_override facts
+ *   4. Recalculates KPI scorecard
  *
- * This endpoint returns immediately with the scan result.
- * For large entities, consider making this async in a future iteration.
+ * This is intentionally separate from the normal incremental revaluation flow.
+ * Use it when you want a complete fresh review from all source material.
  */
 
 import { NextResponse, type NextRequest } from "next/server";

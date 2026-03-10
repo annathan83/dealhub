@@ -3,8 +3,9 @@
  *
  * Validates that:
  * - entityFileService does NOT call runDeepAnalysis automatically
- * - triageSummaryService is the only AI that runs on intake
- * - the /api/deals/[id]/analysis route rejects new/triaged/passed deals
+ * - incrementalRevaluation is the only AI that runs automatically on intake
+ * - the /api/deals/[id]/analysis route rejects passed deals
+ * - the /api/deals/[id]/deep-analysis route rejects passed deals
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -26,15 +27,15 @@ describe("entityFileService auto-run guard", () => {
     expect(src).not.toContain("deepAnalysisService");
   });
 
-  it("only runs triageSummary automatically (not deepAnalysis or kpiScoring)", async () => {
+  it("only runs incremental revaluation automatically (not deepAnalysis or kpiScoring)", async () => {
     const fs = await import("fs/promises");
     const src = await fs.readFile(
       new URL("../lib/services/entity/entityFileService.ts", import.meta.url),
       "utf-8"
     );
 
-    // Triage is allowed to auto-run
-    expect(src).toContain("runTriageSummary");
+    // Incremental revaluation is the only auto-run AI on intake
+    expect(src).toContain("runIncrementalRevaluation");
 
     // These must NOT be called automatically
     expect(src).not.toContain("scoreAndPersistKpis");
@@ -45,18 +46,20 @@ describe("entityFileService auto-run guard", () => {
 // ─── Test 2: /api/deals/[id]/analysis route blocks new/triaged/passed ────────
 
 describe("analysis route status gate", () => {
-  it("route source blocks new, triaged, passed, and archived statuses", async () => {
+  it("route source blocks only passed status (simplified 3-status model)", async () => {
     const fs = await import("fs/promises");
     const src = await fs.readFile(
       new URL("../app/api/deals/[id]/analysis/route.ts", import.meta.url),
       "utf-8"
     );
 
-    // All four blocked statuses must be present in the gate
-    expect(src).toContain('"new"');
-    expect(src).toContain('"triaged"');
+    // Only passed is blocked in the simplified model
     expect(src).toContain('"passed"');
-    expect(src).toContain('"archived"');
+
+    // Old statuses must NOT be in the gate
+    expect(src).not.toContain('"new"');
+    expect(src).not.toContain('"triaged"');
+    expect(src).not.toContain('"archived"');
 
     // The gate must return a non-2xx response
     expect(src).toContain("422");
@@ -85,9 +88,8 @@ describe("deep analysis route guard", () => {
       "utf-8"
     );
 
-    // Route must have a status check — either an allowlist or a blocklist
+    // Route must have a status check
     const hasStatusCheck =
-      src.includes("allowedStatuses") ||
       src.includes("blockedStatuses") ||
       src.includes("deal.status");
     expect(hasStatusCheck).toBe(true);
@@ -95,12 +97,12 @@ describe("deep analysis route guard", () => {
     // Must return a non-2xx when status is not allowed
     expect(src).toMatch(/40[0-9]|42[0-9]/);
 
-    // "passed" must NOT be in the allowed statuses list
-    // (it is excluded from the allowlist, so deep analysis is blocked for passed deals)
-    const allowedMatch = src.match(/allowedStatuses\s*=\s*\[([^\]]+)\]/);
-    if (allowedMatch) {
-      expect(allowedMatch[1]).not.toContain('"passed"');
-    }
+    // "passed" must be blocked
+    expect(src).toContain('"passed"');
+
+    // Old statuses must NOT be in the gate
+    expect(src).not.toContain('"triaged"');
+    expect(src).not.toContain('"investigating"');
   });
 
   it("deep analysis is never imported by entityFileService", async () => {

@@ -28,7 +28,7 @@ import { chunkAndStoreText } from "./textChunkingService";
 import { logFileUploaded, logTextExtracted, logFactsExtracted } from "./entityEventService";
 import { extractFactsFromText } from "../facts/factExtractionService";
 import { reconcileFacts } from "../facts/factReconciliationService";
-import { runTriageSummary } from "./triageSummaryService";
+import { runIncrementalRevaluation } from "./incrementalRevaluationService";
 import type { Entity } from "@/types/entity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -164,11 +164,11 @@ async function runFactExtraction(
       model: extractionResult.model_name,
     }, { runId });
 
-    // Run triage summary after facts are updated (non-fatal).
-    // This is the only AI analysis that runs automatically on intake.
-    // Deep analysis (KPI scoring, deal assessment) is user-triggered only.
-    runTriageSummary(entity.id, entity.entity_type_id, dealId, entity.title).catch((err) => {
-      console.error("[entityFileService] triage summary failed (non-fatal):", err);
+    // Trigger incremental revaluation after facts are updated (non-fatal, fire-and-forget).
+    // This is the default analysis path — efficient, focused on what changed.
+    // Deep Scan (full corpus resend) is a separate explicit user action.
+    runIncrementalRevaluation(entity.id, entity.title, "extraction_complete").catch((err) => {
+      console.error("[entityFileService] incremental revaluation failed (non-fatal):", err);
     });
   } catch (err) {
     if (runId) {

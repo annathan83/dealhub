@@ -1,7 +1,16 @@
 /**
  * analysisService
  *
- * Replaces the aggregateDealIntelligence() stub.
+ * @deprecated Superseded by incrementalRevaluationService for the normal analysis path.
+ * This service is retained for backward compatibility with the /api/deals/[id]/analysis
+ * endpoint and existing deal_assessment snapshots.
+ *
+ * For new analysis logic, use incrementalRevaluationService which:
+ * - Produces a 'revaluation' snapshot (not 'deal_assessment')
+ * - Is change-aware (reads fact_history since last run)
+ * - Includes AI memories in context
+ * - Tracks run via processing_runs with type 'incremental_revaluation'
+ *
  * Reads entity_fact_values + recent entity_events to build a compact context
  * (not raw files), calls GPT-4o-mini, and inserts an analysis_snapshot.
  *

@@ -57,13 +57,10 @@ export async function POST(
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
 
-  const blockedStatuses = ["new", "triaged", "passed", "archived"];
-  if (blockedStatuses.includes(deal.status)) {
+  // Only block passed deals — active and closed deals can trigger analysis.
+  if (deal.status === "passed") {
     return NextResponse.json(
-      {
-        error: `Analysis is not available for deals with status "${deal.status}". ` +
-          `Use the Deep Analysis tab after choosing to Keep Investigating.`,
-      },
+      { error: `Analysis is not available for passed deals.` },
       { status: 422 }
     );
   }

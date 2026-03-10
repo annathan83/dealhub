@@ -1,19 +1,24 @@
 /**
  * triageSummaryService
  *
+ * @deprecated The auto-run triage summary has been replaced by incrementalRevaluationService.
+ * This service is retained for backward compatibility (existing triage_summary snapshots
+ * in analysis_snapshots are still read by TriageReviewPanel) and for cases where
+ * a dedicated lightweight triage pass is explicitly requested.
+ *
+ * Do NOT call runTriageSummary automatically from the intake pipeline.
+ * Use runIncrementalRevaluation instead.
+ *
  * Lightweight triage pass that runs immediately after initial fact extraction.
  * Produces a short, grounded, neutral AI summary of what is known so far.
  *
  * Design constraints:
  * - Uses only facts with fact_scope='triage' or is_user_visible_initially=true
- *   (loaded from fact_definitions via getTriageFactDefinitions — not a hardcoded list)
  * - Prompt is strictly neutral — no verdicts, no recommendations
  * - Stores result as an analysis_snapshot with type "triage_summary"
  * - Creates a processing_run record for full pipeline visibility
- * - Updates deal.status to "triaged" and sets deal.triaged_at
+ * - Sets deal.triaged_at (status no longer changed — simplified 3-status model)
  * - Never throws — all errors are logged and swallowed
- *
- * Migration 027: processing_run wired in for triage_generation runs.
  */
 
 import OpenAI from "openai";
@@ -250,10 +255,10 @@ export async function runTriageSummary(
       run_id: runId,
     });
 
-    // 8. Update deal status to "triaged"
+    // 8. Record triaged_at timestamp (status stays 'active' — simplified status model)
     await supabase
       .from("deals")
-      .update({ status: "triaged", triaged_at: new Date().toISOString() })
+      .update({ triaged_at: new Date().toISOString() })
       .eq("id", dealId);
 
     // 9. Mark processing_run as completed

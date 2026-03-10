@@ -59,6 +59,9 @@ function normalizeEntity(row: Record<string, unknown>): Entity {
     deep_analysis_run_at: (row.deep_analysis_run_at as string | null) ?? null,
     deep_analysis_stale: (row.deep_analysis_stale as boolean) ?? false,
     latest_source_at: (row.latest_source_at as string | null) ?? null,
+    // Incremental revaluation tracking (migration 034)
+    last_revaluation_at: (row.last_revaluation_at as string | null) ?? null,
+    revaluation_stale: (row.revaluation_stale as boolean) ?? false,
   };
 }
 

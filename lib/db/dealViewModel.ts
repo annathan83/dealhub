@@ -25,6 +25,10 @@ export type DealPageViewModel = {
   deepAnalysisStale: boolean;
   deepAnalysisRunAt: string | null;
   latestSourceAt: string | null;
+  // Incremental revaluation (migration 034)
+  revaluationSnapshot: AnalysisSnapshot | null;
+  revaluationStale: boolean;
+  lastRevaluationAt: string | null;
   entityEvents: EntityEvent[];
   entityFiles: EntityFile[];
 };
@@ -68,6 +72,14 @@ export async function buildDealPageViewModel(
   const deepAnalysisRunAt = entityData?.entity.deep_analysis_run_at ?? null;
   const latestSourceAt = entityData?.entity.latest_source_at ?? null;
 
+  // Extract the most recent incremental revaluation snapshot
+  const revaluationSnapshot =
+    entityData?.analysis_snapshots
+      .filter((s) => s.analysis_type === "revaluation")
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] ?? null;
+  const revaluationStale = entityData?.entity.revaluation_stale ?? false;
+  const lastRevaluationAt = entityData?.entity.last_revaluation_at ?? null;
+
   // entity_files are already loaded in entityData.files
   const entityFiles = entityData?.files.map((f) => f) ?? [];
 
@@ -82,6 +94,9 @@ export async function buildDealPageViewModel(
     deepAnalysisStale,
     deepAnalysisRunAt,
     latestSourceAt,
+    revaluationSnapshot,
+    revaluationStale,
+    lastRevaluationAt,
     entityEvents,
     entityFiles,
   };

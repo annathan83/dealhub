@@ -8,7 +8,7 @@
  *   1. Resolve entity from deal ID
  *   2. Guard against concurrent runs (via processing_runs status check)
  *   3. Create a processing_run record for this deep_analysis run
- *   4. Transition deal status: triaged → investigating (if applicable)
+ *   4. (Status transition removed — simplified 3-status model: active/closed/passed)
  *   5. Log deep_analysis_started event (with run_id)
  *   6. Run deep fact scan (reuses stored file texts, no re-upload)
  *   7. Build analysis context (facts + text corpus)
@@ -53,10 +53,8 @@ export type DeepAnalysisOrchestratorResult = {
  * Run the full deep analysis pipeline for a deal.
  * Resolves entity from legacy deal ID, then orchestrates all steps.
  *
- * Status transitions:
- *   - triaged → investigating  (only when status is exactly "triaged")
- *   - investigating → investigating  (re-run, no status change)
- *   - other allowed statuses → no status change
+ * No status transitions — deal status is managed by the user (active/closed/passed).
+ * Deep analysis runs regardless of current status (except passed).
  */
 export async function runDeepAnalysisForDeal(
   dealId: string,
@@ -104,28 +102,7 @@ export async function runDeepAnalysisForDeal(
       await updateProcessingRun(runId, { status: "running" });
     }
 
-    // ── 4. Transition deal status triaged → investigating ────────────────────
-    // Only transitions from exactly "triaged" — never downgrades other statuses.
-    const { data: deal } = await supabase
-      .from("deals")
-      .select("status")
-      .eq("id", dealId)
-      .eq("user_id", userId)
-      .single();
-
-    if (deal?.status === "triaged") {
-      const { error: updateError } = await supabase
-        .from("deals")
-        .update({ status: "investigating" })
-        .eq("id", dealId)
-        .eq("user_id", userId);
-
-      if (!updateError) {
-        result.deal_status_changed = true;
-      } else {
-        console.warn("[deepAnalysisOrchestrator] Failed to update deal status (non-fatal):", updateError.message);
-      }
-    }
+    // ── 4. (Status transition removed — simplified 3-status model) ─────────
 
     // ── 5. Log start event ───────────────────────────────────────────────────
     await logEntityEvent(entity.id, "deep_analysis_started", { trigger }, undefined, undefined, { runId });

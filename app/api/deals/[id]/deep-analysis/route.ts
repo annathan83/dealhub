@@ -39,12 +39,10 @@ export async function POST(
     return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   }
 
-  // Deep analysis is only available for deals that have been triaged or are investigating.
-  // Passed deals are excluded — user must explicitly reopen the deal first.
-  const allowedStatuses = ["triaged", "investigating", "loi", "acquired", "reviewing", "due_diligence", "offer"];
-  if (!allowedStatuses.includes(deal.status)) {
+  // Deep analysis (full corpus resend) is blocked only for passed deals.
+  if (deal.status === "passed") {
     return NextResponse.json(
-      { error: `Deep analysis is not available for deals with status "${deal.status}"` },
+      { error: `Deep analysis is not available for passed deals.` },
       { status: 422 }
     );
   }

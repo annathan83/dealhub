@@ -30,6 +30,11 @@ export type Entity = {
   deep_analysis_run_at: string | null;
   deep_analysis_stale: boolean;
   latest_source_at: string | null;
+
+  // ── Incremental revaluation tracking (migration 034) ──
+  // Separate from deep_analysis_* which tracks the full deep scan.
+  last_revaluation_at: string | null;
+  revaluation_stale: boolean;
 };
 
 // ─── File Layer ───────────────────────────────────────────────────────────────
@@ -251,6 +256,7 @@ export type ProcessingRunType =
   | "transcription"
   | "fact_extraction"
   | "triage_generation"
+  | "incremental_revaluation"
   | "deep_scan"
   | "deep_analysis"
   | "kpi_scoring"
@@ -292,7 +298,8 @@ export type AnalysisType =
   | "questions"
   | "kpi_scorecard"
   | "triage_summary"
-  | "deep_analysis";
+  | "deep_analysis"
+  | "revaluation";
 
 export type AnalysisSnapshot = {
   id: string;
@@ -326,6 +333,7 @@ export type EntityEventType =
   | "manual_override_applied"
   // Analysis lifecycle
   | "analysis_refreshed"
+  | "revaluation_completed"
   | "deep_scan_started"
   | "deep_scan_completed"
   | "triage_completed"
@@ -355,6 +363,64 @@ export type EntityEvent = {
   created_at: string;
 };
 
+// ─── AI Memories ─────────────────────────────────────────────────────────────
+
+/**
+ * Durable contextual observations extracted from source material.
+ * Separate from structured facts (normalized/typed) and analysis_snapshots (AI narrative blobs).
+ * Examples: "seller seems open to financing", "employee retention risk mentioned".
+ */
+export type AiMemoryType = "risk" | "opportunity" | "context" | "flag" | "question";
+export type AiMemoryImportance = "high" | "medium" | "low";
+export type AiMemoryStatus = "active" | "superseded" | "dismissed";
+
+export type AiMemory = {
+  id: string;
+  entity_id: string;
+  memory_type: AiMemoryType;
+  memory_text: string;
+  importance: AiMemoryImportance;
+  confidence: number | null;
+  source_file_id: string | null;
+  source_excerpt: string | null;
+  status: AiMemoryStatus;
+  superseded_by: string | null;
+  run_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+// ─── Fact History ─────────────────────────────────────────────────────────────
+
+/**
+ * Structured diff log covering both AI-driven fact changes and user overrides.
+ * Complements entity_events (timeline) and fact_edit_log (manual edits only).
+ */
+export type FactHistoryRecordType = "structured_fact" | "ai_memory";
+export type FactHistoryAction =
+  | "created"
+  | "updated"
+  | "superseded"
+  | "overridden"
+  | "dismissed"
+  | "confirmed"
+  | "deleted";
+
+export type FactHistoryEntry = {
+  id: string;
+  entity_id: string;
+  record_type: FactHistoryRecordType;
+  record_id: string;
+  action: FactHistoryAction;
+  old_value_json: Record<string, unknown> | null;
+  new_value_json: Record<string, unknown> | null;
+  reason: string | null;
+  source_file_id: string | null;
+  run_id: string | null;
+  created_at: string;
+  created_by: string;
+};
+
 // ─── Composite / View types ───────────────────────────────────────────────────
 
 /** FactDefinition enriched with the current entity_fact_value for a specific entity */
@@ -382,4 +448,5 @@ export type EntityPageData = {
   fact_evidence: FactEvidence[];
   analysis_snapshots: AnalysisSnapshot[];
   events: EntityEvent[];
+  ai_memories?: AiMemory[];
 };
