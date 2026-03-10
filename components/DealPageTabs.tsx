@@ -72,12 +72,10 @@ function TabBar({
   active,
   onChange,
   factsBadge,
-  analysisBadge,
 }: {
   active: TabId;
   onChange: (t: TabId) => void;
   factsBadge?: number;
-  analysisBadge?: string | null;
 }) {
   return (
     <div className="flex border-b border-[#E5E7EB] bg-white sticky top-0 z-20">
@@ -98,11 +96,6 @@ function TabBar({
             {tab.id === "facts" && factsBadge != null && factsBadge > 0 && (
               <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold">
                 {factsBadge > 9 ? "9+" : factsBadge}
-              </span>
-            )}
-            {tab.id === "analysis" && analysisBadge && (
-              <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-px rounded-full bg-[#D1FAE5] text-[#065F46] text-[10px] font-bold">
-                {analysisBadge}
               </span>
             )}
           </button>
@@ -595,11 +588,6 @@ export default function DealPageTabs({
       })()
     : 0;
 
-  // Badge: show 0–10 score if available
-  const analysisBadge = kpiScorecard?.overall_score != null
-    ? String(kpiScorecard.overall_score)
-    : null;
-
   return (
     <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
 
@@ -612,7 +600,6 @@ export default function DealPageTabs({
         active={activeTab}
         onChange={setActiveTab}
         factsBadge={factsBadge}
-        analysisBadge={analysisBadge}
       />
 
       {/* ── WORKSPACE TAB ───────────────────────────────────────────────── */}
