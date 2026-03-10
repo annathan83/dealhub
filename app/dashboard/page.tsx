@@ -123,12 +123,12 @@ export default async function DashboardPage() {
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">
-                Pipeline
+                Deal Flow
               </h1>
               <p className="text-sm text-slate-400 mt-1.5">
                 {totalDeals === 0
                   ? "Track and evaluate acquisition opportunities."
-                  : `${activeDeals} active · ${totalDeals} total deal${totalDeals !== 1 ? "s" : ""}`}
+                  : `${totalDeals} deal${totalDeals !== 1 ? "s" : ""}`}
               </p>
             </div>
             <Link

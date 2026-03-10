@@ -36,7 +36,7 @@ export default function AppHeader() {
                 : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
-            Pipeline
+            Deal Flow
           </Link>
           <Link
             href="/settings/integrations"
