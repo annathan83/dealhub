@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DealHubIcon } from "@/components/DealHubLogo";
 
 export default function Footer() {
   return (
@@ -6,8 +7,11 @@ export default function Footer() {
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
 
         {/* Wordmark */}
-        <Link href="/" className="text-lg font-bold tracking-tight text-slate-900">
-          Deal<span className="text-indigo-600">Hub</span>
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <DealHubIcon size={24} />
+          <span className="text-lg font-bold tracking-tight text-slate-900">
+            Deal<span className="text-[#1F7A63]">Hub</span>
+          </span>
         </Link>
 
         {/* Links */}

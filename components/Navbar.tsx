@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { DealHubIcon } from "@/components/DealHubLogo";
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -10,8 +11,11 @@ export default function Navbar() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-slate-100">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Wordmark */}
-        <Link href="/" className="text-xl font-bold tracking-tight text-slate-900">
-          Deal<span className="text-indigo-600">Hub</span>
+        <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <DealHubIcon size={30} />
+          <span className="text-xl font-bold tracking-tight text-slate-900">
+            Deal<span className="text-[#1F7A63]">Hub</span>
+          </span>
         </Link>
 
         {/* Desktop nav */}

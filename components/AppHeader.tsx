@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { DealHubIcon } from "@/components/DealHubLogo";
 
 export default function AppHeader() {
   const pathname = usePathname();
@@ -21,9 +22,12 @@ export default function AppHeader() {
         {/* Wordmark */}
         <Link
           href="/dashboard"
-          className="text-base font-bold tracking-tight text-[#1E1E1E] shrink-0 hover:opacity-75 transition-opacity"
+          className="flex items-center gap-2 shrink-0 hover:opacity-75 transition-opacity"
         >
-          Deal<span className="text-[#1F7A63]">Hub</span>
+          <DealHubIcon size={26} />
+          <span className="text-base font-bold tracking-tight text-[#1E1E1E]">
+            Deal<span className="text-[#1F7A63]">Hub</span>
+          </span>
         </Link>
 
         {/* Nav — desktop only */}
