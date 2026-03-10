@@ -15,25 +15,25 @@ const STATUS_LABELS: Record<DealStatus, string> = {
   passed: "Passed",
 };
 
-// Active = blue, Passed = red, Closed = green
+// Active = emerald, Passed = red, Closed = grey — flat solid badges
 const STATUS_STYLES: Record<DealStatus, { badge: string; dot: string; pill: string; pillActive: string }> = {
   active: {
-    badge:      "bg-blue-50 text-blue-700 border border-blue-100",
-    dot:        "bg-blue-500",
-    pill:       "bg-white text-slate-500 border border-slate-200 hover:border-blue-200 hover:text-blue-700",
-    pillActive: "bg-blue-600 text-white border border-blue-600 shadow-sm",
+    badge:      "bg-[#1F7A63] text-white",
+    dot:        "bg-white/70",
+    pill:       "bg-white text-[#6B7280] border border-[#E5E7EB] hover:border-[#1F7A63] hover:text-[#1F7A63]",
+    pillActive: "bg-[#1F7A63] text-white border border-[#1F7A63]",
   },
   closed: {
-    badge:      "bg-emerald-50 text-emerald-700 border border-emerald-100",
-    dot:        "bg-emerald-500",
-    pill:       "bg-white text-slate-500 border border-slate-200 hover:border-emerald-200 hover:text-emerald-700",
-    pillActive: "bg-emerald-600 text-white border border-emerald-600 shadow-sm",
+    badge:      "bg-[#6B7280] text-white",
+    dot:        "bg-white/70",
+    pill:       "bg-white text-[#6B7280] border border-[#E5E7EB] hover:border-[#6B7280] hover:text-[#1E1E1E]",
+    pillActive: "bg-[#6B7280] text-white border border-[#6B7280]",
   },
   passed: {
-    badge:      "bg-rose-50 text-rose-600 border border-rose-100",
-    dot:        "bg-rose-400",
-    pill:       "bg-white text-slate-500 border border-slate-200 hover:border-rose-200 hover:text-rose-600",
-    pillActive: "bg-rose-600 text-white border border-rose-600 shadow-sm",
+    badge:      "bg-[#DC2626] text-white",
+    dot:        "bg-white/70",
+    pill:       "bg-white text-[#6B7280] border border-[#E5E7EB] hover:border-[#DC2626] hover:text-[#DC2626]",
+    pillActive: "bg-[#DC2626] text-white border border-[#DC2626]",
   },
 };
 
@@ -126,18 +126,18 @@ function industryIcon(industry: string | null): string {
 
 function ScoreBadge({ score }: { score: number | undefined }) {
   if (score === undefined) {
-    return <span className="text-[11px] text-slate-300">—</span>;
+    return <span className="text-[11px] text-[#6B7280]">—</span>;
   }
-  // score is already on 1–10 scale
   const display = score % 1 === 0 ? score.toFixed(0) : score.toFixed(1);
+  // Flat solid badges: green / yellow / red
   const color =
-    score >= 8 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-    score >= 5 ? "bg-amber-50 text-amber-700 border-amber-200" :
-                 "bg-rose-50 text-rose-600 border-rose-200";
+    score >= 8 ? "bg-[#1F7A63] text-white" :
+    score >= 5 ? "bg-[#EAB308] text-white" :
+                 "bg-[#DC2626] text-white";
   return (
-    <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold border tabular-nums ${color}`}>
+    <span className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${color}`}>
       {display}
-      <span className="font-normal opacity-60">/10</span>
+      <span className="font-normal opacity-70">/10</span>
     </span>
   );
 }
@@ -147,8 +147,7 @@ function ScoreBadge({ score }: { score: number | undefined }) {
 function StatusBadge({ status }: { status: DealStatus }) {
   const s = STATUS_STYLES[status];
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${s.badge}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+    <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold ${s.badge}`}>
       {STATUS_LABELS[status]}
     </span>
   );
@@ -210,7 +209,7 @@ function FilterPanel({
   }, [open, onClose]);
 
   const SELECT_CLS =
-    "w-full rounded-lg border border-slate-200 bg-white pl-3 pr-8 py-2 text-sm text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition appearance-none cursor-pointer";
+    "w-full rounded-lg border border-[#E5E7EB] bg-white pl-3 pr-8 py-2 text-sm text-[#1E1E1E] focus:border-[#1F7A63] focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition appearance-none cursor-pointer";
 
   const hasFilters = !!(statusFilter !== "all" || industryFilter || stateFilter || sourceFilter || sdeFilter || askFilter);
 
@@ -232,20 +231,20 @@ function FilterPanel({
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900">Filters</h3>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E5E7EB]">
+          <h3 className="text-sm font-bold text-[#1E1E1E]">Filters</h3>
           <div className="flex items-center gap-2">
             {hasFilters && (
               <button
                 onClick={onClear}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                className="text-xs text-[#1F7A63] hover:text-[#176B55] font-medium transition-colors"
               >
                 Clear all
               </button>
             )}
             <button
               onClick={onClose}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-[#6B7280] hover:text-[#1E1E1E] hover:bg-[#F3F4F6] transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -259,7 +258,7 @@ function FilterPanel({
 
           {/* Status */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Status</p>
+            <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-widest mb-2">Status</p>
             <div className="flex flex-wrap gap-1.5">
               {(["all", ...ALL_STATUSES] as const).map((s) => {
                 const isActive = statusFilter === s;
@@ -294,12 +293,12 @@ function FilterPanel({
 
           {/* Industry */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Industry</p>
+            <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-widest mb-2">Industry</p>
             <div className="relative">
               <select
                 value={industryFilter}
                 onChange={(e) => setIndustryFilter(e.target.value)}
-                className={`${SELECT_CLS} ${industryFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+                className={`${SELECT_CLS} ${industryFilter ? "border-[#1F7A63] text-[#1F7A63] bg-[#F0FAF7]" : ""}`}
               >
                 <option value="">All industries</option>
                 {INDUSTRY_CATEGORIES.map((cat) => (
@@ -314,12 +313,12 @@ function FilterPanel({
 
           {/* Location / State */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">State</p>
+            <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-widest mb-2">State</p>
             <div className="relative">
               <select
                 value={stateFilter}
                 onChange={(e) => setStateFilter(e.target.value)}
-                className={`${SELECT_CLS} ${stateFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+                className={`${SELECT_CLS} ${stateFilter ? "border-[#1F7A63] text-[#1F7A63] bg-[#F0FAF7]" : ""}`}
               >
                 <option value="">All states</option>
                 {US_STATES.map((s) => (
@@ -334,12 +333,12 @@ function FilterPanel({
 
           {/* Source */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Deal Source</p>
+            <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-widest mb-2">Deal Source</p>
             <div className="relative">
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className={`${SELECT_CLS} ${sourceFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+                className={`${SELECT_CLS} ${sourceFilter ? "border-[#1F7A63] text-[#1F7A63] bg-[#F0FAF7]" : ""}`}
               >
                 <option value="">All sources</option>
                 {DEAL_SOURCE_CATEGORIES.map((cat) => (
@@ -354,12 +353,12 @@ function FilterPanel({
 
           {/* SDE range */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">SDE Range</p>
+            <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-widest mb-2">SDE Range</p>
             <div className="relative">
               <select
                 value={sdeFilter}
                 onChange={(e) => setSdeFilter(e.target.value as SdeFilterKey)}
-                className={`${SELECT_CLS} ${sdeFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+                className={`${SELECT_CLS} ${sdeFilter ? "border-[#1F7A63] text-[#1F7A63] bg-[#F0FAF7]" : ""}`}
               >
                 <option value="">Any SDE</option>
                 <option value="under250k">Under $250K</option>
@@ -374,12 +373,12 @@ function FilterPanel({
 
           {/* Ask Price range */}
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Ask Price Range</p>
+            <p className="text-[11px] font-bold text-[#6B7280] uppercase tracking-widest mb-2">Ask Price Range</p>
             <div className="relative">
               <select
                 value={askFilter}
                 onChange={(e) => setAskFilter(e.target.value as AskFilterKey)}
-                className={`${SELECT_CLS} ${askFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+                className={`${SELECT_CLS} ${askFilter ? "border-[#1F7A63] text-[#1F7A63] bg-[#F0FAF7]" : ""}`}
               >
                 <option value="">Any ask price</option>
                 <option value="under1m">Under $1M</option>
@@ -395,10 +394,10 @@ function FilterPanel({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 border-t border-slate-100">
+        <div className="px-5 py-4 border-t border-[#E5E7EB]">
           <button
             onClick={onClose}
-            className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold py-2.5 transition-colors"
+            className="w-full rounded-lg bg-[#1F7A63] hover:bg-[#176B55] text-white text-sm font-semibold py-2.5 transition-colors"
           >
             Apply Filters
           </button>
@@ -423,12 +422,12 @@ function DealCard({ deal, score }: { deal: Deal; score: number | undefined }) {
   return (
     <div
       onClick={() => router.push(`/deals/${deal.id}`)}
-      className="group bg-white rounded-xl border border-slate-100 shadow-sm active:scale-[0.99] active:shadow-none transition-all duration-100 cursor-pointer overflow-hidden hover:border-indigo-100 hover:shadow-md"
+      className="group bg-white rounded-xl border border-[#E5E7EB] shadow-sm active:scale-[0.99] active:shadow-none transition-all duration-100 cursor-pointer overflow-hidden hover:border-[#1F7A63]/30 hover:shadow-md"
     >
       <div className="px-4 pt-3.5 pb-3">
         {/* Deal name + status */}
         <div className="flex items-start justify-between gap-3 mb-0.5">
-          <p className="font-bold text-slate-900 text-[14px] leading-snug group-hover:text-indigo-700 transition-colors line-clamp-2 flex-1 min-w-0">
+          <p className="font-bold text-[#1E1E1E] text-[14px] leading-snug group-hover:text-[#1F7A63] transition-colors line-clamp-2 flex-1 min-w-0">
             {deal.name}
           </p>
           <div className="shrink-0 mt-0.5">
@@ -484,9 +483,9 @@ function DealCard({ deal, score }: { deal: Deal; score: number | undefined }) {
         </div>
       </div>
 
-      {deal.status === "active" && <div className="h-0.5 bg-gradient-to-r from-blue-400 to-blue-300" />}
-      {deal.status === "closed" && <div className="h-0.5 bg-gradient-to-r from-emerald-400 to-emerald-300" />}
-      {deal.status === "passed" && <div className="h-0.5 bg-gradient-to-r from-rose-300 to-rose-200" />}
+      {deal.status === "active" && <div className="h-0.5 bg-[#1F7A63]" />}
+      {deal.status === "closed" && <div className="h-0.5 bg-[#6B7280]" />}
+      {deal.status === "passed" && <div className="h-0.5 bg-[#DC2626]" />}
     </div>
   );
 }
@@ -506,16 +505,16 @@ function DealRow({
   const ask      = formatFinancial(deal.asking_price);
   const multiple = formatMultiple(deal.multiple);
 
-  const rowBg = index % 2 === 1 ? "bg-slate-50/40" : "bg-white";
+  const rowBg = index % 2 === 1 ? "bg-[#F8FAF9]" : "bg-white";
 
   return (
     <tr
       onClick={onClick}
-      className={`cursor-pointer group hover:bg-indigo-50/50 transition-colors border-b border-slate-100 last:border-0 ${rowBg}`}
+      className={`cursor-pointer group hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB] last:border-0 ${rowBg}`}
     >
       {/* Deal identity */}
       <td className="px-4 py-2.5 min-w-[180px]">
-        <span className="font-semibold text-[13px] text-slate-900 group-hover:text-indigo-700 transition-colors leading-snug">
+        <span className="font-semibold text-[13px] text-[#1E1E1E] group-hover:text-[#1F7A63] transition-colors leading-snug">
           {deal.name}
         </span>
       </td>
@@ -589,7 +588,7 @@ function DealRow({
       {/* Arrow */}
       <td className="pr-3 py-2.5 w-7">
         <svg
-          className="w-4 h-4 text-slate-200 group-hover:text-indigo-400 transition-colors"
+          className="w-4 h-4 text-[#E5E7EB] group-hover:text-[#1F7A63] transition-colors"
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -692,9 +691,9 @@ export default function DealsTable({
     const isActive = sortable && sortKey === colKey;
     return (
       <th
-        className={`px-4 py-2.5 text-[10px] font-bold text-slate-400 tracking-widest uppercase whitespace-nowrap select-none ${
+            className={`px-4 py-2.5 text-[10px] font-medium text-[#6B7280] tracking-widest uppercase whitespace-nowrap select-none ${
           align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"
-        } ${sortable ? "cursor-pointer hover:text-slate-700 transition-colors" : ""}`}
+        } ${sortable ? "cursor-pointer hover:text-[#1E1E1E] transition-colors" : ""}`}
         onClick={sortable && colKey ? () => handleSort(colKey) : undefined}
       >
         <span className="inline-flex items-center gap-0.5">
@@ -744,7 +743,7 @@ export default function DealsTable({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search deals by name, industry, location…"
-              className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+              className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-[#E5E7EB] bg-white text-[#1E1E1E] placeholder-[#6B7280] focus:border-[#1F7A63] focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition"
             />
             {search && (
               <button
@@ -763,8 +762,8 @@ export default function DealsTable({
             onClick={() => setFilterPanelOpen(true)}
             className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
               hasSecondaryFilters
-                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700"
+                ? "bg-[#F0FAF7] text-[#1F7A63] border-[#1F7A63]"
+                : "bg-white text-[#6B7280] border-[#E5E7EB] hover:border-[#1F7A63] hover:text-[#1F7A63]"
             }`}
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -780,7 +779,7 @@ export default function DealsTable({
           {isFiltered && (
             <button
               onClick={clearFilters}
-              className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors whitespace-nowrap"
+              className="shrink-0 text-xs text-[#6B7280] hover:text-[#1E1E1E] transition-colors whitespace-nowrap"
             >
               Clear
             </button>
@@ -806,10 +805,10 @@ export default function DealsTable({
               </p>
             </div>
             {deals.length === 0 && (
-              <Link
-                href="/deals/new"
-                className="mt-1 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
-              >
+            <Link
+              href="/deals/new"
+              className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-[#1F7A63] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#176B55] transition-colors shadow-sm"
+            >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
@@ -829,11 +828,11 @@ export default function DealsTable({
             </div>
 
             {/* ── Desktop table ──────────────────────────────────────────── */}
-            <div className="hidden md:block rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+            <div className="hidden md:block rounded-xl border border-[#E5E7EB] bg-white overflow-hidden shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80">
+                    <tr className="border-b border-[#E5E7EB] bg-[#F8FAF9]">
                       <Th label="Deal"     sortable colKey="name" />
                       <Th label="Industry" />
                       <Th label="Location" />

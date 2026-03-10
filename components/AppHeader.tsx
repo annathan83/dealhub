@@ -16,14 +16,14 @@ export default function AppHeader() {
   }
 
   return (
-    <header className="bg-white border-b border-slate-100 sticky top-0 z-40">
+    <header className="bg-white border-b border-[#E5E7EB] sticky top-0 z-40">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-4">
         {/* Wordmark */}
         <Link
           href="/dashboard"
-          className="text-base font-bold tracking-tight text-slate-900 shrink-0 hover:opacity-75 transition-opacity"
+          className="text-base font-bold tracking-tight text-[#1E1E1E] shrink-0 hover:opacity-75 transition-opacity"
         >
-          Deal<span className="text-indigo-600">Hub</span>
+          Deal<span className="text-[#1F7A63]">Hub</span>
         </Link>
 
         {/* Nav — desktop only */}
@@ -32,8 +32,8 @@ export default function AppHeader() {
             href="/dashboard"
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               pathname === "/dashboard"
-                ? "bg-indigo-50 text-indigo-700"
-                : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                ? "text-[#1F7A63] font-semibold bg-[#F0FAF7]"
+                : "text-[#6B7280] hover:text-[#1E1E1E] hover:bg-[#F3F4F6]"
             }`}
           >
             Deal Flow
@@ -42,8 +42,8 @@ export default function AppHeader() {
             href="/settings/integrations"
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               pathname.startsWith("/settings")
-                ? "bg-indigo-50 text-indigo-700"
-                : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                ? "text-[#1F7A63] font-semibold bg-[#F0FAF7]"
+                : "text-[#6B7280] hover:text-[#1E1E1E] hover:bg-[#F3F4F6]"
             }`}
           >
             Settings
@@ -55,7 +55,7 @@ export default function AppHeader() {
           {/* Settings icon — mobile only */}
           <Link
             href="/settings/integrations"
-            className="sm:hidden p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+            className="sm:hidden p-2 rounded-lg text-[#6B7280] hover:text-[#1E1E1E] hover:bg-[#F3F4F6] transition-colors"
             aria-label="Settings"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -67,7 +67,7 @@ export default function AppHeader() {
           {/* Sign out */}
           <button
             onClick={handleSignOut}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium text-[#6B7280] hover:text-[#1E1E1E] hover:bg-[#F3F4F6] transition-colors"
             aria-label="Sign out"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

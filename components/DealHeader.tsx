@@ -16,12 +16,12 @@ const STATUS_LABELS: Record<DealStatus, string> = {
 
 // Segmented control styles per option (active = selected)
 const SEGMENT_ACTIVE: Record<DealStatus, string> = {
-  active: "bg-indigo-600 text-white shadow-sm",
-  closed: "bg-emerald-600 text-white shadow-sm",
-  passed: "bg-slate-500 text-white shadow-sm",
+  active: "bg-[#1F7A63] text-white",
+  closed: "bg-[#6B7280] text-white",
+  passed: "bg-[#DC2626] text-white",
 };
 
-const SEGMENT_INACTIVE = "text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors";
+const SEGMENT_INACTIVE = "text-[#6B7280] hover:text-[#1E1E1E] hover:bg-[#F3F4F6] transition-colors";
 
 // ─── Segmented status control ─────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ function StatusSegmentedControl({
 
   return (
     <div
-      className={`inline-flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5 transition-opacity ${saving ? "opacity-60 pointer-events-none" : ""}`}
+      className={`inline-flex items-center gap-0.5 rounded-full bg-[#F3F4F6] p-0.5 transition-opacity ${saving ? "opacity-60 pointer-events-none" : ""}`}
       role="group"
       aria-label="Deal status"
     >
@@ -118,10 +118,10 @@ function MetricCell({
       <p
         className={`tabular-nums leading-tight ${
           empty
-            ? "text-slate-300 text-sm font-medium"
+            ? "text-[#D1D5DB] text-sm font-medium"
             : primary
-            ? "text-slate-900 text-lg font-bold"
-            : "text-slate-700 text-base font-semibold"
+            ? "text-[#1E1E1E] text-lg font-bold"
+            : "text-[#374151] text-base font-semibold"
         }`}
       >
         {value}
@@ -138,17 +138,17 @@ export default function DealHeader({ deal }: { deal: Deal }) {
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
 
         {/* ── Top row: name + status + edit ───────────────────────────── */}
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-start justify-between gap-3">
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight leading-snug flex-1 min-w-0">
+            <h1 className="text-lg font-bold text-[#1E1E1E] tracking-tight leading-snug flex-1 min-w-0">
               {deal.name}
             </h1>
             <button
               onClick={() => setEditOpen(true)}
-              className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors mt-0.5"
+              className="shrink-0 p-1.5 rounded-lg text-[#6B7280] hover:text-[#1E1E1E] hover:bg-[#F3F4F6] transition-colors mt-0.5"
               title="Edit deal"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -184,22 +184,22 @@ export default function DealHeader({ deal }: { deal: Deal }) {
 
         {/* ── Metrics strip ───────────────────────────────────────────── */}
         {hasAnyMetric ? (
-          <div className="border-t border-slate-100 px-4 py-3 grid grid-cols-3 gap-3">
+          <div className="border-t border-[#E5E7EB] px-4 py-3 grid grid-cols-3 gap-3">
             <MetricCell label="SDE" value={formatCurrency(deal.sde)} empty={!deal.sde} primary />
             <div className="relative">
-              <div className="absolute left-0 top-0 bottom-0 w-px bg-slate-100" />
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
               <MetricCell label="Ask" value={formatCurrency(deal.asking_price)} empty={!deal.asking_price} />
             </div>
             <div className="relative">
-              <div className="absolute left-0 top-0 bottom-0 w-px bg-slate-100" />
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
               <MetricCell label="Multiple" value={formatMultiple(deal.multiple)} empty={!deal.multiple} />
             </div>
           </div>
         ) : (
-          <div className="border-t border-slate-100 px-4 py-2.5">
+          <div className="border-t border-[#E5E7EB] px-4 py-2.5">
             <button
               onClick={() => setEditOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-dashed border-slate-200 text-xs text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-dashed border-[#E5E7EB] text-xs text-[#6B7280] hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors"
             >
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

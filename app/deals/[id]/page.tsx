@@ -63,7 +63,7 @@ export default async function DealPage({
   );
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#F8FAF9]">
       <AppHeader />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-5 pt-4 pb-24">

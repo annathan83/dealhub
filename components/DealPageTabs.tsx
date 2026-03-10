@@ -73,7 +73,7 @@ function TabBar({
   analysisBadge?: string | null;
 }) {
   return (
-    <div className="flex border-b border-slate-200 bg-white sticky top-0 z-20">
+    <div className="flex border-b border-[#E5E7EB] bg-white sticky top-0 z-20">
       {TABS.map((tab) => {
         const isActive = active === tab.id;
         return (
@@ -83,18 +83,18 @@ function TabBar({
             onClick={() => onChange(tab.id)}
             className={`relative flex-1 py-3 text-sm font-semibold transition-colors ${
               isActive
-                ? "text-indigo-600 border-b-2 border-indigo-600 -mb-px"
-                : "text-slate-400 hover:text-slate-600"
+                ? "text-[#1F7A63] border-b-2 border-[#1F7A63] -mb-px"
+                : "text-[#6B7280] hover:text-[#1E1E1E]"
             }`}
           >
             {tab.label}
             {tab.id === "facts" && factsBadge != null && factsBadge > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">
+              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-[#FEF3C7] text-[#92400E] text-[10px] font-bold">
                 {factsBadge > 9 ? "9+" : factsBadge}
               </span>
             )}
             {tab.id === "analysis" && analysisBadge && (
-              <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-px rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold">
+              <span className="ml-1.5 inline-flex items-center justify-center px-1.5 py-px rounded-full bg-[#D1FAE5] text-[#065F46] text-[10px] font-bold">
                 {analysisBadge}
               </span>
             )}
@@ -254,7 +254,7 @@ export default function DealPageTabs({
     : null;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
 
       {/* ── Quick-add actions — always visible above the tab bar ────────── */}
       <div className="px-4 pt-4 pb-3">

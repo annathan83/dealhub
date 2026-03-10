@@ -90,14 +90,14 @@ export default async function DashboardPage() {
     last7 > prev7 ? "up" : last7 < prev7 ? "down" : "flat";
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#F8FAF9]">
       <AppHeader />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-safe">
 
         {/* ── Google Drive onboarding banner ───────────────────────────── */}
         {!isDriveConnected && (
-          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 flex items-start gap-3">
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 flex items-start gap-3">
             <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
               <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
@@ -123,10 +123,10 @@ export default async function DashboardPage() {
           {/* Title + New Deal button */}
           <div className="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">
+              <h1 className="text-2xl font-extrabold text-[#1E1E1E] tracking-tight leading-none">
                 Deal Flow
               </h1>
-              <p className="text-sm text-slate-400 mt-1.5">
+              <p className="text-sm text-[#6B7280] mt-1.5">
                 {totalDeals === 0
                   ? "Track and evaluate acquisition opportunities."
                   : `${totalDeals} deal${totalDeals !== 1 ? "s" : ""}`}
@@ -134,7 +134,7 @@ export default async function DashboardPage() {
             </div>
             <Link
               href="/deals/new"
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 active:bg-indigo-800 transition-colors shadow-sm shadow-indigo-200"
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#1F7A63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#176B55] active:bg-[#145E4A] transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -148,58 +148,58 @@ export default async function DashboardPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 
               {/* New — last 30 days */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">New · 30 days</p>
-                <p className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">+{new30}</p>
-                <p className="text-[11px] text-slate-400 mt-1">deals added</p>
+              <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wide mb-1.5">New · 30 days</p>
+                <p className="text-2xl font-extrabold text-[#1E1E1E] tabular-nums leading-none">+{new30}</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">deals added</p>
               </div>
 
               {/* Passed — last 30 days */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Passed · 30 days</p>
-                <p className="text-2xl font-extrabold text-slate-500 tabular-nums leading-none">{passed30}</p>
-                <p className="text-[11px] text-slate-400 mt-1">deals passed</p>
+              <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wide mb-1.5">Passed · 30 days</p>
+                <p className="text-2xl font-extrabold text-[#6B7280] tabular-nums leading-none">{passed30}</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">deals passed</p>
               </div>
 
               {/* Avg new per week — last 4 weeks */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Avg / week</p>
-                <p className="text-2xl font-extrabold text-indigo-600 tabular-nums leading-none">
+              <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wide mb-1.5">Avg / week</p>
+                <p className="text-2xl font-extrabold text-[#1F7A63] tabular-nums leading-none">
                   {avgPerWeek % 1 === 0 ? avgPerWeek.toFixed(0) : avgPerWeek.toFixed(1)}
                 </p>
-                <p className="text-[11px] text-slate-400 mt-1">new deals · 4 wk avg</p>
+                <p className="text-[11px] text-[#6B7280] mt-1">new deals · 4 wk avg</p>
               </div>
 
               {/* Trend: last 7 days vs prior 7 days */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
-                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Trend</p>
+              <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wide mb-1.5">Trend</p>
                 <div className="flex items-center gap-2 leading-none">
                   {trend === "up" && (
                     <>
-                      <svg className="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-6 h-6 text-[#1F7A63]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                       </svg>
-                      <span className="text-2xl font-extrabold text-emerald-600">Up</span>
+                      <span className="text-2xl font-extrabold text-[#1F7A63]">Up</span>
                     </>
                   )}
                   {trend === "down" && (
                     <>
-                      <svg className="w-6 h-6 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-6 h-6 text-[#DC2626]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 17l5-5m0 0l-5-5m5 5H6" />
                       </svg>
-                      <span className="text-2xl font-extrabold text-rose-500">Down</span>
+                      <span className="text-2xl font-extrabold text-[#DC2626]">Down</span>
                     </>
                   )}
                   {trend === "flat" && (
                     <>
-                      <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-6 h-6 text-[#6B7280]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
                       </svg>
-                      <span className="text-2xl font-extrabold text-slate-500">Flat</span>
+                      <span className="text-2xl font-extrabold text-[#6B7280]">Flat</span>
                     </>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
+                <p className="text-[11px] text-[#6B7280] mt-1">
                   {last7} this wk · {prev7} last wk
                 </p>
               </div>
@@ -208,10 +208,10 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        {/* ── Deals pipeline ────────────────────────────────────────────── */}
+        {/* ── Deals table ───────────────────────────────────────────────── */}
         <Suspense fallback={
           <div className="py-16 flex items-center justify-center">
-            <div className="w-5 h-5 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+            <div className="w-5 h-5 rounded-full border-2 border-[#C6E4DC] border-t-[#1F7A63] animate-spin" />
           </div>
         }>
           <DealsTable deals={dealList} scoreMap={scoreMap} />

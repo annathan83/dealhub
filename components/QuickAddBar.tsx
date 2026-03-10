@@ -44,28 +44,28 @@ const ACTION_STYLES: Record<
   { bg: string; border: string; text: string; hover: string }
 > = {
   upload: {
-    bg: "bg-[#EEF4FF]",
-    border: "border-[#C7D9FF]",
-    text: "text-[#3B6FE8]",
-    hover: "hover:bg-[#E2ECFF] hover:border-[#A8C4FF]",
+    bg: "bg-[#F0FAF7]",
+    border: "border-[#C6E4DC]",
+    text: "text-[#1F7A63]",
+    hover: "hover:bg-[#E4F5EF] hover:border-[#1F7A63]",
   },
   note: {
-    bg: "bg-[#F4EEFF]",
-    border: "border-[#D9C7FF]",
-    text: "text-[#7C3AED]",
-    hover: "hover:bg-[#EDE4FF] hover:border-[#C4A8FF]",
+    bg: "bg-[#F8FAF9]",
+    border: "border-[#E5E7EB]",
+    text: "text-[#374151]",
+    hover: "hover:bg-[#F3F4F6] hover:border-[#9CA3AF]",
   },
   photo: {
-    bg: "bg-[#EEF9F0]",
-    border: "border-[#C2E8C8]",
-    text: "text-[#2D8A45]",
-    hover: "hover:bg-[#E2F5E5] hover:border-[#A3D9AC]",
+    bg: "bg-[#F8FAF9]",
+    border: "border-[#E5E7EB]",
+    text: "text-[#374151]",
+    hover: "hover:bg-[#F3F4F6] hover:border-[#9CA3AF]",
   },
   audio: {
-    bg: "bg-[#FFF4E8]",
-    border: "border-[#FFD9A8]",
-    text: "text-[#C2620A]",
-    hover: "hover:bg-[#FFEDD6] hover:border-[#FFC47A]",
+    bg: "bg-[#F8FAF9]",
+    border: "border-[#E5E7EB]",
+    text: "text-[#374151]",
+    hover: "hover:bg-[#F3F4F6] hover:border-[#9CA3AF]",
   },
 };
 
@@ -154,13 +154,13 @@ function AddNotePanel({ dealId, onDone }: { dealId: string; onDone: () => void }
             placeholder="Paste a listing, broker email, financial summary, or your own notes…"
             disabled={loading}
             autoFocus
-            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition resize-none disabled:opacity-60"
+            className="w-full rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-3 text-sm text-[#1E1E1E] placeholder-[#6B7280] focus:border-[#1F7A63] focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-none disabled:opacity-60"
           />
           <div className="flex items-center gap-2">
             <button
               type="submit"
               disabled={loading || !content.trim()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1F7A63] px-5 py-2 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-40 transition-colors"
             >
               {loading ? (
                 <>
