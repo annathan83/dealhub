@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Deal, DealStatus } from "@/types";
+import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
 import EditDealModal from "./EditDealModal";
 
 // ─── Status config ────────────────────────────────────────────────────────────
@@ -97,6 +98,24 @@ function formatMultiple(val: string | null): string {
   return /x$/i.test(s) ? s : `${s}x`;
 }
 
+// ─── Score badge ──────────────────────────────────────────────────────────────
+
+function ScoreBadge({ score100 }: { score100: number | null }) {
+  if (score100 === null) return <span className="text-[#D1D5DB] text-sm font-medium">—</span>;
+  // Convert 0–100 to 1–10 display
+  const display = Math.round(score100 / 10);
+  const color =
+    display >= 8 ? "bg-[#1F7A63] text-white" :
+    display >= 5 ? "bg-[#EAB308] text-white" :
+                   "bg-[#DC2626] text-white";
+  return (
+    <span className={`inline-flex items-baseline gap-0.5 rounded px-2 py-0.5 text-base font-bold tabular-nums leading-tight ${color}`}>
+      {display}
+      <span className="text-[10px] font-normal opacity-75">/10</span>
+    </span>
+  );
+}
+
 // ─── Metric cell ──────────────────────────────────────────────────────────────
 
 function MetricCell({
@@ -132,9 +151,16 @@ function MetricCell({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function DealHeader({ deal }: { deal: Deal }) {
+export default function DealHeader({
+  deal,
+  kpiScorecard = null,
+}: {
+  deal: Deal;
+  kpiScorecard?: KpiScorecardResult | null;
+}) {
   const [editOpen, setEditOpen] = useState(false);
   const hasAnyMetric = deal.asking_price || deal.sde || deal.multiple;
+  const score100 = kpiScorecard?.overall_score_100 ?? null;
 
   return (
     <>
@@ -183,16 +209,23 @@ export default function DealHeader({ deal }: { deal: Deal }) {
         </div>
 
         {/* ── Metrics strip ───────────────────────────────────────────── */}
-        {hasAnyMetric ? (
-          <div className="border-t border-[#E5E7EB] px-4 py-3 grid grid-cols-3 gap-3">
+        {hasAnyMetric || score100 !== null ? (
+          <div className="border-t border-[#E5E7EB] px-4 py-3 grid grid-cols-4 gap-3">
             <MetricCell label="SDE" value={formatCurrency(deal.sde)} empty={!deal.sde} primary />
-            <div className="relative">
+            <div className="relative pl-3">
               <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
               <MetricCell label="Ask" value={formatCurrency(deal.asking_price)} empty={!deal.asking_price} />
             </div>
-            <div className="relative">
+            <div className="relative pl-3">
               <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
               <MetricCell label="Multiple" value={formatMultiple(deal.multiple)} empty={!deal.multiple} />
+            </div>
+            <div className="relative pl-3">
+              <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none">Score</p>
+                <ScoreBadge score100={score100} />
+              </div>
             </div>
           </div>
         ) : (

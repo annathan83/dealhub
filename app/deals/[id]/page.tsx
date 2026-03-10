@@ -86,7 +86,7 @@ export default async function DealPage({
         </div>
 
         {/* ── Deal header (always visible) ─────────────────────────────── */}
-        <DealHeader deal={deal} />
+        <DealHeader deal={deal} kpiScorecard={kpiScorecard} />
 
         {/* ── 3-tab workspace ──────────────────────────────────────────── */}
         <div className="mt-4">

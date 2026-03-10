@@ -272,7 +272,16 @@ export default function DealPageTabs({
       {activeTab === "workspace" && (
         <div className="px-4 py-4 flex flex-col gap-5">
 
-          {/* File workspace */}
+          {/* Activity timeline — shown first */}
+          <TimelineSection
+            items={timelineItems}
+            dealName={deal.name}
+            dealCreatedAt={deal.created_at}
+            files={syncedFiles}
+            dealId={deal.id}
+          />
+
+          {/* File workspace — below activity */}
           <IntakeSection
             dealId={deal.id}
             dealName={deal.name}
@@ -282,17 +291,6 @@ export default function DealPageTabs({
             triageSummaryExists={triageSummaryExists}
             newFilesAfterTriage={newFilesAfterTriage}
           />
-
-          {/* Activity timeline */}
-          <div className="pt-1">
-            <TimelineSection
-              items={timelineItems}
-              dealName={deal.name}
-              dealCreatedAt={deal.created_at}
-              files={syncedFiles}
-              dealId={deal.id}
-            />
-          </div>
 
         </div>
       )}
