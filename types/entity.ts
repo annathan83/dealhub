@@ -268,7 +268,9 @@ export type ProcessingRunType =
   | "deep_scan"
   | "deep_analysis"
   | "kpi_scoring"
-  | "valuation_support";
+  | "valuation_support"
+  | "swot_analysis"
+  | "missing_info_detection";
 
 export type ProcessingRunStatus = "queued" | "running" | "completed" | "failed" | "skipped";
 
