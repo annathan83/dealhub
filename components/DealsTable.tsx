@@ -42,6 +42,9 @@ const VALID_STATUSES: DealStatus[] = ALL_STATUSES;
 type SortKey = "name" | "asking_price" | "sde" | "multiple" | "status" | "created_at" | "updated_at";
 type SortDir = "asc" | "desc";
 
+type SdeFilterKey  = "" | "under250k" | "250-500k" | "500k+";
+type AskFilterKey  = "" | "under1m"   | "1-3m"     | "3m+";
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseNum(val: string | null): number {
@@ -53,45 +56,37 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function formatRelativeDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const days = Math.floor(diffMs / 86_400_000);
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  return formatDate(iso);
-}
-
 /** Format raw financial string to compact display: "300000" → "$300K", "1200000" → "$1.2M" */
 function formatFinancial(raw: string | null): string | null {
   if (!raw) return null;
   const n = parseFloat(raw.replace(/[^0-9.-]/g, ""));
-  if (isNaN(n)) return raw; // already formatted (e.g. "$300K")
+  if (isNaN(n)) return raw;
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`;
   if (n >= 1_000) return `$${Math.round(n / 1_000)}K`;
   return `$${Math.round(n)}`;
 }
 
-/** Derive a detected stage label from deal fields */
-function detectStage(deal: Deal): string | null {
-  if (deal.status === "passed") return null;
-  if (deal.status === "closed") return "Acquired";
-  // Heuristic: if triaged and has financials, show "Analyzing"
-  if (deal.triaged_at && deal.sde && deal.asking_price) return "Analyzing";
-  if (deal.triaged_at) return "Triaged";
-  if (deal.google_drive_folder_id) return "In Review";
-  return null;
+/** Match a raw numeric string against a SDE bucket filter */
+function matchSdeFilter(raw: string | null, filter: SdeFilterKey): boolean {
+  if (!filter) return true;
+  const n = parseNum(raw);
+  if (n === -Infinity) return false;
+  if (filter === "under250k") return n < 250_000;
+  if (filter === "250-500k")  return n >= 250_000 && n < 500_000;
+  if (filter === "500k+")     return n >= 500_000;
+  return true;
 }
 
-const STAGE_STYLES: Record<string, string> = {
-  "Acquired":   "bg-emerald-50 text-emerald-700 border border-emerald-100",
-  "Analyzing":  "bg-violet-50 text-violet-700 border border-violet-100",
-  "Triaged":    "bg-blue-50 text-blue-700 border border-blue-100",
-  "In Review":  "bg-amber-50 text-amber-700 border border-amber-100",
-};
+/** Match a raw numeric string against an Ask Price bucket filter */
+function matchAskFilter(raw: string | null, filter: AskFilterKey): boolean {
+  if (!filter) return true;
+  const n = parseNum(raw);
+  if (n === -Infinity) return false;
+  if (filter === "under1m") return n < 1_000_000;
+  if (filter === "1-3m")    return n >= 1_000_000 && n < 3_000_000;
+  if (filter === "3m+")     return n >= 3_000_000;
+  return true;
+}
 
 /** Industry → emoji icon */
 function industryIcon(industry: string | null): string {
@@ -117,25 +112,7 @@ function industryIcon(industry: string | null): string {
   return "🏢";
 }
 
-/** Derive small activity signals from deal fields */
-function getActivitySignals(deal: Deal): { icon: string; label: string }[] {
-  const signals: { icon: string; label: string }[] = [];
-  if (deal.triaged_at) signals.push({ icon: "🧠", label: "Facts extracted" });
-  if (deal.google_drive_folder_id) signals.push({ icon: "📁", label: "Drive connected" });
-  // Recency signal
-  const updatedDays = Math.floor(
-    (Date.now() - new Date(deal.updated_at).getTime()) / 86_400_000
-  );
-  if (updatedDays <= 1) signals.push({ icon: "⚡", label: "Updated today" });
-  else if (updatedDays <= 3) signals.push({ icon: "🔄", label: "Recent activity" });
-  return signals.slice(0, 3);
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Dash() {
-  return <span className="text-slate-300 select-none">—</span>;
-}
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   return (
@@ -160,49 +137,6 @@ function StatusBadge({ status }: { status: DealStatus }) {
   );
 }
 
-function StageBadge({ stage }: { stage: string }) {
-  const cls = STAGE_STYLES[stage] ?? "bg-slate-50 text-slate-500 border border-slate-200";
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>
-      {stage}
-    </span>
-  );
-}
-
-/** Compact financial trio: SDE / Ask / Multiple */
-function FinancialGroup({ deal }: { deal: Deal }) {
-  const sde = formatFinancial(deal.sde);
-  const ask = formatFinancial(deal.asking_price);
-  const mult = deal.multiple ? `${deal.multiple}×` : null;
-
-  if (!sde && !ask && !mult) {
-    return <span className="text-[11px] text-slate-300 italic">No financials</span>;
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      {sde && (
-        <div className="text-right">
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none mb-0.5">SDE</p>
-          <p className="text-sm font-bold text-slate-800 tabular-nums leading-none">{sde}</p>
-        </div>
-      )}
-      {ask && (
-        <div className="text-right">
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none mb-0.5">Ask</p>
-          <p className="text-sm font-semibold text-slate-600 tabular-nums leading-none">{ask}</p>
-        </div>
-      )}
-      {mult && (
-        <div className="text-right">
-          <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none mb-0.5">Mult</p>
-          <p className="text-sm font-semibold text-slate-500 tabular-nums leading-none">{mult}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Mobile deal card ─────────────────────────────────────────────────────────
 
 function DealCard({ deal }: { deal: Deal }) {
@@ -210,8 +144,6 @@ function DealCard({ deal }: { deal: Deal }) {
   const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
   const displayIndustry = deal.industry ?? deal.industry_category;
   const icon = industryIcon(displayIndustry);
-  const stage = detectStage(deal);
-  const signals = getActivitySignals(deal);
 
   const subtitle = [
     displayIndustry ? `${icon} ${displayIndustry}` : null,
@@ -220,45 +152,51 @@ function DealCard({ deal }: { deal: Deal }) {
     .filter(Boolean)
     .join("  ·  ");
 
+  const sde = formatFinancial(deal.sde);
+  const ask = formatFinancial(deal.asking_price);
+
   return (
     <div
       onClick={() => router.push(`/deals/${deal.id}`)}
-      className="group bg-white rounded-2xl border border-slate-100 shadow-sm active:scale-[0.99] active:shadow-none transition-all duration-100 cursor-pointer overflow-hidden hover:border-indigo-100 hover:shadow-md"
+      className="group bg-white rounded-xl border border-slate-100 shadow-sm active:scale-[0.99] active:shadow-none transition-all duration-100 cursor-pointer overflow-hidden hover:border-indigo-100 hover:shadow-md"
     >
-      <div className="px-4 pt-4 pb-3">
-        {/* Deal name + badges */}
+      <div className="px-4 pt-3.5 pb-3">
+        {/* Deal name + status */}
         <div className="flex items-start justify-between gap-3 mb-1">
-          <p className="font-bold text-slate-900 text-[15px] leading-snug group-hover:text-indigo-700 transition-colors line-clamp-2 flex-1 min-w-0">
+          <p className="font-bold text-slate-900 text-[14px] leading-snug group-hover:text-indigo-700 transition-colors line-clamp-2 flex-1 min-w-0">
             {deal.name}
           </p>
-          <div className="flex items-center gap-1.5 shrink-0 mt-0.5 flex-wrap justify-end">
-            {stage && <StageBadge stage={stage} />}
+          <div className="shrink-0 mt-0.5">
             <StatusBadge status={deal.status} />
           </div>
         </div>
 
         {/* Subtitle: industry · location */}
         {subtitle && (
-          <p className="text-xs text-slate-400 truncate mb-3 leading-relaxed">{subtitle}</p>
+          <p className="text-[11px] text-slate-400 truncate mb-2.5 leading-relaxed">{subtitle}</p>
         )}
 
-        {/* Financials */}
-        <div className="mb-2.5">
-          <FinancialGroup deal={deal} />
-        </div>
-
-        {/* Bottom row: signals + date */}
-        <div className="flex items-center justify-between gap-2 mt-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            {signals.map((s) => (
-              <span key={s.label} className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-                <span>{s.icon}</span>
-                <span>{s.label}</span>
-              </span>
-            ))}
+        {/* Financials + created date */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            {sde && (
+              <div>
+                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none mb-0.5">SDE</p>
+                <p className="text-sm font-bold text-slate-800 tabular-nums leading-none">{sde}</p>
+              </div>
+            )}
+            {ask && (
+              <div>
+                <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wide leading-none mb-0.5">Ask</p>
+                <p className="text-sm font-semibold text-slate-600 tabular-nums leading-none">{ask}</p>
+              </div>
+            )}
+            {!sde && !ask && (
+              <span className="text-[11px] text-slate-300 italic">No financials</span>
+            )}
           </div>
           <span className="text-[11px] text-slate-300 tabular-nums shrink-0">
-            {formatRelativeDate(deal.updated_at)}
+            {formatDate(deal.created_at)}
           </span>
         </div>
       </div>
@@ -272,12 +210,10 @@ function DealCard({ deal }: { deal: Deal }) {
 
 // ─── Desktop deal row ─────────────────────────────────────────────────────────
 
-function DealRow({ deal, onClick }: { deal: Deal; onClick: () => void }) {
+function DealRow({ deal, index, onClick }: { deal: Deal; index: number; onClick: () => void }) {
   const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
   const displayIndustry = deal.industry ?? deal.industry_category;
   const icon = industryIcon(displayIndustry);
-  const stage = detectStage(deal);
-  const signals = getActivitySignals(deal);
 
   const subtitle = [
     displayIndustry ? `${icon} ${displayIndustry}` : null,
@@ -286,53 +222,56 @@ function DealRow({ deal, onClick }: { deal: Deal; onClick: () => void }) {
     .filter(Boolean)
     .join("  ·  ");
 
+  const sde = formatFinancial(deal.sde);
+  const ask = formatFinancial(deal.asking_price);
+
+  const rowBg = index % 2 === 1 ? "bg-slate-50/40" : "bg-white";
+
   return (
     <tr
       onClick={onClick}
-      className="cursor-pointer group hover:bg-indigo-50/40 transition-colors border-b border-slate-50 last:border-0"
+      className={`cursor-pointer group hover:bg-indigo-50/50 transition-colors border-b border-slate-100 last:border-0 ${rowBg}`}
     >
       {/* Deal identity */}
-      <td className="px-5 py-3.5">
+      <td className="px-5 py-2.5">
         <div className="flex flex-col gap-0.5">
-          <span className="font-bold text-[14px] text-slate-900 group-hover:text-indigo-700 transition-colors leading-snug">
+          <span className="font-semibold text-[13px] text-slate-900 group-hover:text-indigo-700 transition-colors leading-snug">
             {deal.name}
           </span>
           {subtitle && (
-            <span className="text-[12px] text-slate-400 leading-relaxed">{subtitle}</span>
-          )}
-          {signals.length > 0 && (
-            <div className="flex items-center gap-2 mt-0.5">
-              {signals.map((s) => (
-                <span key={s.label} className="inline-flex items-center gap-0.5 text-[11px] text-slate-300">
-                  <span>{s.icon}</span>
-                  <span>{s.label}</span>
-                </span>
-              ))}
-            </div>
+            <span className="text-[11px] text-slate-400 leading-relaxed">{subtitle}</span>
           )}
         </div>
       </td>
 
-      {/* Financials grouped */}
-      <td className="px-5 py-3.5">
-        <FinancialGroup deal={deal} />
+      {/* SDE */}
+      <td className="px-5 py-2.5 tabular-nums">
+        {sde
+          ? <span className="text-[13px] font-bold text-slate-800">{sde}</span>
+          : <span className="text-[12px] text-slate-300">—</span>
+        }
       </td>
 
-      {/* Stage + Status badges */}
-      <td className="px-5 py-3.5">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {stage && <StageBadge stage={stage} />}
-          <StatusBadge status={deal.status} />
-        </div>
+      {/* Ask Price */}
+      <td className="px-5 py-2.5 tabular-nums">
+        {ask
+          ? <span className="text-[13px] font-semibold text-slate-600">{ask}</span>
+          : <span className="text-[12px] text-slate-300">—</span>
+        }
       </td>
 
-      {/* Updated */}
-      <td className="px-5 py-3.5 text-[12px] text-slate-400 tabular-nums whitespace-nowrap">
-        {formatRelativeDate(deal.updated_at)}
+      {/* Status */}
+      <td className="px-5 py-2.5">
+        <StatusBadge status={deal.status} />
+      </td>
+
+      {/* Created */}
+      <td className="px-5 py-2.5 text-[12px] text-slate-400 tabular-nums whitespace-nowrap">
+        {formatDate(deal.created_at)}
       </td>
 
       {/* Arrow */}
-      <td className="pr-4 py-3.5 w-8">
+      <td className="pr-4 py-2.5 w-8">
         <svg
           className="w-4 h-4 text-slate-200 group-hover:text-indigo-400 transition-colors"
           fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -350,13 +289,15 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<DealStatus | "all">("all");
+  const [search, setSearch]               = useState("");
+  const [statusFilter, setStatusFilter]   = useState<DealStatus | "all">("all");
   const [industryFilter, setIndustryFilter] = useState("");
-  const [stateFilter, setStateFilter] = useState("");
-  const [sourceFilter, setSourceFilter] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [stateFilter, setStateFilter]     = useState("");
+  const [sourceFilter, setSourceFilter]   = useState("");
+  const [sdeFilter, setSdeFilter]         = useState<SdeFilterKey>("");
+  const [askFilter, setAskFilter]         = useState<AskFilterKey>("");
+  const [sortKey, setSortKey]             = useState<SortKey>("updated_at");
+  const [sortDir, setSortDir]             = useState<SortDir>("desc");
   const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   useEffect(() => {
@@ -385,33 +326,32 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
         displayLocation.toLowerCase().includes(q) ||
         deal.deal_source_category?.toLowerCase().includes(q) ||
         deal.deal_source_detail?.toLowerCase().includes(q);
-      const matchesStatus = statusFilter === "all" || deal.status === statusFilter;
-      const matchesIndustry =
-        !industryFilter ||
-        deal.industry_category === industryFilter ||
-        deal.industry === industryFilter;
-      const matchesState = !stateFilter || deal.state === stateFilter;
-      const matchesSource = !sourceFilter || deal.deal_source_category === sourceFilter;
-      return matchesSearch && matchesStatus && matchesIndustry && matchesState && matchesSource;
+      const matchesStatus   = statusFilter === "all" || deal.status === statusFilter;
+      const matchesIndustry = !industryFilter || deal.industry_category === industryFilter || deal.industry === industryFilter;
+      const matchesState    = !stateFilter || deal.state === stateFilter;
+      const matchesSource   = !sourceFilter || deal.deal_source_category === sourceFilter;
+      const matchesSde      = matchSdeFilter(deal.sde, sdeFilter);
+      const matchesAsk      = matchAskFilter(deal.asking_price, askFilter);
+      return matchesSearch && matchesStatus && matchesIndustry && matchesState && matchesSource && matchesSde && matchesAsk;
     });
 
     list = [...list].sort((a, b) => {
       let cmp = 0;
-      if (sortKey === "name") cmp = a.name.localeCompare(b.name);
+      if (sortKey === "name")          cmp = a.name.localeCompare(b.name);
       else if (sortKey === "asking_price") cmp = parseNum(a.asking_price) - parseNum(b.asking_price);
-      else if (sortKey === "sde") cmp = parseNum(a.sde) - parseNum(b.sde);
+      else if (sortKey === "sde")      cmp = parseNum(a.sde) - parseNum(b.sde);
       else if (sortKey === "multiple") cmp = parseNum(a.multiple) - parseNum(b.multiple);
-      else if (sortKey === "status") cmp = a.status.localeCompare(b.status);
-      else if (sortKey === "created_at") cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      else if (sortKey === "updated_at") cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+      else if (sortKey === "status")   cmp = a.status.localeCompare(b.status);
+      else if (sortKey === "created_at")  cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      else if (sortKey === "updated_at")  cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
       return sortDir === "asc" ? cmp : -cmp;
     });
 
     return list;
-  }, [deals, search, statusFilter, industryFilter, stateFilter, sourceFilter, sortKey, sortDir]);
+  }, [deals, search, statusFilter, industryFilter, stateFilter, sourceFilter, sdeFilter, askFilter, sortKey, sortDir]);
 
-  const isFiltered = search || statusFilter !== "all" || industryFilter || stateFilter || sourceFilter;
-  const hasSecondaryFilters = industryFilter || stateFilter || sourceFilter;
+  const hasSecondaryFilters = !!(industryFilter || stateFilter || sourceFilter || sdeFilter || askFilter);
+  const isFiltered = !!(search || statusFilter !== "all" || hasSecondaryFilters);
 
   const SELECT_CLS =
     "rounded-lg border border-slate-200 bg-white pl-3 pr-8 py-1.5 text-xs text-slate-600 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition appearance-none cursor-pointer";
@@ -422,7 +362,7 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
     const isActive = sortable && sortKey === colKey;
     return (
       <th
-        className={`px-5 py-3 text-[11px] font-bold text-slate-400 tracking-widest uppercase whitespace-nowrap select-none ${align === "right" ? "text-right" : "text-left"} ${sortable ? "cursor-pointer hover:text-slate-700 transition-colors" : ""}`}
+        className={`px-5 py-2.5 text-[10px] font-bold text-slate-400 tracking-widest uppercase whitespace-nowrap select-none ${align === "right" ? "text-right" : "text-left"} ${sortable ? "cursor-pointer hover:text-slate-700 transition-colors" : ""}`}
         onClick={sortable && colKey ? () => handleSort(colKey) : undefined}
       >
         <span className="inline-flex items-center gap-0.5">
@@ -434,45 +374,66 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
 
-      {/* ── Search + filter row ──────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2.5">
+      {/* ── Filter bar ───────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-2">
 
-        {/* Search */}
-        <div className="relative">
-          <svg
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search deals by name, industry, location…"
-            className="w-full pl-10 pr-9 py-2.5 text-sm rounded-xl border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-
-        {/* Status filter pills + secondary filter toggle */}
+        {/* Row 1: Filters button + Search + Status pills */}
         <div className="flex items-center gap-2 flex-wrap">
+
+          {/* Filters toggle — before search */}
+          <button
+            onClick={() => setShowMoreFilters((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
+              hasSecondaryFilters
+                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 8h10M11 12h2" />
+            </svg>
+            Filters
+            {hasSecondaryFilters && (
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            )}
+          </button>
+
+          {/* Search */}
+          <div className="relative flex-1 min-w-[160px]">
+            <svg
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+            </svg>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search deals…"
+              className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Separator */}
+          <div className="h-5 w-px bg-slate-200" />
 
           {/* All pill */}
           <button
             onClick={() => setStatusFilter("all")}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
               statusFilter === "all"
                 ? "bg-slate-900 text-white shadow-sm"
                 : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-800"
@@ -494,7 +455,7 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
                   isActive ? styles.pillActive : styles.pill
                 }`}
               >
@@ -507,27 +468,6 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
             );
           })}
 
-          {/* Separator */}
-          <div className="h-5 w-px bg-slate-200 mx-0.5" />
-
-          {/* More filters toggle */}
-          <button
-            onClick={() => setShowMoreFilters((v) => !v)}
-            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap ${
-              hasSecondaryFilters
-                ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-700"
-            }`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 8h10M11 12h2" />
-            </svg>
-            Filters
-            {hasSecondaryFilters && (
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-            )}
-          </button>
-
           {/* Clear */}
           {isFiltered && (
             <button
@@ -537,6 +477,8 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                 setIndustryFilter("");
                 setStateFilter("");
                 setSourceFilter("");
+                setSdeFilter("");
+                setAskFilter("");
               }}
               className="ml-auto text-xs text-slate-400 hover:text-slate-700 transition-colors whitespace-nowrap"
             >
@@ -545,9 +487,10 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
           )}
         </div>
 
-        {/* Secondary filters (collapsible) */}
+        {/* Row 2: Secondary filters (collapsible) */}
         {showMoreFilters && (
-          <div className="flex items-center gap-2 flex-wrap pt-1">
+          <div className="flex items-center gap-2 flex-wrap pt-0.5 pl-0.5">
+
             {/* Industry */}
             <div className="relative">
               <select
@@ -598,6 +541,41 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </div>
+
+            {/* SDE filter */}
+            <div className="relative">
+              <select
+                value={sdeFilter}
+                onChange={(e) => setSdeFilter(e.target.value as SdeFilterKey)}
+                className={`${SELECT_CLS} ${sdeFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+              >
+                <option value="">Any SDE</option>
+                <option value="under250k">SDE &lt; $250K</option>
+                <option value="250-500k">SDE $250K – $500K</option>
+                <option value="500k+">SDE $500K+</option>
+              </select>
+              <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
+            {/* Ask Price filter */}
+            <div className="relative">
+              <select
+                value={askFilter}
+                onChange={(e) => setAskFilter(e.target.value as AskFilterKey)}
+                className={`${SELECT_CLS} ${askFilter ? "border-indigo-300 text-indigo-700 bg-indigo-50" : ""}`}
+              >
+                <option value="">Any ask price</option>
+                <option value="under1m">Ask &lt; $1M</option>
+                <option value="1-3m">Ask $1M – $3M</option>
+                <option value="3m+">Ask $3M+</option>
+              </select>
+              <svg className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+
           </div>
         )}
       </div>
@@ -637,29 +615,31 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
       {filtered.length > 0 && (
         <>
           {/* ── Mobile cards ─────────────────────────────────────────────── */}
-          <div className="md:hidden flex flex-col gap-3">
+          <div className="md:hidden flex flex-col gap-2.5">
             {filtered.map((deal) => (
               <DealCard key={deal.id} deal={deal} />
             ))}
           </div>
 
           {/* ── Desktop table ─────────────────────────────────────────────── */}
-          <div className="hidden md:block rounded-2xl border border-slate-100 bg-white overflow-hidden shadow-sm">
+          <div className="hidden md:block rounded-xl border border-slate-150 bg-white overflow-hidden shadow-sm">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/60">
-                  <Th label="Deal" sortable colKey="name" />
-                  <Th label="Financials" sortable colKey="sde" />
-                  <Th label="Stage / Status" sortable colKey="status" />
-                  <Th label="Updated" sortable colKey="updated_at" />
+                <tr className="border-b border-slate-100 bg-slate-50/80">
+                  <Th label="Deal"      sortable colKey="name" />
+                  <Th label="SDE"       sortable colKey="sde" />
+                  <Th label="Ask Price" sortable colKey="asking_price" />
+                  <Th label="Status"    sortable colKey="status" />
+                  <Th label="Created"   sortable colKey="created_at" />
                   <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((deal) => (
+                {filtered.map((deal, i) => (
                   <DealRow
                     key={deal.id}
                     deal={deal}
+                    index={i}
                     onClick={() => router.push(`/deals/${deal.id}`)}
                   />
                 ))}
