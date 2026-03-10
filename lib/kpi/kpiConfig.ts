@@ -39,6 +39,15 @@ export type KpiScorecardResult = {
   kpis: KpiScore[];
   missing_count: number;
   coverage_pct: number;
+  // Scoring transparency (populated after persistence)
+  confidence?: {
+    confidence_score: number;       // 0–100: reliability of scoring inputs
+    total_facts_used: number;
+    document_backed_count: number;
+    manual_count: number;
+    inferred_count: number;
+    override_count: number;
+  } | null;
 };
 
 // Input facts fed into the scoring engine

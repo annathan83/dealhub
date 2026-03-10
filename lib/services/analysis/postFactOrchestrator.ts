@@ -4,9 +4,15 @@
  * Single entry point called after ANY fact change (extraction, manual edit,
  * conflict resolution). Runs the full downstream pipeline:
  *
- *   1. Deterministic KPI scoring  (no AI, fast)
- *   2. SWOT analysis              (AI, facts-only)
- *   3. Missing info detection     (deterministic, no AI)
+ *   1. Fact inference             (deterministic, derives facts from known facts)
+ *   2. Deterministic KPI scoring  (no AI, fast)
+ *   3. SWOT analysis              (AI, facts-only)
+ *   4. Missing info detection     (deterministic, no AI)
+ *
+ * Pipeline order matters:
+ *   - Inference runs FIRST so inferred facts are available for scoring
+ *   - Scoring runs AFTER inference so it uses the most complete fact set
+ *   - SWOT and missing info run in parallel after scoring
  *
  * All steps are fire-and-forget (non-fatal). The caller does not need to
  * await this — it runs in the background after the fact is saved.
@@ -15,6 +21,7 @@
  */
 
 import { scoreAndPersistKpis, type ScoreTriggerType } from "@/lib/kpi/kpiScoringService";
+import { runAndApplyFactInference } from "@/lib/services/facts/factInferenceService";
 import { generateSwotFromFacts } from "./swotAnalysisService";
 import { detectMissingInfo } from "./missingInfoService";
 
@@ -35,22 +42,34 @@ export type PostFactTrigger = {
 export async function runPostFactPipeline(trigger: PostFactTrigger): Promise<void> {
   const { entityId, entityTypeId, entityTitle, industry } = trigger;
 
-  // Step 1: Deterministic KPI scoring (fast, no AI)
-  scoreAndPersistKpis(entityId, entityTypeId, {
-    triggerType: trigger.triggerType,
-    triggerReason: trigger.triggerReason ?? null,
-    changedFactKey: trigger.changedFactKey ?? null,
-  }).catch((err) => {
-    console.error("[postFactOrchestrator] KPI scoring failed (non-fatal):", err);
-  });
+  try {
+    // Step 1: Fact inference — derive estimated facts from known facts
+    // Runs synchronously first so inferred facts are available for scoring.
+    // Never overwrites confirmed or document-backed facts.
+    await runAndApplyFactInference(entityId, entityTypeId /* reserved for industry overlays */).catch((err) => {
+      console.error("[postFactOrchestrator] Fact inference failed (non-fatal):", err);
+    });
 
-  // Step 2: SWOT analysis from facts (AI, runs after a short delay to let scoring settle)
-  generateSwotFromFacts(entityId, entityTypeId, entityTitle).catch((err) => {
-    console.error("[postFactOrchestrator] SWOT generation failed (non-fatal):", err);
-  });
+    // Step 2: Deterministic KPI scoring (fast, no AI)
+    // Runs after inference so inferred facts contribute to the score.
+    scoreAndPersistKpis(entityId, entityTypeId, {
+      triggerType: trigger.triggerType,
+      triggerReason: trigger.triggerReason ?? null,
+      changedFactKey: trigger.changedFactKey ?? null,
+    }).catch((err) => {
+      console.error("[postFactOrchestrator] KPI scoring failed (non-fatal):", err);
+    });
 
-  // Step 3: Missing info detection (deterministic, fast)
-  detectMissingInfo(entityId, entityTypeId, industry).catch((err) => {
-    console.error("[postFactOrchestrator] Missing info detection failed (non-fatal):", err);
-  });
+    // Steps 3 + 4: SWOT and missing info run in parallel (both read facts only)
+    generateSwotFromFacts(entityId, entityTypeId, entityTitle).catch((err) => {
+      console.error("[postFactOrchestrator] SWOT generation failed (non-fatal):", err);
+    });
+
+    detectMissingInfo(entityId, entityTypeId, industry).catch((err) => {
+      console.error("[postFactOrchestrator] Missing info detection failed (non-fatal):", err);
+    });
+
+  } catch (err) {
+    console.error("[postFactOrchestrator] Pipeline failed (non-fatal):", err);
+  }
 }
