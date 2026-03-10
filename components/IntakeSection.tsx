@@ -55,21 +55,26 @@ function getKindLabel(kind: FileKind): string {
   }[kind];
 }
 
-/** Clean display name: strip extension for non-notes, use AI title when available */
+/** Clean display name: always show actual filename (no extension), prefer AI title when meaningfully different */
 function getDisplayName(file: EntityFile, kind: FileKind): string {
-  // For notes/pasted text prefer the AI-generated title
-  if (kind === "note") {
-    if (file.title && !file.title.toLowerCase().startsWith("note")) return file.title;
+  // Base: strip extension from the raw filename
+  const baseName = file.file_name.replace(/\.[^.]+$/, "").trim() || file.file_name;
+
+  // Use AI-generated title only if it's meaningfully different from the raw filename
+  if (file.title) {
+    const rawLower = baseName.toLowerCase();
+    const titleLower = file.title.trim().toLowerCase();
+    if (titleLower !== rawLower && titleLower.length > 2 && !titleLower.startsWith("untitled")) {
+      return file.title.trim();
+    }
+  }
+
+  // For pasted text with no real filename, fall back to "Note"
+  if (kind === "note" && (baseName === "" || baseName.toLowerCase() === "note" || baseName.match(/^[a-f0-9-]{8,}$/i))) {
     return "Note";
   }
-  // Use AI title if meaningfully different from raw filename
-  if (file.title) {
-    const raw = file.file_name.replace(/\.[^.]+$/, "").trim().toLowerCase();
-    const title = file.title.trim().toLowerCase();
-    if (title !== raw && title.length > 2) return file.title.trim();
-  }
-  // Strip extension from filename for clean display
-  return file.file_name.replace(/\.[^.]+$/, "");
+
+  return baseName;
 }
 
 // ─── File kind icon ───────────────────────────────────────────────────────────
