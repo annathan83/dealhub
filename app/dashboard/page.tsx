@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Suspense } from "react";
 import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
 import type { Deal } from "@/types";
@@ -208,7 +209,13 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── Deals pipeline ────────────────────────────────────────────── */}
-        <DealsTable deals={dealList} scoreMap={scoreMap} />
+        <Suspense fallback={
+          <div className="py-16 flex items-center justify-center">
+            <div className="w-5 h-5 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin" />
+          </div>
+        }>
+          <DealsTable deals={dealList} scoreMap={scoreMap} />
+        </Suspense>
 
       </main>
     </div>
