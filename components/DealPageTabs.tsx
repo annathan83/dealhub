@@ -595,9 +595,9 @@ export default function DealPageTabs({
       })()
     : 0;
 
-  // Badge: show score if available
-  const analysisBadge = kpiScorecard?.overall_score_100 != null
-    ? String(kpiScorecard.overall_score_100)
+  // Badge: show 0–10 score if available
+  const analysisBadge = kpiScorecard?.overall_score != null
+    ? String(kpiScorecard.overall_score)
     : null;
 
   return (

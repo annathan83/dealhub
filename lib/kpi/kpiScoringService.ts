@@ -42,8 +42,9 @@ async function writeScoreHistory(params: {
 }): Promise<void> {
   try {
     const supabase = await createClient();
+    // overall_score is natively 0–10; overall_score_10 mirrors it for backward compat
     const overall10 = params.scorecard.overall_score !== null
-      ? Math.round(params.scorecard.overall_score * 2 * 10) / 10  // 1–5 → 1–10
+      ? Math.round(params.scorecard.overall_score * 10) / 10
       : null;
 
     await supabase.from("score_history").insert({
@@ -161,10 +162,10 @@ export function computeKpiScorecard(
   if (scoredKpis.length > 0) {
     const totalWeight = scoredKpis.reduce((sum, k) => sum + k.weight, 0);
     const weightedSum = scoredKpis.reduce((sum, k) => sum + (k.weighted_score ?? 0), 0);
-    // Re-normalize to account for missing KPIs
+    // Re-normalize to account for missing KPIs; result is natively 0–10
     overallScore = totalWeight > 0 ? weightedSum / totalWeight : null;
-    // Scale 1–5 → 0–100
-    overallScore100 = overallScore !== null ? Math.round(((overallScore - 1) / 4) * 100) : null;
+    // overall_score_100 = score * 10, used for progress bars
+    overallScore100 = overallScore !== null ? Math.round(overallScore * 10) : null;
   }
 
   const coveragePct = kpis.length > 0

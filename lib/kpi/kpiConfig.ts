@@ -4,12 +4,13 @@
  * Single source of truth for all KPI definitions, weights, and scoring logic.
  * To add a new KPI: add an entry here. Nothing else needs to change.
  *
- * Scoring scale: 1–5
- *   5 = excellent
- *   4 = good
- *   3 = average / acceptable
- *   2 = below average / concern
- *   1 = poor / red flag
+ * Scoring scale: 0–10
+ *   10 = excellent
+ *   8  = good
+ *   6  = average / acceptable
+ *   4  = below average / concern
+ *   2  = poor / red flag
+ *   0  = critical failure
  *
  * Weights must sum to 1.0 across all KPIs.
  *
@@ -25,7 +26,7 @@ export type KpiScore = {
   kpi_key: string;
   label: string;
   raw_value: string | null;
-  score: number | null;          // 1–5, null if missing
+  score: number | null;          // 0–10, null if missing
   weight: number;
   weighted_score: number | null; // score * weight, null if missing
   rationale: string;
@@ -33,8 +34,8 @@ export type KpiScore = {
 };
 
 export type KpiScorecardResult = {
-  overall_score: number | null;  // weighted average of non-missing KPIs, 1–5 scale
-  overall_score_100: number | null; // scaled to 0–100 for display
+  overall_score: number | null;     // weighted average of non-missing KPIs, 0–10 scale
+  overall_score_100: number | null; // overall_score * 10, for progress bars (0–100)
   kpis: KpiScore[];
   missing_count: number;
   coverage_pct: number;
@@ -95,7 +96,7 @@ function formatPct(n: number): string {
 export const KPI_DEFINITIONS: KpiDefinition[] = [
 
   // ── 1. Asking Price ──────────────────────────────────────────────────────────
-  // Informational only — score reflects whether it's present and reasonable
+  // Informational only — neutral score since price alone can't be judged without multiple
   {
     kpi_key: "asking_price",
     label: "Asking Price",
@@ -104,7 +105,7 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
     score: ({ asking_price }) => {
       if (!asking_price) return missing("Asking price");
       return {
-        score: 3, // neutral — price alone doesn't score good/bad without multiple
+        score: 6, // neutral — evaluate alongside multiple and SDE
         raw_value: formatCurrency(asking_price),
         rationale: `Asking price is ${formatCurrency(asking_price)}. Evaluate alongside multiple and SDE.`,
         status: "known",
@@ -123,15 +124,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (revenue_latest >= 2_000_000) {
-        score = 5; rationale = `Strong revenue of ${formatCurrency(revenue_latest)}.`;
+        score = 10; rationale = `Strong revenue of ${formatCurrency(revenue_latest)}.`;
       } else if (revenue_latest >= 1_000_000) {
-        score = 4; rationale = `Solid revenue of ${formatCurrency(revenue_latest)}.`;
+        score = 8;  rationale = `Solid revenue of ${formatCurrency(revenue_latest)}.`;
       } else if (revenue_latest >= 500_000) {
-        score = 3; rationale = `Moderate revenue of ${formatCurrency(revenue_latest)}.`;
+        score = 6;  rationale = `Moderate revenue of ${formatCurrency(revenue_latest)}.`;
       } else if (revenue_latest >= 200_000) {
-        score = 2; rationale = `Low revenue of ${formatCurrency(revenue_latest)} — limited scale.`;
+        score = 4;  rationale = `Low revenue of ${formatCurrency(revenue_latest)} — limited scale.`;
       } else {
-        score = 1; rationale = `Very low revenue of ${formatCurrency(revenue_latest)}.`;
+        score = 2;  rationale = `Very low revenue of ${formatCurrency(revenue_latest)}.`;
       }
       return { score, raw_value: formatCurrency(revenue_latest), rationale, status: "known" };
     },
@@ -150,15 +151,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (earnings >= 500_000) {
-        score = 5; rationale = `Strong ${label} of ${formatCurrency(earnings)}.`;
+        score = 10; rationale = `Strong ${label} of ${formatCurrency(earnings)}.`;
       } else if (earnings >= 250_000) {
-        score = 4; rationale = `Good ${label} of ${formatCurrency(earnings)}.`;
+        score = 8;  rationale = `Good ${label} of ${formatCurrency(earnings)}.`;
       } else if (earnings >= 100_000) {
-        score = 3; rationale = `Acceptable ${label} of ${formatCurrency(earnings)}.`;
+        score = 6;  rationale = `Acceptable ${label} of ${formatCurrency(earnings)}.`;
       } else if (earnings >= 50_000) {
-        score = 2; rationale = `Low ${label} of ${formatCurrency(earnings)} — thin cushion.`;
+        score = 4;  rationale = `Low ${label} of ${formatCurrency(earnings)} — thin cushion.`;
       } else {
-        score = 1; rationale = `Very low ${label} of ${formatCurrency(earnings)}.`;
+        score = 2;  rationale = `Very low ${label} of ${formatCurrency(earnings)}.`;
       }
       const status: KpiStatus = sde_latest ? "known" : "estimated";
       return { score, raw_value: formatCurrency(earnings), rationale, status };
@@ -178,15 +179,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (multiple <= 2.0) {
-        score = 5; rationale = `Excellent multiple of ${multiple.toFixed(2)}x — strong value.`;
+        score = 10; rationale = `Excellent multiple of ${multiple.toFixed(2)}x — strong value.`;
       } else if (multiple <= 3.0) {
-        score = 4; rationale = `Good multiple of ${multiple.toFixed(2)}x — fair value.`;
+        score = 8;  rationale = `Good multiple of ${multiple.toFixed(2)}x — fair value.`;
       } else if (multiple <= 4.0) {
-        score = 3; rationale = `Average multiple of ${multiple.toFixed(2)}x — market rate.`;
+        score = 6;  rationale = `Average multiple of ${multiple.toFixed(2)}x — market rate.`;
       } else if (multiple <= 5.5) {
-        score = 2; rationale = `High multiple of ${multiple.toFixed(2)}x — premium pricing.`;
+        score = 4;  rationale = `High multiple of ${multiple.toFixed(2)}x — premium pricing.`;
       } else {
-        score = 1; rationale = `Very high multiple of ${multiple.toFixed(2)}x — difficult to justify.`;
+        score = 2;  rationale = `Very high multiple of ${multiple.toFixed(2)}x — difficult to justify.`;
       }
       return { score, raw_value: `${multiple.toFixed(2)}x`, rationale, status: "known" };
     },
@@ -205,15 +206,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (margin >= 0.30) {
-        score = 5; rationale = `Excellent margin of ${formatPct(margin)} — highly profitable.`;
+        score = 10; rationale = `Excellent margin of ${formatPct(margin)} — highly profitable.`;
       } else if (margin >= 0.20) {
-        score = 4; rationale = `Good margin of ${formatPct(margin)}.`;
+        score = 8;  rationale = `Good margin of ${formatPct(margin)}.`;
       } else if (margin >= 0.12) {
-        score = 3; rationale = `Average margin of ${formatPct(margin)}.`;
+        score = 6;  rationale = `Average margin of ${formatPct(margin)}.`;
       } else if (margin >= 0.06) {
-        score = 2; rationale = `Thin margin of ${formatPct(margin)} — limited buffer.`;
+        score = 4;  rationale = `Thin margin of ${formatPct(margin)} — limited buffer.`;
       } else {
-        score = 1; rationale = `Very thin margin of ${formatPct(margin)} — high risk.`;
+        score = 2;  rationale = `Very thin margin of ${formatPct(margin)} — high risk.`;
       }
       return { score, raw_value: formatPct(margin), rationale, status: "known" };
     },
@@ -231,15 +232,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (yoy >= 0.15) {
-        score = 5; rationale = `Strong growth of ${formatPct(yoy)} YoY.`;
+        score = 10; rationale = `Strong growth of ${formatPct(yoy)} YoY.`;
       } else if (yoy >= 0.05) {
-        score = 4; rationale = `Steady growth of ${formatPct(yoy)} YoY.`;
+        score = 8;  rationale = `Steady growth of ${formatPct(yoy)} YoY.`;
       } else if (yoy >= -0.02) {
-        score = 3; rationale = `Flat revenue (${formatPct(yoy)} YoY).`;
+        score = 6;  rationale = `Flat revenue (${formatPct(yoy)} YoY).`;
       } else if (yoy >= -0.10) {
-        score = 2; rationale = `Revenue declining ${formatPct(Math.abs(yoy))} YoY — investigate.`;
+        score = 4;  rationale = `Revenue declining ${formatPct(Math.abs(yoy))} YoY — investigate.`;
       } else {
-        score = 1; rationale = `Significant revenue decline of ${formatPct(Math.abs(yoy))} YoY.`;
+        score = 2;  rationale = `Significant revenue decline of ${formatPct(Math.abs(yoy))} YoY.`;
       }
       const status: KpiStatus = revenue_year_2 ? "known" : "estimated";
       return { score, raw_value: `${yoy >= 0 ? "+" : ""}${formatPct(yoy)} YoY`, rationale, status };
@@ -258,15 +259,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (yoy >= 0.15) {
-        score = 5; rationale = `Strong earnings growth of ${formatPct(yoy)} YoY.`;
+        score = 10; rationale = `Strong earnings growth of ${formatPct(yoy)} YoY.`;
       } else if (yoy >= 0.05) {
-        score = 4; rationale = `Steady earnings growth of ${formatPct(yoy)} YoY.`;
+        score = 8;  rationale = `Steady earnings growth of ${formatPct(yoy)} YoY.`;
       } else if (yoy >= -0.02) {
-        score = 3; rationale = `Flat earnings (${formatPct(yoy)} YoY).`;
+        score = 6;  rationale = `Flat earnings (${formatPct(yoy)} YoY).`;
       } else if (yoy >= -0.15) {
-        score = 2; rationale = `Earnings declining ${formatPct(Math.abs(yoy))} YoY.`;
+        score = 4;  rationale = `Earnings declining ${formatPct(Math.abs(yoy))} YoY.`;
       } else {
-        score = 1; rationale = `Significant earnings decline of ${formatPct(Math.abs(yoy))} YoY.`;
+        score = 2;  rationale = `Significant earnings decline of ${formatPct(Math.abs(yoy))} YoY.`;
       }
       return { score, raw_value: `${yoy >= 0 ? "+" : ""}${formatPct(yoy)} YoY`, rationale, status: "known" };
     },
@@ -284,15 +285,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (pct <= 0.10) {
-        score = 5; rationale = `Excellent diversification — top customer is only ${formatPct(pct)}.`;
+        score = 10; rationale = `Excellent diversification — top customer is only ${formatPct(pct)}.`;
       } else if (pct <= 0.20) {
-        score = 4; rationale = `Good diversification — top customer is ${formatPct(pct)}.`;
+        score = 8;  rationale = `Good diversification — top customer is ${formatPct(pct)}.`;
       } else if (pct <= 0.35) {
-        score = 3; rationale = `Moderate concentration — top customer is ${formatPct(pct)}.`;
+        score = 6;  rationale = `Moderate concentration — top customer is ${formatPct(pct)}.`;
       } else if (pct <= 0.50) {
-        score = 2; rationale = `High concentration — top customer is ${formatPct(pct)} of revenue.`;
+        score = 4;  rationale = `High concentration — top customer is ${formatPct(pct)} of revenue.`;
       } else {
-        score = 1; rationale = `Critical concentration — top customer is ${formatPct(pct)} of revenue.`;
+        score = 2;  rationale = `Critical concentration — top customer is ${formatPct(pct)} of revenue.`;
       }
       return { score, raw_value: formatPct(pct), rationale, status: "known" };
     },
@@ -310,15 +311,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let score: number;
       let rationale: string;
       if (pct >= 0.70) {
-        score = 5; rationale = `Excellent — ${formatPct(pct)} recurring revenue.`;
+        score = 10; rationale = `Excellent — ${formatPct(pct)} recurring revenue.`;
       } else if (pct >= 0.50) {
-        score = 4; rationale = `Good — ${formatPct(pct)} recurring revenue.`;
+        score = 8;  rationale = `Good — ${formatPct(pct)} recurring revenue.`;
       } else if (pct >= 0.30) {
-        score = 3; rationale = `Moderate — ${formatPct(pct)} recurring revenue.`;
+        score = 6;  rationale = `Moderate — ${formatPct(pct)} recurring revenue.`;
       } else if (pct >= 0.10) {
-        score = 2; rationale = `Low — only ${formatPct(pct)} recurring revenue.`;
+        score = 4;  rationale = `Low — only ${formatPct(pct)} recurring revenue.`;
       } else {
-        score = 1; rationale = `Minimal recurring revenue (${formatPct(pct)}) — transactional model.`;
+        score = 2;  rationale = `Minimal recurring revenue (${formatPct(pct)}) — transactional model.`;
       }
       return { score, raw_value: formatPct(pct), rationale, status: "known" };
     },
@@ -342,16 +343,16 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
         else if (owner_hours_per_week >= 30) { riskPoints += 1; notes.push(`owner works ${owner_hours_per_week}h/week`); }
         else { notes.push(`owner works ${owner_hours_per_week}h/week`); }
       }
-      if (owner_in_sales === true) { riskPoints += 1; notes.push("owner drives sales"); }
+      if (owner_in_sales === true)      { riskPoints += 1; notes.push("owner drives sales"); }
       if (owner_in_operations === true) { riskPoints += 1; notes.push("owner in operations"); }
-      if (manager_in_place === true) { riskPoints -= 1; notes.push("manager in place"); }
+      if (manager_in_place === true)    { riskPoints -= 1; notes.push("manager in place"); }
 
       let score: number;
-      if (riskPoints <= 0) score = 5;
-      else if (riskPoints === 1) score = 4;
-      else if (riskPoints === 2) score = 3;
-      else if (riskPoints === 3) score = 2;
-      else score = 1;
+      if (riskPoints <= 0) score = 10;
+      else if (riskPoints === 1) score = 8;
+      else if (riskPoints === 2) score = 6;
+      else if (riskPoints === 3) score = 4;
+      else score = 2;
 
       const rationale = notes.length > 0
         ? `Owner dependence indicators: ${notes.join(", ")}.`
@@ -376,15 +377,15 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       let rationale: string;
 
       if (manager_in_place === true && totalEmployees >= 5) {
-        score = 5; rationale = `Strong — manager in place with ${totalEmployees} employees.`;
+        score = 10; rationale = `Strong — manager in place with ${totalEmployees} employees.`;
       } else if (manager_in_place === true) {
-        score = 4; rationale = `Good — manager in place (${totalEmployees} employees).`;
+        score = 8;  rationale = `Good — manager in place (${totalEmployees} employees).`;
       } else if (totalEmployees >= 10) {
-        score = 3; rationale = `${totalEmployees} employees but no confirmed manager in place.`;
+        score = 6;  rationale = `${totalEmployees} employees but no confirmed manager in place.`;
       } else if (totalEmployees >= 3) {
-        score = 2; rationale = `Small team (${totalEmployees} employees), no manager confirmed.`;
+        score = 4;  rationale = `Small team (${totalEmployees} employees), no manager confirmed.`;
       } else {
-        score = 1; rationale = `Minimal team (${totalEmployees} employees) — high key-person risk.`;
+        score = 2;  rationale = `Minimal team (${totalEmployees} employees) — high key-person risk.`;
       }
 
       return { score, raw_value: manager_in_place === true ? "Manager in place" : `${totalEmployees} employees`, rationale, status: "known" };
@@ -402,18 +403,18 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       if (!hasData) return missing("Risk flag data");
 
       const flags: string[] = [];
-      if (legal_risk_flag === true) flags.push("legal risk");
+      if (legal_risk_flag === true)      flags.push("legal risk");
       if (compliance_risk_flag === true) flags.push("compliance risk");
       if (licensing_dependency === true) flags.push("licensing dependency");
 
       let score: number;
       let rationale: string;
       if (flags.length === 0) {
-        score = 5; rationale = "No risk flags identified.";
+        score = 10; rationale = "No risk flags identified.";
       } else if (flags.length === 1) {
-        score = 3; rationale = `One risk flag: ${flags[0]}.`;
+        score = 6;  rationale = `One risk flag: ${flags[0]}.`;
       } else {
-        score = 1; rationale = `Multiple risk flags: ${flags.join(", ")}.`;
+        score = 2;  rationale = `Multiple risk flags: ${flags.join(", ")}.`;
       }
 
       return { score, raw_value: flags.length === 0 ? "None" : flags.join(", "), rationale, status: "known" };

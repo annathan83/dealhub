@@ -11,13 +11,13 @@ type Props = {
 
 // ─── Score bar ────────────────────────────────────────────────────────────────
 
-function ScoreBar({ score, max = 5 }: { score: number | null; max?: number }) {
+function ScoreBar({ score, max = 10 }: { score: number | null; max?: number }) {
   if (score === null) {
     return <div className="w-full h-1.5 bg-slate-100 rounded-full" />;
   }
   const pct = (score / max) * 100;
-  const color = score >= 4 ? "bg-emerald-500"
-    : score >= 3 ? "bg-amber-400"
+  const color = score >= 8 ? "bg-emerald-500"
+    : score >= 5 ? "bg-amber-400"
     : "bg-red-400";
   return (
     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -30,10 +30,10 @@ function ScoreBar({ score, max = 5 }: { score: number | null; max?: number }) {
 
 function ScoreDot({ score }: { score: number | null }) {
   if (score === null) return <span className="text-slate-300 text-sm font-mono">—</span>;
-  const color = score >= 4 ? "text-emerald-600"
-    : score >= 3 ? "text-amber-600"
+  const color = score >= 8 ? "text-emerald-600"
+    : score >= 5 ? "text-amber-600"
     : "text-red-600";
-  return <span className={`text-sm font-bold tabular-nums ${color}`}>{score}/5</span>;
+  return <span className={`text-sm font-bold tabular-nums ${color}`}>{score}/10</span>;
 }
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
