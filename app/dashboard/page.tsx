@@ -32,6 +32,35 @@ export default async function DashboardPage() {
   }
 
   const dealList = (dealsResult.data ?? []) as Deal[];
+
+  // Fetch latest KPI scorecard scores for all deals via their entity bridge
+  // We join entities → analysis_snapshots to get the latest kpi_scorecard per deal
+  const scoreMap: Record<string, number> = {};
+  if (dealList.length > 0) {
+    const { data: snapshots } = await supabase
+      .from("entities")
+      .select("legacy_deal_id, analysis_snapshots!inner(analysis_type, content_json, created_at)")
+      .in("legacy_deal_id", dealList.map((d) => d.id))
+      .eq("analysis_snapshots.analysis_type", "kpi_scorecard")
+      .order("created_at", { referencedTable: "analysis_snapshots", ascending: false });
+
+    if (snapshots) {
+      for (const entity of snapshots) {
+        const dealId = entity.legacy_deal_id as string | null;
+        if (!dealId) continue;
+        // Take the first (latest) snapshot
+        const snaps = Array.isArray(entity.analysis_snapshots)
+          ? entity.analysis_snapshots
+          : [entity.analysis_snapshots];
+        const snap = snaps[0] as { content_json?: { overall_score?: number } } | null;
+        const score = snap?.content_json?.overall_score;
+        if (typeof score === "number" && !scoreMap[dealId]) {
+          // overall_score is 1–5; convert to 1–10 for display
+          scoreMap[dealId] = Math.round(score * 2 * 10) / 10;
+        }
+      }
+    }
+  }
   const isDriveConnected = !!driveResult.data;
 
   const totalDeals  = dealList.length;
@@ -179,7 +208,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* ── Deals pipeline ────────────────────────────────────────────── */}
-        <DealsTable deals={dealList} />
+        <DealsTable deals={dealList} scoreMap={scoreMap} />
 
       </main>
     </div>
