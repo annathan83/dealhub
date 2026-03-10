@@ -103,30 +103,36 @@ function iconForEvent(event: EntityEvent, file?: EntityFile): TimelineIconType {
   }
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Clean display name for a file: prefer AI title, strip extension, cap length */
+function displayFileName(file: EntityFile): string {
+  const raw = file.title ?? file.file_name;
+  // Strip extension for cleaner display
+  const stripped = raw.replace(/\.[^.]+$/, "").trim() || raw;
+  return stripped.length > 40 ? stripped.slice(0, 38) + "…" : stripped;
+}
+
 // ─── Deterministic title templates ───────────────────────────────────────────
 
 function titleForEvent(event: EntityEvent, file?: EntityFile): string {
-  const fileName = file?.title ?? file?.file_name ?? (event.metadata_json?.file_name as string | undefined) ?? "File";
-  const shortName = fileName.length > 40 ? fileName.slice(0, 38) + "…" : fileName;
+  const name = file ? displayFileName(file) : ((event.metadata_json?.file_name as string | undefined) ?? "File");
 
   switch (event.event_type) {
     case "file_uploaded": {
       const mime = file?.mime_type ?? "";
       const ext = (file?.file_name ?? "").split(".").pop()?.toLowerCase() ?? "";
-      if (mime.startsWith("audio/") || ["mp3","m4a","wav","webm","ogg","aac"].includes(ext)) return "Audio added";
-      if (mime.startsWith("image/") || ["png","jpg","jpeg","gif","webp"].includes(ext)) return "Photo added";
-      if (ext === "pdf") return "PDF uploaded";
-      if (["xls","xlsx","csv"].includes(ext)) return "Spreadsheet uploaded";
-      if (["doc","docx"].includes(ext)) return "Document uploaded";
-      if (file?.source_type === "pasted_text") return "Note added";
-      return "File uploaded";
+      if (mime.startsWith("audio/") || ["mp3","m4a","wav","webm","ogg","aac"].includes(ext)) return name;
+      if (mime.startsWith("image/") || ["png","jpg","jpeg","gif","webp"].includes(ext)) return name;
+      if (file?.source_type === "pasted_text") return name;
+      return name;
     }
     case "text_extracted":
-      return "Text extracted";
+      return file ? `${displayFileName(file)} — text extracted` : "Text extracted";
     case "ocr_completed":
-      return "OCR completed";
+      return file ? `${displayFileName(file)} — OCR completed` : "OCR completed";
     case "transcript_completed":
-      return "Transcript created";
+      return file ? `${displayFileName(file)} — transcribed` : "Transcript created";
     case "facts_extracted": {
       const count = event.metadata_json?.facts_found as number | undefined;
       return count ? `${count} facts extracted` : "Facts extracted";
@@ -157,46 +163,47 @@ function titleForEvent(event: EntityEvent, file?: EntityFile): string {
     case "entity_archived":
       return "Deal archived";
     default:
-      return shortName;
+      return name;
   }
 }
 
 // ─── Deterministic summary templates ─────────────────────────────────────────
 
 function summaryForEvent(event: EntityEvent, file?: EntityFile): string {
-  // Use cached AI-generated summary if present
+  // Use cached AI-generated summary if present (written by entityFileService after processing)
   const cached = event.metadata_json?.display_summary as string | undefined;
   if (cached) return cached;
 
-  const fileName = file?.title ?? file?.file_name ?? "the file";
-  const shortName = fileName.length > 50 ? fileName.slice(0, 48) + "…" : fileName;
+  // Use the file's own AI summary if available — this is the richest signal
+  if (file?.summary) return file.summary;
+
+  const ext = (file?.file_name ?? "").split(".").pop()?.toLowerCase() ?? "";
+  const mime = file?.mime_type ?? "";
 
   switch (event.event_type) {
     case "file_uploaded": {
-      const mime = file?.mime_type ?? "";
-      const ext = (file?.file_name ?? "").split(".").pop()?.toLowerCase() ?? "";
       if (mime.startsWith("audio/") || ["mp3","m4a","wav","webm","ogg","aac"].includes(ext))
-        return `Audio recording was added and queued for transcription.`;
+        return `Audio recording added — queued for transcription.`;
       if (mime.startsWith("image/") || ["png","jpg","jpeg","gif","webp"].includes(ext))
-        return `Photo was added and queued for AI analysis.`;
+        return `Photo added — queued for AI analysis.`;
       if (ext === "pdf")
-        return `PDF "${shortName}" was uploaded and queued for text extraction.`;
+        return `PDF uploaded — queued for text extraction.`;
       if (["xls","xlsx","csv"].includes(ext))
-        return `Spreadsheet "${shortName}" was uploaded and queued for processing.`;
+        return `Spreadsheet uploaded — queued for processing.`;
       if (file?.source_type === "pasted_text")
-        return `Text note was added and queued for fact extraction.`;
-      return `"${shortName}" was uploaded and queued for processing.`;
+        return `Note added — queued for fact extraction.`;
+      return `File uploaded — queued for processing.`;
     }
     case "text_extracted": {
       const chunks = event.metadata_json?.chunk_count as number | undefined;
       return chunks
-        ? `Text was extracted and split into ${chunks} searchable chunks.`
-        : `Text was extracted and indexed for analysis.`;
+        ? `Text extracted and split into ${chunks} searchable chunks.`
+        : `Text extracted and indexed for analysis.`;
     }
     case "ocr_completed":
-      return `Image text was extracted via OCR and added to the searchable record.`;
+      return `Image text extracted via OCR.`;
     case "transcript_completed":
-      return `Audio was transcribed and the text was added to the searchable record.`;
+      return `Audio transcribed — text is now searchable.`;
     case "facts_extracted": {
       const found = event.metadata_json?.facts_found as number | undefined;
       const inserted = event.metadata_json?.facts_inserted as number | undefined;
@@ -207,7 +214,7 @@ function summaryForEvent(event: EntityEvent, file?: EntityFile): string {
         if (updated) parts.push(`${updated} updated`);
         return `${found} facts found — ${parts.join(", ")} stored.`;
       }
-      return `Key deal facts were extracted and stored.`;
+      return `Key deal facts extracted and stored.`;
     }
     case "fact_updated":
       return `A deal fact was updated based on new evidence.`;
@@ -216,24 +223,24 @@ function summaryForEvent(event: EntityEvent, file?: EntityFile): string {
     case "fact_manually_confirmed":
       return `A deal fact was reviewed and confirmed.`;
     case "fact_conflict_detected":
-      return `Conflicting evidence was found for a deal fact — review recommended.`;
+      return `Conflicting evidence found for a deal fact — review recommended.`;
     case "manual_override_applied":
       return `A fact value was manually overridden.`;
     case "triage_completed":
     case "initial_review_completed":
-      return `AI generated an initial review based on the current inputs.`;
+      return `AI generated an initial review based on current inputs.`;
     case "deep_analysis_started":
     case "deep_scan_started":
-      return `Deep analysis was triggered and is running.`;
+      return `Deep analysis triggered and running.`;
     case "deep_analysis_completed":
     case "deep_scan_completed":
-      return `Deep analysis completed — executive summary, risks, and valuation support are available.`;
+      return `Deep analysis complete — executive summary, risks, and valuation support available.`;
     case "analysis_refreshed":
-      return `Analysis was refreshed after new information was added.`;
+      return `Analysis refreshed after new information was added.`;
     case "entity_passed":
-      return `This deal was marked as passed and moved to the archive.`;
+      return `Deal marked as passed.`;
     case "entity_archived":
-      return `This deal was archived.`;
+      return `Deal archived.`;
     default:
       return `Activity recorded.`;
   }
@@ -255,25 +262,29 @@ function titleForGroup(events: EntityEvent[], file?: EntityFile): string {
   const hasFacts = events.some((e) => e.event_type === "facts_extracted");
 
   if (hasUpload && file) {
+    const name = displayFileName(file);
     const mime = file.mime_type ?? "";
     const ext = file.file_name.split(".").pop()?.toLowerCase() ?? "";
     if (mime.startsWith("audio/") || ["mp3","m4a","wav","webm","ogg","aac"].includes(ext))
-      return hasTranscript ? "Audio transcribed" : "Audio added";
+      return hasTranscript ? `${name} — transcribed` : name;
     if (mime.startsWith("image/") || ["png","jpg","jpeg","gif","webp"].includes(ext))
-      return hasOcr ? "Photo processed" : "Photo added";
-    if (file.source_type === "pasted_text") return hasFacts ? "Note analyzed" : "Note added";
-    return hasFacts ? "Document analyzed" : "Document added";
+      return hasOcr ? `${name} — processed` : name;
+    if (file.source_type === "pasted_text") return hasFacts ? `${name} — analyzed` : name;
+    return hasFacts ? `${name} — analyzed` : name;
   }
 
   return titleForEvent(events[0], file);
 }
 
 function summaryForGroup(events: EntityEvent[], file?: EntityFile): string {
-  // Use cached AI summary from the most significant event if available
+  // Prefer cached AI summary from the most significant event
   for (const e of events) {
     const cached = e.metadata_json?.display_summary as string | undefined;
     if (cached) return cached;
   }
+
+  // Use the file's own AI-generated summary — this is the richest signal
+  if (file?.summary) return file.summary;
 
   const hasUpload = events.some((e) => e.event_type === "file_uploaded");
   const hasTranscript = events.some((e) => e.event_type === "transcript_completed");
@@ -283,30 +294,27 @@ function summaryForGroup(events: EntityEvent[], file?: EntityFile): string {
   const factsEvent = events.find((e) => e.event_type === "facts_extracted");
   const factsFound = factsEvent?.metadata_json?.facts_found as number | undefined;
 
-  const fileName = file?.title ?? file?.file_name ?? "File";
-  const shortName = fileName.length > 50 ? fileName.slice(0, 48) + "…" : fileName;
-
   if (hasUpload && file) {
     const mime = file.mime_type ?? "";
     const ext = file.file_name.split(".").pop()?.toLowerCase() ?? "";
 
     if (mime.startsWith("audio/") || ["mp3","m4a","wav","webm","ogg","aac"].includes(ext)) {
       return hasTranscript
-        ? `Recording was uploaded and transcribed — text is now searchable.`
-        : `Audio recording "${shortName}" was added and is being processed.`;
+        ? `Transcribed — text is now searchable.`
+        : `Audio recording added and queued for transcription.`;
     }
     if (mime.startsWith("image/") || ["png","jpg","jpeg","gif","webp"].includes(ext)) {
       return hasOcr
-        ? `Photo was uploaded and text was extracted via OCR.`
-        : `Photo "${shortName}" was added and analyzed by AI.`;
+        ? `Photo processed — text extracted via OCR.`
+        : `Photo added and queued for AI analysis.`;
     }
     if (file.source_type === "pasted_text") {
       return hasFacts && factsFound
-        ? `Note was added and ${factsFound} deal facts were extracted.`
-        : `Text note was added and indexed for analysis.`;
+        ? `Note added — ${factsFound} deal facts extracted.`
+        : `Note added and indexed for analysis.`;
     }
 
-    const parts: string[] = [`"${shortName}" was uploaded`];
+    const parts: string[] = ["Uploaded"];
     if (hasText) parts.push("text extracted");
     if (hasFacts && factsFound) parts.push(`${factsFound} facts found`);
     return parts.join(", ") + ".";

@@ -209,8 +209,8 @@ function TimelineEntry({
             </span>
           </div>
 
-          {/* Summary — single line, truncated */}
-          <p className="text-[11px] text-slate-400 mt-0.5 leading-snug line-clamp-1">
+          {/* Summary — up to 2 lines */}
+          <p className="text-[11px] text-slate-400 mt-0.5 leading-snug line-clamp-2">
             {item.summary}
           </p>
         </button>
