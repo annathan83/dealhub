@@ -487,7 +487,7 @@ function ConflictModal({
                     <button
                       key={ev.id ?? i}
                       type="button"
-                      onClick={() => setSelectedValue(ev.extracted_value_raw)}
+                      onClick={() => setSelectedValue(ev.extracted_value_raw ?? "")}
                       className={`w-full text-left rounded-xl border px-4 py-3 transition-all ${
                         isSelected
                           ? "border-[#1F7A63] bg-[#F0FAF7]"
