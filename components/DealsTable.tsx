@@ -379,29 +379,11 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
       {/* ── Filter bar ───────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
 
-        {/* Row 1: Filters button + Search + Status pills */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Row 1: Search + Filters button */}
+        <div className="flex items-center gap-2">
 
-          {/* Filters toggle — before search */}
-          <button
-            onClick={() => setShowMoreFilters((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
-              hasSecondaryFilters
-                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700"
-            }`}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 8h10M11 12h2" />
-            </svg>
-            Filters
-            {hasSecondaryFilters && (
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-            )}
-          </button>
-
-          {/* Search */}
-          <div className="relative flex-1 min-w-[160px]">
+          {/* Search — takes remaining width */}
+          <div className="relative flex-1">
             <svg
               className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none"
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
@@ -412,7 +394,7 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search deals…"
+              placeholder="Search deals by name, industry, location…"
               className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition"
             />
             {search && (
@@ -427,48 +409,25 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
             )}
           </div>
 
-          {/* Separator */}
-          <div className="h-5 w-px bg-slate-200" />
-
-          {/* All pill */}
+          {/* Filters toggle — to the right of search */}
           <button
-            onClick={() => setStatusFilter("all")}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-              statusFilter === "all"
-                ? "bg-slate-900 text-white shadow-sm"
-                : "bg-white text-slate-500 border border-slate-200 hover:border-slate-300 hover:text-slate-800"
+            onClick={() => setShowMoreFilters((v) => !v)}
+            className={`shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
+              hasSecondaryFilters
+                ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700"
             }`}
           >
-            All
-            <span className={`text-[10px] tabular-nums ${statusFilter === "all" ? "text-slate-300" : "text-slate-400"}`}>
-              {deals.length}
-            </span>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M7 8h10M11 12h2" />
+            </svg>
+            Filters
+            {hasSecondaryFilters && (
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+            )}
           </button>
 
-          {/* Status pills */}
-          {ALL_STATUSES.map((s) => {
-            const isActive = statusFilter === s;
-            const count = deals.filter((d) => d.status === s).length;
-            if (count === 0) return null;
-            const styles = STATUS_STYLES[s];
-            return (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-                  isActive ? styles.pillActive : styles.pill
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-white/70" : styles.dot}`} />
-                {STATUS_LABELS[s]}
-                <span className={`text-[10px] tabular-nums ${isActive ? "opacity-70" : "text-slate-400"}`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-
-          {/* Clear */}
+          {/* Clear — only when something is filtered */}
           {isFiltered && (
             <button
               onClick={() => {
@@ -480,9 +439,9 @@ export default function DealsTable({ deals }: { deals: Deal[] }) {
                 setSdeFilter("");
                 setAskFilter("");
               }}
-              className="ml-auto text-xs text-slate-400 hover:text-slate-700 transition-colors whitespace-nowrap"
+              className="shrink-0 text-xs text-slate-400 hover:text-slate-700 transition-colors whitespace-nowrap"
             >
-              Clear · {filtered.length}/{deals.length}
+              Clear
             </button>
           )}
         </div>

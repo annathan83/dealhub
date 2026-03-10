@@ -39,12 +39,25 @@ export default async function DashboardPage() {
 
   // Activity stats computed server-side
   const now = Date.now();
-  const last30 = dealList.filter((d) => now - new Date(d.created_at).getTime() < 30 * 86_400_000);
-  const last7  = dealList.filter((d) => now - new Date(d.created_at).getTime() < 7  * 86_400_000);
+  const MS_DAY = 86_400_000;
+
+  // Last 30 days
+  const last30 = dealList.filter((d) => now - new Date(d.created_at).getTime() < 30 * MS_DAY);
   const new30    = last30.length;
   const passed30 = last30.filter((d) => d.status === "passed").length;
-  const new7     = last7.length;
-  const passed7  = last7.filter((d) => d.status === "passed").length;
+
+  // Avg new per week over last 4 weeks (28 days)
+  const last28 = dealList.filter((d) => now - new Date(d.created_at).getTime() < 28 * MS_DAY);
+  const avgPerWeek = last28.length > 0 ? (last28.length / 4) : 0;
+
+  // Trend: compare last 7 days vs prior 7 days
+  const last7  = dealList.filter((d) => now - new Date(d.created_at).getTime() < 7  * MS_DAY).length;
+  const prev7  = dealList.filter((d) => {
+    const age = now - new Date(d.created_at).getTime();
+    return age >= 7 * MS_DAY && age < 14 * MS_DAY;
+  }).length;
+  const trend: "up" | "down" | "flat" =
+    last7 > prev7 ? "up" : last7 < prev7 ? "down" : "flat";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -77,13 +90,13 @@ export default async function DashboardPage() {
 
         {/* ── Page header ──────────────────────────────────────────────── */}
         <div className="mb-6">
-          {/* Title row */}
-          <div className="flex items-start justify-between gap-4 mb-3">
+          {/* Title + New Deal button */}
+          <div className="flex items-start justify-between gap-4 mb-5">
             <div>
               <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight leading-none">
                 Pipeline
               </h1>
-              <p className="text-sm text-slate-400 mt-1.5 leading-relaxed">
+              <p className="text-sm text-slate-400 mt-1.5">
                 {totalDeals === 0
                   ? "Track and evaluate acquisition opportunities."
                   : `${activeDeals} active · ${totalDeals} total deal${totalDeals !== 1 ? "s" : ""}`}
@@ -100,28 +113,67 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          {/* Activity stats row */}
+          {/* ── Activity stat cards ───────────────────────────────────── */}
           {totalDeals > 0 && (
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Last 30 days</span>
-                <span className="text-[11px] text-slate-600 font-medium">
-                  <span className="text-indigo-600 font-bold">+{new30}</span> new
-                  {passed30 > 0 && (
-                    <> · <span className="text-slate-500">{passed30} passed</span></>
-                  )}
-                </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+              {/* New — last 30 days */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">New · 30 days</p>
+                <p className="text-2xl font-extrabold text-slate-900 tabular-nums leading-none">+{new30}</p>
+                <p className="text-[11px] text-slate-400 mt-1">deals added</p>
               </div>
-              <div className="h-3 w-px bg-slate-200" />
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Last 7 days</span>
-                <span className="text-[11px] text-slate-600 font-medium">
-                  <span className="text-indigo-600 font-bold">+{new7}</span> new
-                  {passed7 > 0 && (
-                    <> · <span className="text-slate-500">{passed7} passed</span></>
-                  )}
-                </span>
+
+              {/* Passed — last 30 days */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Passed · 30 days</p>
+                <p className="text-2xl font-extrabold text-slate-500 tabular-nums leading-none">{passed30}</p>
+                <p className="text-[11px] text-slate-400 mt-1">deals passed</p>
               </div>
+
+              {/* Avg new per week — last 4 weeks */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Avg / week</p>
+                <p className="text-2xl font-extrabold text-indigo-600 tabular-nums leading-none">
+                  {avgPerWeek % 1 === 0 ? avgPerWeek.toFixed(0) : avgPerWeek.toFixed(1)}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">new deals · 4 wk avg</p>
+              </div>
+
+              {/* Trend: last 7 days vs prior 7 days */}
+              <div className="bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3.5">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Trend</p>
+                <div className="flex items-center gap-2 leading-none">
+                  {trend === "up" && (
+                    <>
+                      <svg className="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                      <span className="text-2xl font-extrabold text-emerald-600">Up</span>
+                    </>
+                  )}
+                  {trend === "down" && (
+                    <>
+                      <svg className="w-6 h-6 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 17l5-5m0 0l-5-5m5 5H6" />
+                      </svg>
+                      <span className="text-2xl font-extrabold text-rose-500">Down</span>
+                    </>
+                  )}
+                  {trend === "flat" && (
+                    <>
+                      <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
+                      </svg>
+                      <span className="text-2xl font-extrabold text-slate-500">Flat</span>
+                    </>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {last7} this wk · {prev7} last wk
+                </p>
+              </div>
+
             </div>
           )}
         </div>
