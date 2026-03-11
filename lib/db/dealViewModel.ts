@@ -15,6 +15,7 @@ import type { AnalysisSnapshot, EntityPageData, EntityEvent, EntityFile } from "
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
 import type { TriageSummaryContent } from "@/lib/services/entity/triageSummaryService";
 import type { DeepAnalysisContent } from "@/lib/services/entity/deepAnalysisService";
+import type { BuyerProfile } from "@/lib/kpi/buyerFit";
 
 export type DealPageViewModel = {
   deal: Deal;
@@ -37,6 +38,8 @@ export type DealPageViewModel = {
   // Auto-generated analysis
   swotAnalysis: SwotAnalysisContent | null;
   missingInfo: MissingInfoResult | null;
+  // Buyer profile (for buyer fit analysis)
+  buyerProfile: BuyerProfile | null;
 };
 
 export async function buildDealPageViewModel(
@@ -52,7 +55,21 @@ export async function buildDealPageViewModel(
 
   if (!dealResult.data) return null;
 
-  const [kpiScorecard, scoreHistory, entityEvents, swotAnalysis, missingInfo] = await Promise.all([
+  // Fetch buyer profile in parallel
+  const buyerProfilePromise: Promise<BuyerProfile | null> = (async () => {
+    try {
+      const { data } = await supabase
+        .from("buyer_profiles")
+        .select("*")
+        .eq("user_id", userId)
+        .single();
+      return (data as BuyerProfile | null) ?? null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const [kpiScorecard, scoreHistory, entityEvents, swotAnalysis, missingInfo, buyerProfile] = await Promise.all([
     entityData?.entity
       ? getLatestKpiScorecard(entityData.entity.id).catch(() => null)
       : Promise.resolve(null),
@@ -68,6 +85,7 @@ export async function buildDealPageViewModel(
     entityData?.entity
       ? getLatestMissingInfo(entityData.entity.id).catch(() => null)
       : Promise.resolve(null),
+    buyerProfilePromise,
   ]);
 
   // Extract the most recent triage_summary snapshot for the Initial Review panel
@@ -118,5 +136,6 @@ export async function buildDealPageViewModel(
     entityFiles,
     swotAnalysis,
     missingInfo,
+    buyerProfile,
   };
 }

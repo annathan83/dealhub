@@ -45,12 +45,13 @@ type ScoringFactMeta = {
   dataType: string;
 };
 
+// V1 Triage: 6 KPI inputs — facts that feed directly into the 6 scored KPIs
 const SCORING_FACTS: ScoringFactMeta[] = [
-  { key: "asking_price",      kpiLabel: "Price Multiple",   weight: 0.12, weightLabel: "12%", placeholder: "e.g. 1200000",  dataType: "currency" },
-  { key: "sde_latest",        kpiLabel: "SDE / EBITDA",     weight: 0.12, weightLabel: "12%", placeholder: "e.g. 250000",   dataType: "currency" },
-  { key: "revenue_latest",    kpiLabel: "Revenue",          weight: 0.10, weightLabel: "10%", placeholder: "e.g. 820000",   dataType: "currency" },
-  { key: "employees_ft",      kpiLabel: "Management Depth", weight: 0.07, weightLabel: "7%",  placeholder: "e.g. 8",        dataType: "number"   },
-  { key: "years_in_business", kpiLabel: "Stability",        weight: 0.05, weightLabel: "5%",  placeholder: "e.g. 12",       dataType: "number"   },
+  { key: "asking_price",      kpiLabel: "Purchase Multiple", weight: 0.30, weightLabel: "30%", placeholder: "e.g. 1200000",  dataType: "currency" },
+  { key: "sde_latest",        kpiLabel: "SDE Margin",        weight: 0.20, weightLabel: "20%", placeholder: "e.g. 250000",   dataType: "currency" },
+  { key: "revenue_latest",    kpiLabel: "Rev / Employee",    weight: 0.15, weightLabel: "15%", placeholder: "e.g. 820000",   dataType: "currency" },
+  { key: "employees_ft",      kpiLabel: "Rev / Employee",    weight: 0.15, weightLabel: "15%", placeholder: "e.g. 8",        dataType: "number"   },
+  { key: "lease_monthly_rent",kpiLabel: "Rent Ratio",        weight: 0.10, weightLabel: "10%", placeholder: "e.g. 4500",     dataType: "currency" },
 ];
 
 const DERIVED_KEYS = new Set(["purchase_multiple", "sde_margin", "revenue_per_employee", "sde_per_employee"]);
@@ -62,11 +63,13 @@ const OPTIONAL_FACT_KEYS = [
   "employees_pt",
   "manager_in_place",
   "owner_hours_per_week",
+  "owner_in_sales",
+  "owner_in_operations",
   "customer_concentration_top1_pct",
   "recurring_revenue_pct",
+  "years_in_business",
   "deal_structure",
   "seller_financing",
-  "lease_monthly_rent",
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -696,6 +699,19 @@ function ScoreInputCard({
     </span>
   );
 
+  // Evidence snippet (truncated for display)
+  const snippet = evidence?.extracted_value_raw ?? evidence?.snippet ?? null;
+  const snippetTruncated = snippet ? (snippet.length > 80 ? snippet.slice(0, 80) + "…" : snippet) : null;
+
+  // Source label
+  const sourceLabel = !filled ? null
+    : sourceType === "ai_extracted" && sourceName ? sourceName
+    : sourceType === "ai_extracted" ? "Document"
+    : sourceType === "ai_inferred" ? "AI estimate"
+    : sourceType === "user_override" ? "Manual entry"
+    : sourceType === "broker_confirmed" ? "Broker confirmed"
+    : sourceName ?? "Source";
+
   return (
     <button
       type="button"
@@ -717,12 +733,12 @@ function ScoreInputCard({
         {filled ? formatValue(val!.value_raw, fd.data_type) : "—"}
       </div>
 
-      {/* Bottom row: status badge + source */}
-      <div className="flex items-center justify-between gap-2">
+      {/* Status badge + source label */}
+      <div className="flex items-center justify-between gap-2 mb-1.5">
         {badge}
-        {filled && sourceName && (
-          <span className="text-[10px] text-slate-400 truncate max-w-[120px]">
-            {sourceName}
+        {filled && sourceLabel && (
+          <span className="text-[10px] text-slate-400 truncate max-w-[140px]">
+            {sourceLabel}
           </span>
         )}
         {!filled && (
@@ -731,6 +747,22 @@ function ScoreInputCard({
           </span>
         )}
       </div>
+
+      {/* Evidence snippet */}
+      {filled && snippetTruncated && (
+        <div className="mt-1 px-2 py-1.5 bg-white/70 rounded-lg border border-slate-100">
+          <p className="text-[10px] text-slate-500 leading-relaxed italic">
+            &ldquo;{snippetTruncated}&rdquo;
+          </p>
+        </div>
+      )}
+      {filled && sourceType === "ai_inferred" && val?.change_reason && (
+        <div className="mt-1 px-2 py-1.5 bg-blue-50/60 rounded-lg border border-blue-100">
+          <p className="text-[10px] text-blue-600 leading-relaxed">
+            {val.change_reason}
+          </p>
+        </div>
+      )}
     </button>
   );
 }
@@ -762,17 +794,49 @@ function OptionalFactRow({
     : sourceType === "ai_inferred"  ? { icon: "~", cls: "text-blue-400" }
     :                                 { icon: "·", cls: "text-slate-400" };
 
+  const snippet = evidence?.extracted_value_raw ?? evidence?.snippet ?? null;
+  const snippetTruncated = snippet ? (snippet.length > 60 ? snippet.slice(0, 60) + "…" : snippet) : null;
+
+  const sourceLabel = !filled ? null
+    : sourceType === "ai_extracted" && sourceName ? sourceName
+    : sourceType === "ai_extracted" ? "Document"
+    : sourceType === "ai_inferred" ? "AI estimate"
+    : sourceType === "user_override" ? "Manual"
+    : sourceType === "broker_confirmed" ? "Broker"
+    : sourceName ?? null;
+
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 group cursor-pointer hover:bg-slate-50 transition-colors"
+      className="flex items-start gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 group cursor-pointer hover:bg-slate-50 transition-colors"
       onClick={onEdit}
     >
-      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${filled ? "bg-emerald-400" : "bg-slate-200"}`} />
+      <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${filled ? "bg-emerald-400" : "bg-slate-200"}`} />
 
       <div className="flex-1 min-w-0">
-        <span className="text-sm text-slate-600 truncate">{fd.label}</span>
-        {filled && sourceName && (
-          <div className="text-[10px] text-slate-400 mt-0.5 truncate">from {sourceName}</div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-600 truncate">{fd.label}</span>
+          {sourceIndicator && (
+            <span className={`text-[10px] font-medium shrink-0 ${sourceIndicator.cls}`}
+              title={
+                sourceType === "user_override" ? "Manually entered" :
+                sourceType === "ai_extracted"  ? "Extracted from document" :
+                sourceType === "ai_inferred"   ? "AI estimate" :
+                status === "conflicting"       ? "Conflict — needs review" : ""
+              }
+            >
+              {sourceIndicator.icon}
+            </span>
+          )}
+        </div>
+        {filled && sourceLabel && (
+          <div className="text-[10px] text-slate-400 mt-0.5 truncate">
+            {sourceLabel}
+          </div>
+        )}
+        {filled && snippetTruncated && (
+          <div className="text-[10px] text-slate-400 italic mt-0.5 truncate">
+            &ldquo;{snippetTruncated}&rdquo;
+          </div>
         )}
       </div>
 
@@ -786,21 +850,8 @@ function OptionalFactRow({
         )}
       </div>
 
-      {sourceIndicator && (
-        <span className={`text-[11px] font-medium shrink-0 hidden sm:inline ${sourceIndicator.cls}`}
-          title={
-            sourceType === "user_override" ? "Manually entered" :
-            sourceType === "ai_extracted"  ? "Extracted from document" :
-            sourceType === "ai_inferred"   ? "AI estimate" :
-            status === "conflicting"       ? "Conflict — needs review" : ""
-          }
-        >
-          {sourceIndicator.icon}
-        </span>
-      )}
-
       <svg
-        className="w-3.5 h-3.5 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0"
+        className="w-3.5 h-3.5 text-slate-200 group-hover:text-slate-400 transition-colors shrink-0 mt-0.5"
         fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
       >
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

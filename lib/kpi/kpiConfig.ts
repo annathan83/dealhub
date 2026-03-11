@@ -104,16 +104,19 @@ function formatPct(n: number): string {
 
 // ─── KPI Definitions ──────────────────────────────────────────────────────────
 //
-// V1 Triage KPIs — ordered by triage importance:
+// V1 Triage KPIs — 6 derived metrics (buyer-neutral deal quality):
 //   1. Purchase Multiple      (30%) — core valuation check
 //   2. SDE Margin             (20%) — profitability quality
-//   3. Revenue per Employee   (12%) — labor efficiency
+//   3. Revenue per Employee   (15%) — labor efficiency
 //   4. Rent Ratio             (10%) — fixed-cost exposure
-//   5. Business Stability     (10%) — years + trend
-//   6. Owner Dependence       (10%) — transition risk
-//   7. Revenue Quality         (8%) — recurring / concentration
+//   5. Owner Dependence       (15%) — transition risk
+//   6. Revenue Quality        (10%) — recurring / concentration
 //
 // Total: 1.00
+//
+// Business size / stability intentionally excluded:
+//   Size preference is buyer-specific → handled in Buyer Fit, not Deal Score.
+//   Stability (years in business) is useful context but not a core triage KPI.
 
 export const KPI_DEFINITIONS: KpiDefinition[] = [
 
@@ -179,7 +182,7 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
     kpi_key: "revenue_per_employee",
     label: "Revenue / Employee",
     description: "Annual revenue per full-time employee — labor efficiency",
-    weight: 0.12,
+    weight: 0.15,
     score: ({ revenue_latest, employees_ft, employees_pt }) => {
       if (!revenue_latest) return missing("Revenue per employee");
       const totalEmployees = (employees_ft ?? 0) + Math.round((employees_pt ?? 0) * 0.5);
@@ -230,59 +233,13 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
     },
   },
 
-  // ── 5. Business Stability ────────────────────────────────────────────────────
-  // Track record + revenue trend: is this a stable, proven business?
-  {
-    kpi_key: "business_stability",
-    label: "Business Stability",
-    description: "Years in business + revenue trend — proven track record",
-    weight: 0.10,
-    score: ({ years_in_business, revenue_latest, revenue_year_1 }) => {
-      if (!years_in_business) return missing("Years in business");
-
-      let baseScore: number;
-      let ageNote: string;
-      if (years_in_business >= 15) {
-        baseScore = 10; ageNote = `${years_in_business} years in business`;
-      } else if (years_in_business >= 8) {
-        baseScore = 8;  ageNote = `${years_in_business} years in business`;
-      } else if (years_in_business >= 4) {
-        baseScore = 6;  ageNote = `${years_in_business} years in business`;
-      } else if (years_in_business >= 2) {
-        baseScore = 4;  ageNote = `${years_in_business} years in business — limited track record`;
-      } else {
-        baseScore = 2;  ageNote = `Only ${years_in_business} year(s) in business`;
-      }
-
-      // Adjust ±1 for revenue trend if available
-      let trendAdj = 0;
-      let trendNote = "";
-      if (revenue_latest && revenue_year_1 && revenue_year_1 > 0) {
-        const yoy = (revenue_latest - revenue_year_1) / revenue_year_1;
-        if (yoy >= 0.10) { trendAdj = 1; trendNote = `, revenue growing ${formatPct(yoy)} YoY`; }
-        else if (yoy <= -0.10) { trendAdj = -1; trendNote = `, revenue declining ${formatPct(Math.abs(yoy))} YoY`; }
-        else { trendNote = `, revenue flat YoY`; }
-      }
-
-      const finalScore = Math.max(0, Math.min(10, baseScore + trendAdj));
-      const status: KpiStatus = revenue_year_1 ? "known" : "estimated";
-
-      return {
-        score: finalScore,
-        raw_value: `${years_in_business}yr${trendNote}`,
-        rationale: `${ageNote}${trendNote}.`,
-        status,
-      };
-    },
-  },
-
-  // ── 6. Owner Dependence ──────────────────────────────────────────────────────
+  // ── 5. Owner Dependence ──────────────────────────────────────────────────────
   // Transition risk: how much does the business depend on the current owner?
   {
     kpi_key: "owner_dependence",
     label: "Owner Dependence",
     description: "How much the business relies on the current owner",
-    weight: 0.10,
+    weight: 0.15,
     score: ({ owner_hours_per_week, owner_in_sales, owner_in_operations, manager_in_place }) => {
       const hasData = owner_hours_per_week != null || owner_in_sales != null || manager_in_place != null;
       if (!hasData) return missing("Owner dependence indicators");
@@ -315,13 +272,13 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
     },
   },
 
-  // ── 7. Revenue Quality ───────────────────────────────────────────────────────
+  // ── 6. Revenue Quality ───────────────────────────────────────────────────────
   // Recurring revenue % and customer concentration — revenue reliability
   {
     kpi_key: "revenue_quality",
     label: "Revenue Quality",
     description: "Recurring revenue % and customer concentration",
-    weight: 0.08,
+    weight: 0.10,
     score: ({ recurring_revenue_pct, customer_concentration_top1_pct }) => {
       const hasRecurring = recurring_revenue_pct != null;
       const hasConcentration = customer_concentration_top1_pct != null;

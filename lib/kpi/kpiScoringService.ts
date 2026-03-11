@@ -241,14 +241,13 @@ export type ScoringConfidence = {
  * Used to determine which fact values were actually used in scoring.
  */
 const KPI_FACT_KEYS: Record<string, string[]> = {
-  // V1 Triage KPIs
-  price_multiple:      ["asking_price", "sde_latest", "ebitda_latest"],
-  earnings_margin:     ["revenue_latest", "sde_latest", "ebitda_latest"],
-  revenue_per_employee:["revenue_latest", "employees_ft", "employees_pt"],
-  rent_ratio:          ["lease_monthly_rent", "revenue_latest"],
-  business_stability:  ["years_in_business", "revenue_latest", "revenue_year_1"],
-  owner_dependence:    ["owner_hours_per_week", "owner_in_sales", "owner_in_operations", "manager_in_place"],
-  revenue_quality:     ["recurring_revenue_pct", "customer_concentration_top1_pct"],
+  // V1 Triage — 6 KPIs (business_stability removed; size/stability → Buyer Fit)
+  price_multiple:       ["asking_price", "sde_latest", "ebitda_latest"],
+  earnings_margin:      ["revenue_latest", "sde_latest", "ebitda_latest"],
+  revenue_per_employee: ["revenue_latest", "employees_ft", "employees_pt"],
+  rent_ratio:           ["lease_monthly_rent", "revenue_latest"],
+  owner_dependence:     ["owner_hours_per_week", "owner_in_sales", "owner_in_operations", "manager_in_place"],
+  revenue_quality:      ["recurring_revenue_pct", "customer_concentration_top1_pct"],
 };
 
 export function computeScoringConfidence(
