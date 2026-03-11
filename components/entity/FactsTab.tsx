@@ -10,7 +10,8 @@
  *   3. All Facts by Category — grouped: Financials, Operations, Employees, etc.
  */
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type {
   FactDefinition,
   EntityFactValue,
@@ -30,6 +31,8 @@ type Props = {
   dealId: string;
   overallScore?: number | null;
   buyerFitLabel?: string | null;
+  /** Per-deal custom scoring weights from entity.metadata_json.scoring_config */
+  scoringConfig?: Record<string, number> | null;
 };
 
 // ─── Basic Facts config ───────────────────────────────────────────────────────
@@ -584,10 +587,13 @@ function ConflictModal({ fd, currentVal, allEvidence, fileNameMap, dealId, onClo
 function ConflictBanner({
   conflictingFacts,
   onResolve,
+  onOverrideAll,
 }: {
   conflictingFacts: { fd: FactDefinition; val: EntityFactValue }[];
   onResolve: (fd: FactDefinition) => void;
+  onOverrideAll: () => void;
 }) {
+  const [overriding, startTransition] = useTransition();
   if (conflictingFacts.length === 0) return null;
   return (
     <div className="mx-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -595,9 +601,19 @@ function ConflictBanner({
         <svg className="w-3.5 h-3.5 text-amber-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
         </svg>
-        <span className="text-xs font-semibold text-amber-700">
-          {conflictingFacts.length} conflicting value{conflictingFacts.length !== 1 ? "s" : ""} — resolve to improve scoring
+        <span className="text-xs font-semibold text-amber-700 flex-1">
+          {conflictingFacts.length} conflicting value{conflictingFacts.length !== 1 ? "s" : ""} — document differs from your entries
         </span>
+        {conflictingFacts.length > 1 && (
+          <button
+            type="button"
+            disabled={overriding}
+            onClick={() => startTransition(onOverrideAll)}
+            className="text-[11px] font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-50 px-2.5 py-1 rounded-lg transition-colors shrink-0"
+          >
+            {overriding ? "Updating…" : "Use all document values"}
+          </button>
+        )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         {conflictingFacts.map(({ fd }) => (
@@ -620,6 +636,7 @@ function BasicFactCard({
   evidence,
   sourceName,
   onEdit,
+  onAccept,
 }: {
   fd: FactDefinition;
   meta: BasicFactMeta;
@@ -627,54 +644,72 @@ function BasicFactCard({
   evidence: FactEvidence | null;
   sourceName: string | null;
   onEdit: () => void;
+  onAccept?: () => void;
 }) {
   const filled = isFilled(val);
   const status = val?.status as FactValueStatus | undefined;
   const isConflict = filled && status === "conflicting";
+  const needsReview = filled && isCandidate(val);
 
   const cardStyle = !filled
     ? "bg-red-50/50 border-red-200 hover:border-red-400"
     : isConflict
       ? "bg-amber-50/50 border-amber-200 hover:border-amber-400"
-      : val?.value_source_type === "ai_extracted"
-        ? "bg-emerald-50/40 border-emerald-200 hover:border-emerald-400"
-        : val?.value_source_type === "ai_inferred"
-          ? "bg-blue-50/50 border-blue-200 hover:border-blue-400"
-          : "bg-white border-slate-200 hover:border-[#1F7A63]/50";
+      : needsReview
+        ? "bg-emerald-50/60 border-emerald-300 hover:border-emerald-400"
+        : val?.value_source_type === "ai_extracted"
+          ? "bg-emerald-50/40 border-emerald-200 hover:border-emerald-400"
+          : val?.value_source_type === "ai_inferred"
+            ? "bg-blue-50/50 border-blue-200 hover:border-blue-400"
+            : "bg-white border-slate-200 hover:border-[#1F7A63]/50";
 
   const snippet = evidence?.extracted_value_raw ?? evidence?.snippet ?? null;
   const snippetTruncated = snippet ? (snippet.length > 80 ? snippet.slice(0, 80) + "…" : snippet) : null;
   const src = sourceLabel(val, sourceName);
 
   return (
-    <button
-      type="button"
-      onClick={onEdit}
-      className={`w-full text-left rounded-2xl border px-4 py-4 transition-all duration-150 hover:-translate-y-px hover:shadow-sm group ${cardStyle}`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{meta.label}</span>
-        {meta.weightLabel && <span className="text-[10px] text-slate-300 font-mono">{meta.weightLabel}</span>}
-      </div>
-      <div className={`text-2xl font-bold tabular-nums leading-tight mb-2 ${filled ? "text-slate-800" : "text-red-300"}`}>
-        {filled ? formatValue(val!.value_raw, fd.data_type) : "—"}
-      </div>
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <SourceBadge val={val} />
-        {filled && src && <span className="text-[10px] text-slate-400 truncate max-w-[140px]">{src}</span>}
-        {!filled && <span className="text-[10px] text-slate-400 group-hover:text-red-500 transition-colors">Tap to add →</span>}
-      </div>
-      {filled && snippetTruncated && (
-        <div className="mt-1 px-2 py-1.5 bg-white/70 rounded-lg border border-slate-100">
-          <p className="text-[10px] text-slate-500 leading-relaxed italic">&ldquo;{snippetTruncated}&rdquo;</p>
+    <div className={`w-full rounded-2xl border transition-all duration-150 ${cardStyle}`}>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="w-full text-left px-4 py-4 hover:-translate-y-px hover:shadow-sm group transition-all duration-150"
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{meta.label}</span>
+          {meta.weightLabel && <span className="text-[10px] text-slate-300 font-mono">{meta.weightLabel}</span>}
+        </div>
+        <div className={`text-2xl font-bold tabular-nums leading-tight mb-2 ${filled ? "text-slate-800" : "text-red-300"}`}>
+          {filled ? formatValue(val!.value_raw, fd.data_type) : "—"}
+        </div>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <SourceBadge val={val} />
+          {filled && src && <span className="text-[10px] text-slate-400 truncate max-w-[140px]">{src}</span>}
+          {!filled && <span className="text-[10px] text-slate-400 group-hover:text-red-500 transition-colors">Tap to add →</span>}
+        </div>
+        {filled && snippetTruncated && (
+          <div className="mt-1 px-2 py-1.5 bg-white/70 rounded-lg border border-slate-100">
+            <p className="text-[10px] text-slate-500 leading-relaxed italic">&ldquo;{snippetTruncated}&rdquo;</p>
+          </div>
+        )}
+        {filled && val?.value_source_type === "ai_inferred" && val?.change_reason && (
+          <div className="mt-1 px-2 py-1.5 bg-blue-50/60 rounded-lg border border-blue-100">
+            <p className="text-[10px] text-blue-600 leading-relaxed">{val.change_reason}</p>
+          </div>
+        )}
+      </button>
+      {needsReview && onAccept && (
+        <div className="px-4 pb-3 flex items-center gap-2 border-t border-emerald-200/60 pt-2.5">
+          <span className="text-[10px] text-emerald-700 font-medium flex-1">AI extracted — confirm to lock in</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onAccept(); }}
+            className="px-3 py-1 rounded-lg bg-[#1F7A63] text-white text-[11px] font-semibold hover:bg-[#1a6654] transition-colors"
+          >
+            Accept ✓
+          </button>
         </div>
       )}
-      {filled && val?.value_source_type === "ai_inferred" && val?.change_reason && (
-        <div className="mt-1 px-2 py-1.5 bg-blue-50/60 rounded-lg border border-blue-100">
-          <p className="text-[10px] text-blue-600 leading-relaxed">{val.change_reason}</p>
-        </div>
-      )}
-    </button>
+    </div>
   );
 }
 
@@ -937,13 +972,289 @@ function CategorySection({
   );
 }
 
+// ─── Scoring config section ───────────────────────────────────────────────────
+// Lets users pick which facts feed into scoring and assign weights.
+// Any change immediately triggers a rescore via the API.
+
+type ScoringConfigEntry = { factKey: string; label: string; weight: number };
+
+function ScoringConfigSection({
+  factDefinitions,
+  factValues,
+  dealId,
+  initialConfig,
+  onScoreUpdated,
+}: {
+  factDefinitions: FactDefinition[];
+  factValues: EntityFactValue[];
+  dealId: string;
+  initialConfig: Record<string, number> | null;
+  onScoreUpdated: () => void;
+}) {
+  // Build the list of facts that have values (filled facts only)
+  const filledFacts = factDefinitions.filter((fd) => {
+    const val = factValues.find((v) => v.fact_definition_id === fd.id);
+    return val && val.status !== "missing" && val.status !== "unclear" && val.value_raw;
+  });
+
+  // Local state: which facts are selected and their raw weight inputs
+  const [selected, setSelected] = useState<Set<string>>(() => {
+    if (initialConfig && Object.keys(initialConfig).length > 0) {
+      return new Set(Object.keys(initialConfig).filter((k) => (initialConfig[k] ?? 0) > 0));
+    }
+    // Default: pre-select the 6 core KPI input facts
+    return new Set(["asking_price", "sde_latest", "revenue_latest", "employees_ft", "lease_monthly_rent", "owner_hours_per_week"]);
+  });
+
+  const [rawWeights, setRawWeights] = useState<Record<string, string>>(() => {
+    if (initialConfig && Object.keys(initialConfig).length > 0) {
+      const result: Record<string, string> = {};
+      for (const [k, v] of Object.entries(initialConfig)) {
+        result[k] = String(Math.round(v * 100));
+      }
+      return result;
+    }
+    // Default weights matching the 6 KPIs
+    return {
+      asking_price: "30",
+      sde_latest: "20",
+      revenue_latest: "15",
+      employees_ft: "15",
+      lease_monthly_rent: "10",
+      owner_hours_per_week: "10",
+    };
+  });
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  // Compute normalized weights (sum to 1.0)
+  const selectedKeys = Array.from(selected);
+  const totalRaw = selectedKeys.reduce((sum, k) => sum + (parseFloat(rawWeights[k] ?? "0") || 0), 0);
+
+  const normalizedConfig: Record<string, number> = {};
+  for (const k of selectedKeys) {
+    const raw = parseFloat(rawWeights[k] ?? "0") || 0;
+    normalizedConfig[k] = totalRaw > 0 ? raw / totalRaw : 0;
+  }
+
+  async function saveConfig(config: Record<string, number>) {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/scoring-config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scoring_config: config }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setSaveError(d.error ?? "Failed to save.");
+      } else {
+        onScoreUpdated();
+      }
+    } catch {
+      setSaveError("Network error.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleFact(factKey: string) {
+    const next = new Set(selected);
+    if (next.has(factKey)) {
+      next.delete(factKey);
+    } else {
+      next.add(factKey);
+      if (!rawWeights[factKey]) {
+        setRawWeights((prev) => ({ ...prev, [factKey]: "10" }));
+      }
+    }
+    setSelected(next);
+
+    // Build new config and save
+    const newConfig: Record<string, number> = {};
+    const newTotal = Array.from(next).reduce((sum, k) => {
+      const raw = parseFloat((k === factKey && !selected.has(factKey))
+        ? (rawWeights[factKey] ?? "10")
+        : (rawWeights[k] ?? "0")) || 0;
+      return sum + raw;
+    }, 0);
+    for (const k of Array.from(next)) {
+      const raw = parseFloat(rawWeights[k] ?? "0") || 0;
+      newConfig[k] = newTotal > 0 ? raw / newTotal : 0;
+    }
+    saveConfig(newConfig);
+  }
+
+  function handleWeightChange(factKey: string, value: string) {
+    setRawWeights((prev) => ({ ...prev, [factKey]: value }));
+  }
+
+  function handleWeightBlur(factKey: string) {
+    // On blur, save the current config
+    saveConfig(normalizedConfig);
+  }
+
+  function resetToDefaults() {
+    const defaults = {
+      asking_price: "30",
+      sde_latest: "20",
+      revenue_latest: "15",
+      employees_ft: "15",
+      lease_monthly_rent: "10",
+      owner_hours_per_week: "10",
+    };
+    setSelected(new Set(Object.keys(defaults)));
+    setRawWeights(defaults);
+    const total = Object.values(defaults).reduce((s, v) => s + parseFloat(v), 0);
+    const config: Record<string, number> = {};
+    for (const [k, v] of Object.entries(defaults)) {
+      config[k] = parseFloat(v) / total;
+    }
+    saveConfig(config);
+  }
+
+  const entries: ScoringConfigEntry[] = filledFacts.map((fd) => ({
+    factKey: fd.key,
+    label: fd.label,
+    weight: normalizedConfig[fd.key] ?? 0,
+  }));
+
+  const selectedEntries = entries.filter((e) => selected.has(e.factKey));
+  const unselectedEntries = entries.filter((e) => !selected.has(e.factKey));
+
+  return (
+    <div className="mt-6">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-3 py-2 group"
+      >
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Scoring Weights</p>
+        <div className="flex-1 h-px bg-slate-100" />
+        <span className="text-[10px] text-slate-400 shrink-0">
+          {selectedKeys.length} fact{selectedKeys.length !== 1 ? "s" : ""} in score
+        </span>
+        <svg
+          className={`w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-all ${expanded ? "rotate-90" : ""}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] text-slate-400">
+              Toggle facts on/off and set relative weights. Score updates instantly.
+            </p>
+            <button
+              type="button"
+              onClick={resetToDefaults}
+              className="text-[11px] text-slate-400 hover:text-slate-600 font-medium transition-colors"
+            >
+              Reset to defaults
+            </button>
+          </div>
+
+          {saveError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{saveError}</p>
+          )}
+
+          {/* Selected facts */}
+          {selectedEntries.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/60">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">In scoring</p>
+              </div>
+              {selectedEntries.map((entry, i) => {
+                const pct = Math.round(entry.weight * 100);
+                return (
+                  <div
+                    key={entry.factKey}
+                    className={`flex items-center gap-3 px-4 py-2.5 ${i < selectedEntries.length - 1 ? "border-b border-slate-100" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleFact(entry.factKey)}
+                      className="w-4 h-4 rounded border-2 border-[#1F7A63] bg-[#1F7A63] flex items-center justify-center shrink-0 hover:bg-[#1a6654] transition-colors"
+                    >
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <span className="flex-1 text-sm text-slate-700 truncate">{entry.label}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={rawWeights[entry.factKey] ?? "0"}
+                        onChange={(e) => handleWeightChange(entry.factKey, e.target.value)}
+                        onBlur={() => handleWeightBlur(entry.factKey)}
+                        className="w-14 text-right text-sm font-medium text-slate-700 border border-slate-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#1F7A63]/30 focus:border-[#1F7A63] transition"
+                      />
+                      <span className="text-xs text-slate-400 w-8 text-right tabular-nums">
+                        {saving ? "…" : `${pct}%`}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Available facts to add */}
+          {unselectedEntries.length > 0 && (
+            <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-2 border-b border-slate-100">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Available to add</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 px-4 py-3">
+                {unselectedEntries.map((entry) => (
+                  <button
+                    key={entry.factKey}
+                    type="button"
+                    onClick={() => toggleFact(entry.factKey)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-xs text-slate-500 hover:border-[#1F7A63]/50 hover:text-[#1F7A63] transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {filledFacts.length === 0 && (
+            <p className="text-xs text-slate-400 text-center py-4">
+              No facts with values yet. Upload documents or add facts to configure scoring.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function FactsTab({ factDefinitions, factValues, factEvidence, files, dealId, overallScore, buyerFitLabel }: Props) {
+export default function FactsTab({ factDefinitions, factValues, factEvidence, files, dealId, overallScore, buyerFitLabel, scoringConfig }: Props) {
+  const router = useRouter();
   const [editingFact, setEditingFact] = useState<FactDefinition | null>(null);
   const [resolvingConflict, setResolvingConflict] = useState<FactDefinition | null>(null);
   const [localOverrides, setLocalOverrides] = useState<Map<string, EntityFactValue>>(new Map());
   const [showAllCategories, setShowAllCategories] = useState(false);
+
+  const handleScoreUpdated = useCallback(() => {
+    // Delayed refresh to pick up the rescoring result (runs async server-side)
+    setTimeout(() => router.refresh(), 2500);
+  }, [router]);
 
   // Merge server values with local optimistic overrides
   const effectiveValues = [...factValues];
@@ -1034,6 +1345,51 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
     }
   }
 
+  async function acceptAllCandidates() {
+    const allToAccept = [
+      // Non-basic candidate facts
+      ...candidateFacts.map(({ fd, val }) => ({ fd, val })),
+      // Basic facts that are unreviewed AI-extracted
+      ...basicFacts.flatMap(({ fd }) => {
+        const val = valueMap.get(fd.id);
+        return val && isCandidate(val) ? [{ fd, val }] : [];
+      }),
+    ];
+    await Promise.all(allToAccept.map(({ fd, val }) => acceptCandidate(fd, val)));
+  }
+
+  async function overrideAllConflictsWithDocument() {
+    await Promise.all(
+      conflictingFacts.map(async ({ fd, val }) => {
+        // Find the best non-superseded AI evidence for this fact
+        const aiEvidence = factEvidence
+          .filter((ev) => ev.fact_definition_id === fd.id && !ev.is_superseded)
+          .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+        const bestAi = aiEvidence[0];
+        if (!bestAi?.extracted_value_raw) return;
+        try {
+          const res = await fetch(`/api/deals/${dealId}/facts/${fd.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              change_type: "override",
+              value_raw: bestAi.extracted_value_raw,
+              note: "Bulk override — accepted document values",
+              old_value: val.value_raw,
+              old_status: "conflicting",
+            }),
+          });
+          if (res.ok) {
+            const d = await res.json();
+            handleSaved(d.fact as EntityFactValue);
+          }
+        } catch {
+          // non-fatal
+        }
+      })
+    );
+  }
+
   if (factDefinitions.length === 0) {
     return (
       <div className="py-16 text-center px-4">
@@ -1052,7 +1408,11 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
     <div className="px-0 py-4">
 
       {/* ── Conflict banner ─────────────────────────────────────────────── */}
-      <ConflictBanner conflictingFacts={conflictingFacts} onResolve={setResolvingConflict} />
+      <ConflictBanner
+        conflictingFacts={conflictingFacts}
+        onResolve={setResolvingConflict}
+        onOverrideAll={overrideAllConflictsWithDocument}
+      />
 
       <div className="px-4">
 
@@ -1132,6 +1492,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
                   evidence={evidence}
                   sourceName={sn}
                   onEdit={() => setEditingFact(fd)}
+                  onAccept={val && isCandidate(val) ? () => acceptCandidate(fd, val) : undefined}
                 />
               );
             })}
@@ -1145,6 +1506,15 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
               <p className="text-[11px] font-bold text-blue-500 uppercase tracking-widest shrink-0">Awaiting Review</p>
               <div className="flex-1 h-px bg-blue-100" />
               <span className="text-[10px] text-blue-400 tabular-nums shrink-0">{candidateFacts.length} new</span>
+              {candidateFacts.length > 1 && (
+                <button
+                  type="button"
+                  onClick={acceptAllCandidates}
+                  className="text-[11px] font-semibold text-white bg-[#1F7A63] hover:bg-[#1a6654] px-2.5 py-1 rounded-lg transition-colors shrink-0"
+                >
+                  Accept all
+                </button>
+              )}
             </div>
             <p className="text-[11px] text-slate-400 mb-3">
               AI extracted these facts from your documents. Review and accept to include in scoring.
@@ -1242,6 +1612,15 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
             </div>
           )}
         </div>
+
+        {/* ── Scoring weights config ──────────────────────────────────────── */}
+        <ScoringConfigSection
+          factDefinitions={factDefinitions}
+          factValues={effectiveValues}
+          dealId={dealId}
+          initialConfig={scoringConfig ?? null}
+          onScoreUpdated={handleScoreUpdated}
+        />
 
       </div>{/* end px-4 */}
 

@@ -390,6 +390,148 @@ export function computeKpiScorecard(
   };
 }
 
+// ─── Custom fact scoring ──────────────────────────────────────────────────────
+
+/**
+ * Normalize a raw fact value to a 0–10 score for custom scoring.
+ * Uses the existing KPI scoring functions for facts that map to a KPI,
+ * otherwise uses a simple heuristic based on data type.
+ */
+function scoreFactForCustomScoring(
+  factKey: string,
+  parsedValue: number | boolean | string | null,
+  allInputs: KpiFactInputs
+): number | null {
+  if (parsedValue === null) return null;
+
+  // For facts that are inputs to existing KPIs, run the relevant KPI scorer
+  // and return its score as a proxy for this fact's quality.
+  const kpiForFact: Record<string, string> = {
+    asking_price:                    "price_multiple",
+    sde_latest:                      "price_multiple",
+    ebitda_latest:                   "price_multiple",
+    revenue_latest:                  "earnings_margin",
+    lease_monthly_rent:              "rent_ratio",
+    owner_hours_per_week:            "owner_dependence",
+    owner_in_sales:                  "owner_dependence",
+    owner_in_operations:             "owner_dependence",
+    manager_in_place:                "owner_dependence",
+    recurring_revenue_pct:           "revenue_quality",
+    customer_concentration_top1_pct: "revenue_quality",
+    employees_ft:                    "revenue_per_employee",
+    employees_pt:                    "revenue_per_employee",
+  };
+
+  const kpiKey = kpiForFact[factKey];
+  if (kpiKey) {
+    const kpiDef = KPI_DEFINITIONS.find((k) => k.kpi_key === kpiKey);
+    if (kpiDef) {
+      const result = kpiDef.score(allInputs);
+      return result.score;
+    }
+  }
+
+  // Fallback: score booleans (true = 8, false = 4)
+  if (typeof parsedValue === "boolean") {
+    return parsedValue ? 8 : 4;
+  }
+
+  // Fallback: numeric facts — return a neutral 5 (no benchmark available)
+  if (typeof parsedValue === "number") return 5;
+
+  return null;
+}
+
+/**
+ * Compute a scorecard using user-defined custom fact weights.
+ * Each selected fact is scored 0–10, then weighted and summed.
+ */
+export function computeCustomScorecard(
+  factValues: EntityFactValue[],
+  factDefIdToKey: Map<string, string>,
+  customWeights: Record<string, number>
+): KpiScorecardResult {
+  const rawInputs = extractFactInputs(factValues, factDefIdToKey);
+
+  const inputs: KpiFactInputs = {
+    asking_price:                    rawInputs.asking_price as number | null ?? null,
+    revenue_latest:                  rawInputs.revenue_latest as number | null ?? null,
+    sde_latest:                      rawInputs.sde_latest as number | null ?? null,
+    ebitda_latest:                   rawInputs.ebitda_latest as number | null ?? null,
+    revenue_year_1:                  rawInputs.revenue_year_1 as number | null ?? null,
+    revenue_year_2:                  rawInputs.revenue_year_2 as number | null ?? null,
+    sde_year_1:                      rawInputs.sde_year_1 as number | null ?? null,
+    lease_monthly_rent:              rawInputs.lease_monthly_rent as number | null ?? null,
+    years_in_business:               rawInputs.years_in_business as number | null ?? null,
+    customer_concentration_top1_pct: rawInputs.customer_concentration_top1_pct as number | null ?? null,
+    recurring_revenue_pct:           rawInputs.recurring_revenue_pct as number | null ?? null,
+    owner_hours_per_week:            rawInputs.owner_hours_per_week as number | null ?? null,
+    manager_in_place:                rawInputs.manager_in_place as boolean | null ?? null,
+    owner_in_sales:                  rawInputs.owner_in_sales as boolean | null ?? null,
+    owner_in_operations:             rawInputs.owner_in_operations as boolean | null ?? null,
+    employees_ft:                    rawInputs.employees_ft as number | null ?? null,
+    employees_pt:                    rawInputs.employees_pt as number | null ?? null,
+    legal_risk_flag:                 rawInputs.legal_risk_flag as boolean | null ?? null,
+    compliance_risk_flag:            rawInputs.compliance_risk_flag as boolean | null ?? null,
+    licensing_dependency:            rawInputs.licensing_dependency as boolean | null ?? null,
+    capex_intensity:                 rawInputs.capex_intensity as string | null ?? null,
+    seasonality:                     rawInputs.seasonality as string | null ?? null,
+  };
+
+  // Only include facts with non-zero weight
+  const activeWeights = Object.entries(customWeights).filter(([, w]) => w > 0);
+
+  const kpis: KpiScore[] = activeWeights.map(([factKey, weight]) => {
+    const parsedValue = rawInputs[factKey] ?? null;
+    const score = scoreFactForCustomScoring(factKey, parsedValue, inputs);
+    const weighted_score = score !== null ? score * weight : null;
+
+    // Find a human-readable label from the KPI definitions or use the fact key
+    const existingKpi = KPI_DEFINITIONS.find((k) =>
+      KPI_FACT_KEYS[k.kpi_key]?.includes(factKey)
+    );
+    const label = existingKpi?.label ?? factKey.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+    return {
+      kpi_key: factKey,
+      label,
+      raw_value: parsedValue !== null ? String(parsedValue) : null,
+      score,
+      weight,
+      weighted_score,
+      rationale: score !== null
+        ? `${label}: ${parsedValue}`
+        : `${label} not available`,
+      status: score !== null ? "known" : "missing",
+    };
+  });
+
+  const scoredKpis = kpis.filter((k) => k.score !== null);
+  const missingCount = kpis.filter((k) => k.status === "missing").length;
+
+  let overallScore: number | null = null;
+  let overallScore100: number | null = null;
+
+  if (scoredKpis.length > 0) {
+    const totalWeight = scoredKpis.reduce((sum, k) => sum + k.weight, 0);
+    const weightedSum = scoredKpis.reduce((sum, k) => sum + (k.weighted_score ?? 0), 0);
+    overallScore = totalWeight > 0 ? weightedSum / totalWeight : null;
+    overallScore100 = overallScore !== null ? Math.round(overallScore * 10) : null;
+  }
+
+  const coveragePct = kpis.length > 0
+    ? Math.round((scoredKpis.length / kpis.length) * 100)
+    : 0;
+
+  return {
+    overall_score: overallScore !== null ? Math.round(overallScore * 10) / 10 : null,
+    overall_score_100: overallScore100,
+    kpis,
+    missing_count: missingCount,
+    coverage_pct: coveragePct,
+  };
+}
+
 // ─── DB-integrated scoring ────────────────────────────────────────────────────
 
 /**
@@ -397,6 +539,9 @@ export function computeKpiScorecard(
  * Creates a processing_run record for full pipeline visibility.
  * Writes a score_history row with trigger context.
  * Returns the scorecard result (whether or not persistence succeeded).
+ *
+ * If the entity has a custom scoring_config in metadata_json, uses that
+ * instead of the default 6 hardcoded KPIs.
  */
 export async function scoreAndPersistKpis(
   entityId: string,
@@ -421,16 +566,25 @@ export async function scoreAndPersistKpis(
   try {
     if (runId) await updateProcessingRun(runId, { status: "running" }).catch(() => {});
 
-    const [factValues, factDefs] = await Promise.all([
+    const supabase = await createClient();
+
+    const [factValues, factDefs, entityRow] = await Promise.all([
       getCurrentFactsForEntity(entityId),
       getFactDefinitionsForEntityType(entityTypeId),
+      supabase.from("entities").select("metadata_json").eq("id", entityId).maybeSingle(),
     ]);
 
     const factDefIdToKey = new Map<string, string>(
       factDefs.map((fd) => [fd.id, fd.key])
     );
 
-    const scorecard = computeKpiScorecard(factValues, factDefIdToKey);
+    // Check for custom scoring config in entity metadata
+    const meta = (entityRow.data?.metadata_json as Record<string, unknown> | null) ?? {};
+    const customWeights = (meta.scoring_config as Record<string, number> | null) ?? null;
+
+    const scorecard = customWeights && Object.keys(customWeights).length > 0
+      ? computeCustomScorecard(factValues, factDefIdToKey, customWeights)
+      : computeKpiScorecard(factValues, factDefIdToKey);
 
     // Compute confidence based on source provenance of facts used in scoring
     const confidence = computeScoringConfidence(scorecard.kpis, factValues, factDefIdToKey);

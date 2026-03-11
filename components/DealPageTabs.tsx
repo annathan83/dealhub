@@ -1140,7 +1140,7 @@ export default function DealPageTabs({
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "workspace");
   const handleReviewFacts = () => setActiveTab("facts");
 
-  // Badge: count of missing core scoring facts (asking_price, sde_latest, revenue_latest, employees_ft, years_in_business)
+  // Badge: count of core scoring facts that are missing, unclear, or conflicting
   const CORE_SCORING_KEYS = ["asking_price", "sde_latest", "revenue_latest", "employees_ft", "years_in_business"];
   const factsBadge = entityData
     ? (() => {
@@ -1149,7 +1149,7 @@ export default function DealPageTabs({
           .filter((fd) => CORE_SCORING_KEYS.includes(fd.key))
           .filter((fd) => {
             const v = valueMap.get(fd.id);
-            return !v || v.status === "missing" || v.status === "unclear";
+            return !v || v.status === "missing" || v.status === "unclear" || v.status === "conflicting";
           }).length;
       })()
     : 0;
@@ -1212,6 +1212,7 @@ export default function DealPageTabs({
               files={entityData.files}
               dealId={deal.id}
               overallScore={kpiScorecard?.overall_score ?? null}
+              scoringConfig={(entityData.entity.metadata_json.scoring_config as Record<string, number> | undefined) ?? null}
               buyerFitLabel={buyerProfile && entityData
                 ? (() => {
                     const factDefs = entityData.fact_definitions;

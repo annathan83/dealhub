@@ -174,10 +174,12 @@ export async function reconcileFacts(
         );
 
         if (hasConflictWithManual) {
-          // AI value differs from manual entry — surface as conflict for user to resolve
+          // AI value differs from manual entry — surface as conflict for user to resolve.
+          // Keep the existing manual value as the current value (do not overwrite with AI value).
           newStatus = "conflicting";
-          newConfidence = candidate.confidence;
-          newEvidenceId = evidence.id;
+          newConfidence = existingFactValue!.confidence ?? candidate.confidence;
+          // Keep the existing evidence id so the displayed value stays as the manual entry
+          newEvidenceId = existingFactValue!.current_evidence_id ?? evidence.id;
           result.facts_conflicted++;
 
           await logFactConflictDetected(input.entityId, factDef.id, {
@@ -264,10 +266,17 @@ export async function reconcileFacts(
       // ai_inferred  = AI estimated from context without a direct evidence snippet
       const sourceType = candidate.snippet ? "ai_extracted" : "ai_inferred";
 
+      // When conflicting, upsertEntityFactValue preserves the existing user_override value
+      // automatically (it only updates status + current_evidence_id for user_override rows).
+      // For non-user-override conflicts, keep the existing evidence value as current.
+      const valueToStore = newStatus === "conflicting" && !isExistingUserOverride
+        ? (bestExisting?.extracted_value_raw ?? candidate.extracted_value_raw)
+        : candidate.extracted_value_raw;
+
       await upsertEntityFactValue({
         entity_id: input.entityId,
         fact_definition_id: factDef.id,
-        value_raw: candidate.extracted_value_raw,
+        value_raw: valueToStore,
         value_normalized_json: candidate.normalized_value,
         status: newStatus,
         confidence: newConfidence,
