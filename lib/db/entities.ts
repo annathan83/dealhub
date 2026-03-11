@@ -115,6 +115,8 @@ function normalizeFactDefinition(row: Record<string, unknown>): FactDefinition {
     is_user_visible_initially: (row.is_user_visible_initially as boolean) ?? false,
     is_required_for_kpi: (row.is_required_for_kpi as boolean) ?? false,
     industry_key: (row.industry_key as string | null) ?? null,
+    is_derived: (row.is_derived as boolean) ?? false,
+    fact_group: (row.fact_group as FactDefinition["fact_group"]) ?? null,
     metadata_json: (row.metadata_json as Record<string, unknown>) ?? {},
     created_at: row.created_at as string,
   };
@@ -665,6 +667,9 @@ export async function upsertEntityFactValue(params: {
   confidence?: number | null;
   current_evidence_id?: string | null;
   value_source_type?: ValueSourceType;
+  /** Explicit review status. When omitted, defaults to "confirmed" for user_override
+   *  and "unreviewed" for all other source types. */
+  review_status?: ReviewStatus;
 }): Promise<EntityFactValue | null> {
   const supabase = await createClient();
 
@@ -701,8 +706,11 @@ export async function upsertEntityFactValue(params: {
     upsertPayload.status = params.status;
     upsertPayload.confidence = params.confidence ?? null;
     upsertPayload.value_source_type = params.value_source_type ?? "ai_extracted";
-    // User overrides are always considered reviewed (user explicitly entered the value)
-    upsertPayload.review_status = params.value_source_type === "user_override" ? "confirmed" : "unreviewed";
+    // Use explicit review_status if provided; otherwise default based on source type.
+    // user_override → confirmed (user explicitly entered), everything else → unreviewed.
+    upsertPayload.review_status =
+      params.review_status ??
+      (params.value_source_type === "user_override" ? "confirmed" : "unreviewed");
   }
 
   const { data, error } = await supabase

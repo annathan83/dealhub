@@ -170,9 +170,11 @@ const INFERENCE_RULES: InferenceRule[] = [
   // ── 5. Revenue per Employee ──────────────────────────────────────────────────
   (facts) => {
     const revenue = getNumeric(facts, "revenue_latest");
+    // Prefer employees_total if available; otherwise sum ft + pt
+    const totalDirect = getNumeric(facts, "employees_total");
     const ftEmployees = getNumeric(facts, "employees_ft") ?? 0;
     const ptEmployees = getNumeric(facts, "employees_pt") ?? 0;
-    const totalEmployees = ftEmployees + ptEmployees * 0.5; // PT counts as 0.5 FTE
+    const totalEmployees = totalDirect ?? (ftEmployees + ptEmployees * 0.5); // PT counts as 0.5 FTE
     if (!revenue || totalEmployees <= 0) return null;
 
     if (facts.get("revenue_per_employee")?.value_raw) {
@@ -190,7 +192,8 @@ const INFERENCE_RULES: InferenceRule[] = [
 
   // ── 6. Capacity + Enrollment → Utilization Rate ─────────────────────────────
   (facts) => {
-    const capacity = getNumeric(facts, "student_capacity") ?? getNumeric(facts, "capacity");
+    // Support both 'capacity' (new canonical key) and legacy 'student_capacity'
+    const capacity = getNumeric(facts, "capacity") ?? getNumeric(facts, "student_capacity");
     const enrollment = getNumeric(facts, "enrollment");
     if (!capacity || !enrollment || capacity <= 0) return null;
 
@@ -207,24 +210,24 @@ const INFERENCE_RULES: InferenceRule[] = [
     };
   },
 
-  // ── 7. Rent + Square Footage → Rent per Sq Ft ───────────────────────────────
+  // ── 7. Monthly Rent + Revenue → Rent Ratio ───────────────────────────────────
+  // Replaces the rent-per-sqft rule with the more useful rent_ratio KPI
   (facts) => {
-    const rent = getNumeric(facts, "monthly_rent") ?? getNumeric(facts, "annual_rent");
-    const sqft = getNumeric(facts, "square_footage");
-    if (!rent || !sqft || sqft <= 0) return null;
+    const monthlyRent = getNumeric(facts, "lease_monthly_rent");
+    const revenue = getNumeric(facts, "revenue_latest");
+    if (!monthlyRent || !revenue || revenue <= 0) return null;
 
-    if (facts.get("rent_per_sqft")?.value_raw) {
-      return { skip: "rent_per_sqft already has a value" };
+    if (facts.get("rent_ratio")?.value_raw) {
+      return { skip: "rent_ratio already has a value" };
     }
 
-    // Normalize to annual rent per sqft
-    const annualRent = facts.get("monthly_rent")?.value_raw ? rent * 12 : rent;
-    const rentPerSqft = annualRent / sqft;
+    const annualRent = monthlyRent * 12;
+    const ratio = annualRent / revenue;
     return {
-      fact_key: "rent_per_sqft",
-      value_raw: rentPerSqft.toFixed(2),
-      confidence: 0.85,
-      rationale: `Calculated from annual rent (${formatCurrency(annualRent)}) ÷ ${sqft.toLocaleString()} sq ft = $${rentPerSqft.toFixed(2)}/sq ft`,
+      fact_key: "rent_ratio",
+      value_raw: (ratio * 100).toFixed(1),
+      confidence: 0.88,
+      rationale: `Calculated from annual rent (${formatCurrency(annualRent)}) ÷ revenue (${formatCurrency(revenue)}) = ${formatPct(ratio)} rent ratio`,
     };
   },
 

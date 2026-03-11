@@ -101,7 +101,33 @@ export type FileChunk = {
 
 // ─── Fact Definitions ─────────────────────────────────────────────────────────
 
-export type FactCategory = "financial" | "deal_terms" | "operations" | "people" | "real_estate";
+/**
+ * DB-level category values (legacy column in fact_definitions).
+ * Used for internal grouping and migrations.
+ */
+export type FactCategory =
+  | "financial"
+  | "deal_terms"
+  | "operations"
+  | "people"
+  | "real_estate"
+  | "risk";
+
+/**
+ * UI-level fact grouping (fact_group column, migration 042).
+ * Maps to the grouped sections shown in the Facts tab.
+ * Falls back to "other" when null.
+ */
+export type FactGroup =
+  | "basic"
+  | "financials"
+  | "operations"
+  | "employees_management"
+  | "facility_real_estate"
+  | "deal_structure"
+  | "market_location"
+  | "risk_indicators"
+  | "other";
 export type FactDataType = "currency" | "number" | "percent" | "text" | "boolean" | "date";
 
 /**
@@ -131,6 +157,18 @@ export type FactDefinition = {
   is_required_for_kpi: boolean;
   /** Optional industry overlay key (e.g. 'saas', 'restaurant'). Null = all industries. */
   industry_key: string | null;
+  /**
+   * Whether this fact is computed/derived rather than directly entered or extracted.
+   * Derived facts (e.g. price_multiple, sde_margin) are calculated from other facts
+   * and stored as ai_inferred or system_derived in entity_fact_values.
+   * Added in migration 042.
+   */
+  is_derived: boolean;
+  /**
+   * UI grouping key for the Facts tab (migration 042).
+   * Falls back to "other" when null.
+   */
+  fact_group: FactGroup | null;
   metadata_json: Record<string, unknown>;
   created_at: string;
 };

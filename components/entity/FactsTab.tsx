@@ -72,7 +72,7 @@ const FACT_CATEGORIES: FactCategory[] = [
     factKeys: [
       "ebitda_latest", "revenue_year_1", "revenue_year_2", "sde_year_1",
       "gross_profit", "net_income", "addbacks_summary", "financial_quality_notes",
-      "recurring_revenue_pct", "repeat_revenue_pct",
+      "recurring_revenue_pct", "repeat_revenue_pct", "payroll",
       "customer_concentration_top1_pct", "customer_concentration_top5_pct",
       "vendor_concentration_top1_pct",
     ],
@@ -82,8 +82,9 @@ const FACT_CATEGORIES: FactCategory[] = [
     label: "Operations",
     icon: "⚙️",
     factKeys: [
-      "years_in_business", "seasonality", "seller_reason", "transition_support",
-      "capex_intensity", "working_capital_intensity",
+      "years_in_business", "seasonality", "seller_reason", "reason_for_sale",
+      "transition_support", "capex_intensity", "working_capital_intensity",
+      "capacity", "enrollment", "utilization_rate",
     ],
   },
   {
@@ -91,8 +92,9 @@ const FACT_CATEGORIES: FactCategory[] = [
     label: "Employees & Management",
     icon: "👥",
     factKeys: [
-      "employees_pt", "manager_in_place",
-      "owner_hours_per_week", "owner_in_sales", "owner_in_operations",
+      "employees_total", "employees_pt", "manager_in_place",
+      "owner_hours_per_week", "owner_hours", "owner_in_sales", "owner_in_operations",
+      "owner_dependence_level",
     ],
   },
   {
@@ -100,8 +102,8 @@ const FACT_CATEGORIES: FactCategory[] = [
     label: "Facility / Real Estate",
     icon: "🏢",
     factKeys: [
-      "lease_monthly_rent", "lease_expiration_date", "real_estate_included",
-      "inventory_included",
+      "lease_monthly_rent", "lease_expiration_date", "lease_years_remaining",
+      "lease_terms", "real_estate_included", "inventory_included",
     ],
   },
   {
@@ -130,7 +132,12 @@ const FACT_CATEGORIES: FactCategory[] = [
   },
 ];
 
-const DERIVED_KEYS = new Set(["purchase_multiple", "sde_margin", "revenue_per_employee", "sde_per_employee"]);
+const DERIVED_KEYS = new Set([
+  "purchase_multiple", "sde_margin", "revenue_per_employee", "sde_per_employee",
+  "owner_dependence_level", "rent_ratio", "utilization_rate",
+  // Legacy derived key from early migrations
+  "implied_multiple",
+]);
 const BASIC_KEYS = new Set(BASIC_FACTS.map((f) => f.key));
 const ALL_CATEGORY_KEYS = new Set(FACT_CATEGORIES.flatMap((c) => c.factKeys));
 

@@ -78,9 +78,11 @@ export function computeDerivedMetrics(
   const askingPrice = vals["asking_price"] as number | undefined;
   const sde = (vals["sde_latest"] ?? vals["ebitda_latest"]) as number | undefined;
   const revenue = vals["revenue_latest"] as number | undefined;
+  const empTotal = vals["employees_total"] as number | undefined;
   const empFt = (vals["employees_ft"] as number | undefined) ?? 0;
   const empPt = (vals["employees_pt"] as number | undefined) ?? 0;
-  const totalEmp = empFt + empPt;
+  // Prefer employees_total if present; otherwise sum ft + pt (pt counts as 0.5 FTE)
+  const totalEmp = empTotal ?? (empFt + empPt * 0.5);
 
   // ── Purchase Multiple ──────────────────────────────────────────────────────
   const multipleVal = (askingPrice && sde && sde > 0) ? askingPrice / sde : null;
