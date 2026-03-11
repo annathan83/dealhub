@@ -32,7 +32,7 @@ const IMAGE_MIME_PREFIX = "image/";
 const MAX_IMAGE_ANALYSIS_BYTES = 4 * 1024 * 1024;
 const MAX_WHISPER_BYTES = 25 * 1024 * 1024;
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const ACCEPTED_EXTENSIONS = [
@@ -215,7 +215,9 @@ export async function POST(
       const extractionMethod = isAudio ? "whisper" : isImage ? "vision" : documentExtractionMethod;
       const extractedText = isImage || isAudio ? analysis.summary : documentExtractedText;
 
-      ingestFromDealUpload({
+      // Await the entity pipeline so fact extraction completes before we return.
+      // This ensures the Facts tab shows extracted values immediately after upload.
+      await ingestFromDealUpload({
         dealId, userId: user.id,
         googleFileId: driveMeta.googleFileId,
         originalFileName: file.name,
@@ -225,7 +227,7 @@ export async function POST(
         summary: analysis.summary,
         webViewLink: driveMeta.webViewLink ?? null,
         driveCreatedTime: driveMeta.createdTime ?? null,
-      }).catch((err) => console.error("[entity pipeline] ingestFromDealUpload failed:", err));
+      });
 
       console.log(`[upload] "${file.name}" complete. Drive ID: ${driveMeta.googleFileId}`);
       results.push({ fileName: file.name, success: true, googleFileId: driveMeta.googleFileId });

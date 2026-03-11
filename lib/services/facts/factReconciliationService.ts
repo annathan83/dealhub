@@ -21,6 +21,7 @@ import {
   insertFactEvidence,
   upsertEntityFactValue,
   getFactEvidenceForEntity,
+  getCurrentFactsForEntity,
   promoteEvidenceToPrimary,
 } from "@/lib/db/entities";
 import { logFactUpdated, logFactConflictDetected } from "../entity/entityEventService";
@@ -98,12 +99,22 @@ export async function reconcileFacts(
   }
 
   // Fetch all current evidence for this entity (to check conflicts)
-  const existingEvidence = await getFactEvidenceForEntity(input.entityId);
+  const [existingEvidence, currentFactValues] = await Promise.all([
+    getFactEvidenceForEntity(input.entityId),
+    getCurrentFactsForEntity(input.entityId),
+  ]);
+
   const evidenceByFactId = new Map<string, typeof existingEvidence[0][]>();
   for (const ev of existingEvidence) {
     const list = evidenceByFactId.get(ev.fact_definition_id) ?? [];
     list.push(ev);
     evidenceByFactId.set(ev.fact_definition_id, list);
+  }
+
+  // Map current fact values by fact_definition_id for conflict detection against manual entries
+  const currentFactByDefId = new Map<string, EntityFactValue>();
+  for (const fv of currentFactValues) {
+    currentFactByDefId.set(fv.fact_definition_id, fv);
   }
 
   for (const candidate of input.candidates) {
@@ -137,16 +148,64 @@ export async function reconcileFacts(
         null
       );
 
+      // 2b. Also check if there's a manually-entered (user_override) value with no evidence row.
+      //     This handles the case where the user entered values at deal creation.
+      const existingFactValue = currentFactByDefId.get(factDef.id);
+      const isExistingUserOverride =
+        existingFactValue?.value_source_type === "user_override" &&
+        existingFactValue?.value_raw !== null;
+
       let newStatus: EntityFactValue["status"] = "confirmed";
       let newConfidence = candidate.confidence;
       let newEvidenceId = evidence.id;
 
-      if (!bestExisting) {
-        // Rule 1: No existing evidence — use this as confirmed
+      if (!bestExisting && !isExistingUserOverride) {
+        // Rule 1: No existing evidence or manual entry — use this as confirmed
         newStatus = candidate.confidence >= 0.5 ? "confirmed" : "unclear";
+      } else if (isExistingUserOverride && !bestExisting) {
+        // Rule 1b: No existing evidence but there IS a manually-entered value.
+        // Check if the CIM value conflicts with what the user manually entered.
+        const manualValue = existingFactValue!.value_raw!;
+        const hasConflictWithManual = valuesConflict(
+          manualValue,
+          candidate.extracted_value_raw,
+          factDef.data_type
+        );
+
+        if (hasConflictWithManual) {
+          // CIM value differs from manual entry — surface as conflict for user to resolve
+          newStatus = "conflicting";
+          newConfidence = candidate.confidence;
+          newEvidenceId = evidence.id;
+          result.facts_conflicted++;
+
+          await logFactConflictDetected(input.entityId, factDef.id, {
+            existing_value: manualValue,
+            new_value: candidate.extracted_value_raw,
+            fact_key: candidate.fact_key,
+            fact_label: factDef.label,
+            source_file_id: input.fileId,
+            snippet: candidate.snippet ?? null,
+          }, { fileId: input.fileId });
+        } else {
+          // CIM confirms the manual value — update to document-backed
+          newStatus = "confirmed";
+          newConfidence = candidate.confidence;
+          newEvidenceId = evidence.id;
+          result.facts_updated++;
+
+          await logFactUpdated(input.entityId, factDef.id, {
+            old_value: manualValue,
+            new_value: candidate.extracted_value_raw,
+            fact_key: candidate.fact_key,
+            fact_label: factDef.label,
+            source_file_id: input.fileId,
+            snippet: candidate.snippet ?? null,
+          }, { fileId: input.fileId });
+        }
       } else {
         const hasConflict = valuesConflict(
-          bestExisting.extracted_value_raw,
+          bestExisting!.extracted_value_raw,
           candidate.extracted_value_raw,
           factDef.data_type
         );
@@ -154,12 +213,12 @@ export async function reconcileFacts(
         if (hasConflict) {
           // Rule 3: Values conflict
           newStatus = "conflicting";
-          newConfidence = Math.max(candidate.confidence, bestExisting.confidence ?? 0);
-          newEvidenceId = bestExisting.id; // keep existing as "current"
+          newConfidence = Math.max(candidate.confidence, bestExisting!.confidence ?? 0);
+          newEvidenceId = bestExisting!.id; // keep existing as "current"
           result.facts_conflicted++;
 
           await logFactConflictDetected(input.entityId, factDef.id, {
-            existing_value: bestExisting.extracted_value_raw,
+            existing_value: bestExisting!.extracted_value_raw,
             new_value: candidate.extracted_value_raw,
             fact_key: candidate.fact_key,
             fact_label: factDef.label,
@@ -168,7 +227,7 @@ export async function reconcileFacts(
           }, { fileId: input.fileId });
         } else if (
           candidate.confidence >= MIN_CONFIDENCE_FOR_SUPERSEDE &&
-          candidate.confidence > (bestExisting.confidence ?? 0)
+          candidate.confidence > (bestExisting!.confidence ?? 0)
         ) {
           // Rule 4: New evidence is clearly stronger — supersede old
           newStatus = "confirmed";
@@ -177,7 +236,7 @@ export async function reconcileFacts(
           result.facts_updated++;
 
           await logFactUpdated(input.entityId, factDef.id, {
-            old_value: bestExisting.extracted_value_raw,
+            old_value: bestExisting!.extracted_value_raw,
             new_value: candidate.extracted_value_raw,
             fact_key: candidate.fact_key,
             fact_label: factDef.label,
@@ -187,13 +246,13 @@ export async function reconcileFacts(
         } else {
           // Rule 2: New evidence matches or is weaker — update confidence if stronger
           newStatus = "confirmed";
-          if (candidate.confidence > (bestExisting.confidence ?? 0)) {
+          if (candidate.confidence > (bestExisting!.confidence ?? 0)) {
             newConfidence = candidate.confidence;
             newEvidenceId = evidence.id;
             result.facts_updated++;
           } else {
-            newConfidence = bestExisting.confidence ?? candidate.confidence;
-            newEvidenceId = bestExisting.id;
+            newConfidence = bestExisting!.confidence ?? candidate.confidence;
+            newEvidenceId = bestExisting!.id;
           }
         }
       }

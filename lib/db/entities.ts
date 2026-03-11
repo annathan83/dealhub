@@ -701,7 +701,8 @@ export async function upsertEntityFactValue(params: {
     upsertPayload.status = params.status;
     upsertPayload.confidence = params.confidence ?? null;
     upsertPayload.value_source_type = params.value_source_type ?? "ai_extracted";
-    upsertPayload.review_status = "unreviewed";
+    // User overrides are always considered reviewed (user explicitly entered the value)
+    upsertPayload.review_status = params.value_source_type === "user_override" ? "confirmed" : "unreviewed";
   }
 
   const { data, error } = await supabase

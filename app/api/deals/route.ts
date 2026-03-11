@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { ensureDealSubfolders } from "@/lib/google/drive";
+import { seedManualFactsFromDeal } from "@/lib/services/entity/dealFactSeedService";
 
 export const maxDuration = 30;
 
@@ -82,7 +83,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 2. Provision Drive folder + subfolders (non-fatal if Drive not connected) ─
+  // ── 2. Seed manual facts into entity_fact_values (non-fatal) ─────────────────
+  // This ensures the Facts tab shows manual inputs immediately, and that the
+  // reconciliation service can detect conflicts when a CIM is uploaded later.
+  seedManualFactsFromDeal(deal.id as string, user.id, {
+    asking_price: body.asking_price,
+    sde: body.sde,
+    industry: body.industry,
+    location: body.location,
+    state: body.state,
+    county: body.county,
+    city: body.city,
+  }).catch((err) => console.error("[createDeal] seedManualFactsFromDeal failed:", err));
+
+  // ── 3. Provision Drive folder + subfolders (non-fatal if Drive not connected) ─
   // Creates: DealHub/00001_Deal-Name/raw/, /derived/, /intelligence/
   // If Drive isn't connected yet the folders are created lazily on first upload.
   let driveFolderError: string | null = null;

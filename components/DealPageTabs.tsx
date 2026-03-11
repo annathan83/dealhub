@@ -110,6 +110,68 @@ function TabBar({
   );
 }
 
+// ─── New Facts Extracted Banner ───────────────────────────────────────────────
+// Shown when AI has extracted facts from an uploaded document that haven't been
+// reviewed yet. Prompts user to switch to the Facts tab to review them.
+
+function NewFactsBanner({
+  entityData,
+  onReviewFacts,
+}: {
+  entityData: EntityPageData | null;
+  onReviewFacts: () => void;
+}) {
+  const [dismissed, setDismissed] = useState(false);
+  if (!entityData || dismissed) return null;
+
+  // Count unreviewed AI-extracted or AI-inferred facts
+  const unreviewedAiFacts = entityData.fact_values.filter(
+    (v) =>
+      v.review_status === "unreviewed" &&
+      (v.value_source_type === "ai_extracted" || v.value_source_type === "ai_inferred") &&
+      v.value_raw !== null
+  );
+
+  if (unreviewedAiFacts.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-emerald-50 overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+          <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-emerald-800">
+            {unreviewedAiFacts.length} fact{unreviewedAiFacts.length !== 1 ? "s" : ""} extracted from your upload
+          </p>
+          <p className="text-xs text-emerald-600 mt-0.5">
+            Review and confirm the values AI found in your document
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={onReviewFacts}
+            className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            Review Facts
+          </button>
+          <button
+            onClick={() => setDismissed(true)}
+            className="p-1 text-emerald-400 hover:text-emerald-600 transition-colors"
+            aria-label="Dismiss"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Conflict Alert Banner ────────────────────────────────────────────────────
 // Shown at the top of the Workspace tab when key scoring facts have conflicting
 // values that need user resolution. Each conflict row shows the fact name,
@@ -152,7 +214,19 @@ function ConflictAlertBanner({
       const allEvidence = evidenceMap.get(fd.id) ?? [];
       const primary = allEvidence.find((e) => e.is_primary) ?? allEvidence[0];
       const secondary = allEvidence.find((e) => e.id !== primary?.id);
-      return { fd, val, primary, secondary };
+
+      // For user_override vs CIM: the "existing" value is the user's manual entry,
+      // the "new" value is the CIM extraction (the only evidence row).
+      const isUserOverrideConflict = val.value_source_type === "user_override";
+      const existingDisplayValue = isUserOverrideConflict
+        ? (val.value_raw ?? "—")
+        : (primary?.extracted_value_raw ?? val.value_raw ?? "—");
+      const newDisplayValue = isUserOverrideConflict
+        ? (primary?.extracted_value_raw ?? "—")
+        : (secondary?.extracted_value_raw ?? "—");
+      const snippet = primary?.snippet ?? secondary?.snippet ?? null;
+
+      return { fd, val, primary, secondary, existingDisplayValue, newDisplayValue, snippet };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null)
     .filter((x) => !dismissed.has(x.fd.id));
@@ -199,10 +273,9 @@ function ConflictAlertBanner({
       </div>
 
       <div className="divide-y divide-amber-100">
-        {conflicts.map(({ fd, val, primary, secondary }) => {
-          const existingVal = primary?.extracted_value_raw ?? val.value_raw ?? "—";
-          const newVal = secondary?.extracted_value_raw ?? "—";
-          const snippet = secondary?.snippet ?? primary?.snippet ?? null;
+        {conflicts.map(({ fd, existingDisplayValue, newDisplayValue, snippet }) => {
+          const existingVal = existingDisplayValue;
+          const newVal = newDisplayValue;
           const isResolving = resolving === fd.id;
 
           return (
@@ -906,6 +979,7 @@ export default function DealPageTabs({
   buyerProfile,
 }: DealPageTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const handleReviewFacts = () => setActiveTab("facts");
 
   // Badge: count of missing core scoring facts (asking_price, sde_latest, revenue_latest, employees_ft, years_in_business)
   const CORE_SCORING_KEYS = ["asking_price", "sde_latest", "revenue_latest", "employees_ft", "years_in_business"];
@@ -938,6 +1012,9 @@ export default function DealPageTabs({
       {/* ── WORKSPACE TAB ───────────────────────────────────────────────── */}
       {activeTab === "workspace" && (
         <div className="px-4 py-4 flex flex-col gap-5">
+
+          {/* New facts banner — shown when AI extracted unreviewed facts from upload */}
+          <NewFactsBanner entityData={entityData} onReviewFacts={handleReviewFacts} />
 
           {/* Conflict alert — shown when scoring facts have unresolved conflicts */}
           <ConflictAlertBanner entityData={entityData} dealId={deal.id} />
