@@ -102,17 +102,39 @@ function formatDate(iso: string) {
   });
 }
 
-function formatCurrency(val: string | null): string {
+/**
+ * Compact currency formatter — converts raw numeric strings to readable output.
+ * $120000 → $120K  |  $1200000 → $1.2M  |  $500000 → $500K
+ * Passes through values that are already formatted (start with $).
+ */
+function formatCurrencyCompact(val: string | null): string {
   if (!val?.trim()) return "—";
   const s = val.trim();
-  if (s.startsWith("$")) return s;
-  return /^\d/.test(s) ? `$${s}` : s;
+  // Already formatted — strip $ and reformat so we can normalize
+  const raw = s.replace(/[$,\s]/g, "").toUpperCase();
+  const multiplier = raw.endsWith("M") ? 1_000_000 : raw.endsWith("K") ? 1_000 : 1;
+  const num = parseFloat(raw.replace(/[MK]$/, ""));
+  if (isNaN(num)) return s.startsWith("$") ? s : `$${s}`;
+  const value = num * multiplier;
+  if (value >= 1_000_000) {
+    const m = value / 1_000_000;
+    return `$${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    const k = value / 1_000;
+    return `$${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}K`;
+  }
+  return `$${Math.round(value).toLocaleString()}`;
 }
 
-function formatMultiple(val: string | null): string {
+function formatMultipleValue(val: string | null): string {
   if (!val?.trim()) return "—";
   const s = val.trim();
-  return /x$/i.test(s) ? s : `${s}x`;
+  // Already has x suffix
+  if (/x$/i.test(s)) return s.toLowerCase();
+  const n = parseFloat(s.replace(/[^0-9.]/g, ""));
+  if (isNaN(n)) return `${s}x`;
+  return `${n % 1 === 0 ? n.toFixed(1) : n.toFixed(1)}x`;
 }
 
 // ─── Score badge ──────────────────────────────────────────────────────────────
@@ -120,55 +142,67 @@ function formatMultiple(val: string | null): string {
 function ScoreBadge({ score100 }: { score100: number | null }) {
   if (score100 === null) {
     return (
-      <span className="text-[#9CA3AF] text-xl font-semibold tabular-nums leading-tight" title="No score yet">
+      <span className="text-[#9CA3AF] text-base font-semibold tabular-nums leading-tight" title="No score yet">
         —
       </span>
     );
   }
-  // Convert 0–100 to 1–10 display
   const display = Math.round(score100 / 10);
   const color =
     display >= 7 ? "bg-emerald-500 text-white ring-1 ring-inset ring-emerald-600/20" :
     display >= 5 ? "bg-amber-400 text-white ring-1 ring-inset ring-amber-500/20" :
                    "bg-red-500 text-white ring-1 ring-inset ring-red-600/20";
   return (
-    <span className={`inline-flex items-baseline gap-0.5 rounded-full px-3 py-1 text-lg font-extrabold tabular-nums leading-tight ${color}`}>
+    <span className={`inline-flex items-baseline gap-0.5 rounded-full px-2.5 py-0.5 text-base font-extrabold tabular-nums leading-tight ${color}`}>
       {display}
-      <span className="text-[11px] font-normal opacity-80">/10</span>
+      <span className="text-[10px] font-normal opacity-80">/10</span>
     </span>
   );
 }
 
 // ─── Metric cell ──────────────────────────────────────────────────────────────
+// Mobile-safe: label above, value below, min-w-0 on container, no fixed widths.
 
 function MetricCell({
   label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1 min-w-0">
+      <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest leading-none whitespace-nowrap">
+        {label}
+      </p>
+      <div className="min-w-0">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MetricValue({
   value,
   empty,
   primary,
 }: {
-  label: string;
   value: string;
   empty: boolean;
   primary?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1 min-w-0">
-      <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest leading-none">
-        {label}
-      </p>
-      <p
-        className={`tabular-nums leading-tight ${
-          empty
-            ? "text-[#9CA3AF] text-xl font-semibold"
-            : primary
-            ? "text-[#1E1E1E] text-2xl font-extrabold"
-            : "text-[#374151] text-xl font-bold"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
+    <p
+      className={`tabular-nums leading-tight break-all min-w-0 ${
+        empty
+          ? "text-[#9CA3AF] text-base font-semibold"
+          : primary
+          ? "text-[#1E1E1E] text-lg font-extrabold"
+          : "text-[#374151] text-lg font-bold"
+      }`}
+    >
+      {value}
+    </p>
   );
 }
 
@@ -390,24 +424,38 @@ export default function DealHeader({
           </div>
         </div>
 
-        {/* ── Metrics strip ───────────────────────────────────────────── */}
+        {/* ── Metrics grid ────────────────────────────────────────────── */}
+        {/* Mobile: 2×2 grid. Tablet+: single 4-column row. No absolute  */}
+        {/* dividers — they break on mobile. Dividers are CSS border-r    */}
+        {/* on sm+ only, removed on the last column via last:border-r-0.  */}
         {hasAnyMetric || score100 !== null ? (
-          <div className="border-t border-[#E5E7EB] px-4 py-4 grid grid-cols-4 gap-3">
-            <MetricCell label="SDE" value={formatCurrency(deal.sde)} empty={!deal.sde} primary />
-            <div className="relative pl-3">
-              <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
-              <MetricCell label="Ask" value={formatCurrency(deal.asking_price)} empty={!deal.asking_price} />
+          <div className="border-t border-[#E5E7EB] px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-3">
+            {/* SDE */}
+            <div className="min-w-0 sm:border-r sm:border-[#E5E7EB] sm:pr-3">
+              <MetricCell label="SDE">
+                <MetricValue value={formatCurrencyCompact(deal.sde)} empty={!deal.sde} primary />
+              </MetricCell>
             </div>
-            <div className="relative pl-3">
-              <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
-              <MetricCell label="Multiple" value={formatMultiple(deal.multiple)} empty={!deal.multiple} />
+
+            {/* Ask */}
+            <div className="min-w-0 sm:border-r sm:border-[#E5E7EB] sm:pr-3">
+              <MetricCell label="Ask">
+                <MetricValue value={formatCurrencyCompact(deal.asking_price)} empty={!deal.asking_price} />
+              </MetricCell>
             </div>
-            <div className="relative pl-3">
-              <div className="absolute left-0 top-0 bottom-0 w-px bg-[#E5E7EB]" />
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none">Score</p>
+
+            {/* Multiple */}
+            <div className="min-w-0 sm:border-r sm:border-[#E5E7EB] sm:pr-3">
+              <MetricCell label="Multiple">
+                <MetricValue value={formatMultipleValue(deal.multiple)} empty={!deal.multiple} />
+              </MetricCell>
+            </div>
+
+            {/* Score */}
+            <div className="min-w-0">
+              <MetricCell label="Score">
                 <ScoreBadge score100={score100} />
-              </div>
+              </MetricCell>
             </div>
           </div>
         ) : (
