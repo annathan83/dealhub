@@ -204,14 +204,14 @@ function SourceBadge({ val }: { val: EntityFactValue | undefined }) {
 
   if (status === "conflicting") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
         ⚠ Conflict
       </span>
     );
   }
   if (st === "user_override") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full">
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full">
         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
         </svg>
@@ -221,7 +221,7 @@ function SourceBadge({ val }: { val: EntityFactValue | undefined }) {
   }
   if (st === "ai_extracted") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
         </svg>
@@ -231,7 +231,7 @@ function SourceBadge({ val }: { val: EntityFactValue | undefined }) {
   }
   if (st === "ai_inferred") {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
         <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.353A3.75 3.75 0 0112 18.75a3.75 3.75 0 01-2.652-1.097l-.347-.353z" />
         </svg>
@@ -240,7 +240,7 @@ function SourceBadge({ val }: { val: EntityFactValue | undefined }) {
     );
   }
   return (
-    <span className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+    <span data-testid="fact-source" className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
       Filled
     </span>
   );
@@ -442,6 +442,7 @@ function EditModal({ fd, meta, val, evidence, sourceName, dealId, onClose, onSav
                 type="button" disabled={isPending}
                 onClick={() => submit(hasSuggestion ? "override" : "edit", manualValue)}
                 className="flex-1 py-2.5 rounded-xl bg-[#1F7A63] text-white font-semibold text-sm hover:bg-[#1a6654] disabled:opacity-50 transition-colors"
+                data-testid="fact-save-button"
               >
                 {isPending ? "Saving…" : "Save"}
               </button>
@@ -673,6 +674,7 @@ function BasicFactCard({
         type="button"
         onClick={onEdit}
         className="w-full text-left px-4 py-4 hover:-translate-y-px hover:shadow-sm group transition-all duration-150"
+        data-testid="fact-edit-button"
       >
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{meta.label}</span>
@@ -764,6 +766,7 @@ function CandidateFactRow({
             type="button"
             onClick={onEdit}
             className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-xs font-medium hover:bg-slate-50 transition-colors"
+            data-testid="fact-edit-button"
           >
             Edit
           </button>
@@ -810,6 +813,7 @@ function FactRow({
         isCand ? "bg-blue-50/30 hover:bg-blue-50/60" : "hover:bg-slate-50"
       }`}
       onClick={onEdit}
+      data-testid="fact-edit-button"
     >
       <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
         isConflict ? "bg-amber-400" : filled ? "bg-emerald-400" : "bg-slate-200"
@@ -1405,7 +1409,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
   }
 
   return (
-    <div className="px-0 py-4">
+    <div className="px-0 py-4" data-testid="facts-tab">
 
       {/* ── Conflict banner ─────────────────────────────────────────────── */}
       <ConflictBanner

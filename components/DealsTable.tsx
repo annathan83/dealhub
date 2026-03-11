@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import type { Deal, DealStatus } from "@/types";
+import type { Deal, DealStatus, NdaState } from "@/types";
+import { getNdaState } from "@/types";
 import { US_STATES, INDUSTRY_CATEGORIES, DEAL_SOURCE_CATEGORIES } from "@/lib/config/dealMetadata";
 import { formatLocation } from "@/lib/config/dealMetadata";
 
@@ -474,14 +475,20 @@ function DealCard({ deal, score, fit }: { deal: Deal; score: number | undefined;
           </div>
         </div>
 
-        {/* Dates row */}
-        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-50">
-          <span className="text-[10px] text-slate-300 tabular-nums">
-            Added <span className="text-slate-400">{formatDate(deal.created_at)}</span>
-          </span>
-          <span className="text-[10px] text-slate-300 tabular-nums">
-            Updated <span className="text-slate-400">{formatDate(deal.updated_at)}</span>
-          </span>
+        {/* Dates + NDA row */}
+        <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-50">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-slate-300 tabular-nums">
+              Added <span className="text-slate-400">{formatDate(deal.created_at)}</span>
+            </span>
+            <span className="text-[10px] text-slate-300 tabular-nums">
+              Updated <span className="text-slate-400">{formatDate(deal.updated_at)}</span>
+            </span>
+          </div>
+          {(() => {
+            const s = getNdaState(deal);
+            return s !== "pending" ? <NdaTableBadge state={s} /> : null;
+          })()}
         </div>
       </div>
 
@@ -509,6 +516,34 @@ function FitBadge({ fit }: { fit: string | undefined }) {
   );
 }
 
+// ─── NDA badge (compact table variant) ───────────────────────────────────────
+
+function NdaTableBadge({ state }: { state: NdaState }) {
+  if (state === "signed") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 whitespace-nowrap">
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        Signed
+      </span>
+    );
+  }
+  if (state === "review") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 whitespace-nowrap">
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        Review
+      </span>
+    );
+  }
+  return (
+    <span className="text-[11px] text-slate-300">—</span>
+  );
+}
+
 // ─── Desktop deal row ─────────────────────────────────────────────────────────
 
 function DealRow({
@@ -529,6 +564,8 @@ function DealRow({
     score >= 7 ? "border-l-[3px] border-l-emerald-400" :
     score >= 5 ? "border-l-[3px] border-l-amber-300" :
                  "border-l-[3px] border-l-red-300";
+
+  const ndaState = getNdaState(deal);
 
   return (
     <tr
@@ -595,6 +632,11 @@ function DealRow({
       {/* Status */}
       <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
         <StatusBadge status={deal.status} />
+      </td>
+
+      {/* NDA milestone */}
+      <td className="px-4 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+        <NdaTableBadge state={ndaState} />
       </td>
 
       {/* Created */}
@@ -872,6 +914,7 @@ export default function DealsTable({
                       <Th label="Score"    sortable colKey="score"        align="center" />
                       <Th label="Fit"                                     align="center" />
                       <Th label="Status"   sortable colKey="status" />
+                      <Th label="NDA"                                     align="center" />
                       <Th label="Created"  sortable colKey="created_at" />
                       <Th label="Updated"  sortable colKey="updated_at" />
                       <th className="w-7" />

@@ -108,6 +108,10 @@ function iconForEvent(event: EntityEvent, file?: EntityFile): TimelineIconType {
       return "pass";
     case "entity_archived":
       return "status";
+    case "nda_detected":
+    case "nda_marked_signed":
+    case "nda_status_updated":
+      return "check";
     default:
       return "check";
   }
@@ -187,6 +191,21 @@ function titleForEvent(event: EntityEvent, file?: EntityFile): string {
       return "Deal passed";
     case "entity_archived":
       return "Deal archived";
+    case "nda_detected": {
+      const signed = event.metadata_json?.signed as boolean | undefined;
+      const confidence = event.metadata_json?.confidence as number | undefined;
+      if (signed) return "NDA marked as signed";
+      if (confidence !== undefined && confidence > 0) return "NDA uploaded — review needed";
+      return "NDA detected";
+    }
+    case "nda_marked_signed":
+      return "NDA marked as signed";
+    case "nda_status_updated": {
+      const source = event.metadata_json?.source as string | undefined;
+      return source === "manual" || source === "override"
+        ? "NDA status manually updated"
+        : "NDA status updated";
+    }
     default:
       return name;
   }
@@ -291,6 +310,29 @@ function summaryForEvent(event: EntityEvent, file?: EntityFile): string {
       return `Deal marked as passed.`;
     case "entity_archived":
       return `Deal archived.`;
+    case "nda_detected": {
+      const signed = event.metadata_json?.signed as boolean | undefined;
+      const confidence = event.metadata_json?.confidence as number | undefined;
+      const notes = event.metadata_json?.notes as string | undefined;
+      if (signed) return notes ?? "A signed NDA was detected in the uploaded file.";
+      if (confidence !== undefined && confidence > 0)
+        return notes ?? "An NDA was detected but signature confidence is low — review needed.";
+      return notes ?? "An NDA document was detected.";
+    }
+    case "nda_marked_signed": {
+      const source = event.metadata_json?.source as string | undefined;
+      return source === "manual" || source === "override"
+        ? "NDA manually confirmed as signed."
+        : "NDA marked as signed.";
+    }
+    case "nda_status_updated": {
+      const signed = event.metadata_json?.signed as boolean | undefined;
+      const source = event.metadata_json?.source as string | undefined;
+      if (source === "manual" || source === "override") {
+        return signed ? "NDA manually marked as signed." : "NDA manually marked as not signed.";
+      }
+      return "NDA status updated.";
+    }
     default:
       return `Activity recorded.`;
   }

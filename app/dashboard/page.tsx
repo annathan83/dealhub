@@ -162,7 +162,7 @@ export default async function DashboardPage() {
     last7 > prev7 ? "up" : last7 < prev7 ? "down" : "flat";
 
   return (
-    <div className="min-h-screen bg-[#F8FAF9]">
+    <div className="min-h-screen bg-[#F8FAF9]" data-testid="dashboard-shell">
       <AppHeader />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-safe">
@@ -207,6 +207,7 @@ export default async function DashboardPage() {
             <Link
               href="/deals/new"
               className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#1F7A63] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#176B55] active:bg-[#145E4A] transition-colors"
+              data-testid="create-deal-button"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

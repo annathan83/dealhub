@@ -117,6 +117,26 @@ export async function POST(request: NextRequest) {
     // SWOT and missing info run fire-and-forget (they use AI and take longer).
     const entity = await getEntityByLegacyDealId(dealId, user.id);
     if (entity) {
+      // Apply the user's default scoring config to this new deal entity (non-fatal).
+      // This seeds metadata_json.scoring_config so the first score uses the user's weights.
+      try {
+        const { data: userSettings } = await supabase
+          .from("user_settings")
+          .select("default_scoring_config")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const defaultConfig = userSettings?.default_scoring_config as Record<string, number> | null;
+        if (defaultConfig && Object.keys(defaultConfig).length > 0) {
+          const existingMeta = (entity.metadata_json as Record<string, unknown>) ?? {};
+          await supabase
+            .from("entities")
+            .update({ metadata_json: { ...existingMeta, scoring_config: defaultConfig } })
+            .eq("id", entity.id);
+        }
+      } catch (configErr) {
+        console.warn("[createDeal] Could not apply default scoring config (non-fatal):", configErr);
+      }
+
       const industry = body.industry?.trim() || null;
       await runPostFactPipeline({
         entityId: entity.id,

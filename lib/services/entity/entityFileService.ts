@@ -25,10 +25,11 @@ import {
   updateProcessingRun,
 } from "@/lib/db/entities";
 import { chunkAndStoreText } from "./textChunkingService";
-import { logFileUploaded, logTextExtracted, logFactsExtracted } from "./entityEventService";
+import { logFileUploaded, logTextExtracted, logFactsExtracted, logNdaDetected, logNdaMarkedSigned } from "./entityEventService";
 import { extractFactsFromText } from "../facts/factExtractionService";
 import { reconcileFacts } from "../facts/factReconciliationService";
 import { runPostFactPipeline } from "../analysis/postFactOrchestrator";
+import { detectNda } from "../nda/ndaDetectionService";
 import type { Entity } from "@/types/entity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -264,20 +265,122 @@ export async function ingestFromDealUpload(
 
         // 6. Extract facts (critical subset, non-fatal)
         await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId, fileTextRecord.id, params.originalFileName);
+
+        // 7. NDA detection — runs after fact extraction (non-fatal)
+        runNdaDetection({
+          dealId: params.dealId,
+          userId: params.userId,
+          entityId: entity.id,
+          entityFileId: entityFile.id,
+          fileName: params.originalFileName,
+          extractedText: params.extractedText,
+        }).catch((err) => {
+          console.error("[entityFileService] NDA detection failed (non-fatal):", err);
+        });
       }
     } else {
-      // No text — mark as skipped so we know it was processed
-      await upsertFileText({
-        file_id: entityFile.id,
-        text_type: "raw_extracted",
-        full_text: null,
-        extraction_method: params.extractionMethod ?? "none",
-        extraction_status: "skipped",
-      });
+      // No text — still run NDA filename check (non-fatal, fire-and-forget)
+      runNdaDetection({
+        dealId: params.dealId,
+        userId: params.userId,
+        entityId: entity.id,
+        entityFileId: entityFile.id,
+        fileName: params.originalFileName,
+        extractedText: null,
+      }).catch(() => {});
     }
   } catch (err) {
     // Fully non-fatal — never propagate to caller
     console.error("[entityFileService] ingestFromDealUpload failed (non-fatal):", err);
+  }
+}
+
+// ─── NDA detection step ───────────────────────────────────────────────────────
+
+async function runNdaDetection({
+  dealId,
+  userId,
+  entityId,
+  entityFileId,
+  fileName,
+  extractedText,
+}: {
+  dealId: string;
+  userId: string;
+  entityId: string;
+  entityFileId: string;
+  fileName: string;
+  extractedText: string | null;
+}): Promise<void> {
+  const result = detectNda(fileName, extractedText);
+
+  if (!result.isNda) return;
+
+  const supabase = await createClient();
+
+  // Check if deal already has a manually-set NDA (override) — don't overwrite
+  const { data: currentDeal } = await supabase
+    .from("deals")
+    .select("nda_signed, nda_signed_source")
+    .eq("id", dealId)
+    .eq("user_id", userId)
+    .single();
+
+  if (currentDeal?.nda_signed_source === "override" || currentDeal?.nda_signed_source === "manual") {
+    // Manual override — log detection but don't change the milestone
+    await logNdaDetected(entityId, entityFileId, {
+      signed: result.isSigned,
+      confidence: result.confidence,
+      notes: `${result.notes} (manual override preserved)`,
+      skipped_update: true,
+    });
+    return;
+  }
+
+  if (result.isSigned) {
+    // Confident signed NDA — update the deal milestone
+    await supabase
+      .from("deals")
+      .update({
+        nda_signed: true,
+        nda_signed_at: new Date().toISOString(),
+        nda_signed_file_id: entityFileId,
+        nda_signed_confidence: result.confidence,
+        nda_signed_notes: result.notes,
+        nda_signed_source: "auto",
+      })
+      .eq("id", dealId)
+      .eq("user_id", userId);
+
+    await logNdaMarkedSigned(entityId, {
+      source: "auto",
+      confidence: result.confidence,
+      notes: result.notes,
+      file_id: entityFileId,
+    }, { fileId: entityFileId });
+
+  } else {
+    // NDA detected but not signed — store low-confidence signal for review state
+    // Only update if not already signed
+    if (!currentDeal?.nda_signed) {
+      await supabase
+        .from("deals")
+        .update({
+          nda_signed: false,
+          nda_signed_confidence: result.confidence,
+          nda_signed_notes: result.notes,
+          nda_signed_source: "auto",
+          nda_signed_file_id: entityFileId,
+        })
+        .eq("id", dealId)
+        .eq("user_id", userId);
+    }
+
+    await logNdaDetected(entityId, entityFileId, {
+      signed: false,
+      confidence: result.confidence,
+      notes: result.notes,
+    });
   }
 }
 

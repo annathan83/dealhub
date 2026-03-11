@@ -106,12 +106,50 @@ function FileTypeIcon({ kind }: { kind: FileKind }) {
   );
 }
 
+// ─── NDA file badge ───────────────────────────────────────────────────────────
+
+function NdaFileBadge({ variant }: { variant: "signed" | "review" }) {
+  if (variant === "signed") {
+    return (
+      <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700 whitespace-nowrap shrink-0">
+        <svg className="w-2 h-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        NDA Signed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 whitespace-nowrap shrink-0">
+      NDA Review
+    </span>
+  );
+}
+
 // ─── Explorer file row ────────────────────────────────────────────────────────
 
-function ExplorerRow({ file, onClick }: { file: EntityFile; onClick: () => void }) {
+function ExplorerRow({
+  file,
+  onClick,
+  ndaFileId,
+  ndaConfidence,
+}: {
+  file: EntityFile;
+  onClick: () => void;
+  ndaFileId?: string | null;
+  ndaConfidence?: number | null;
+}) {
   const kind = getFileKind(file);
   const displayName = getDisplayName(file, kind);
   const timeAgo = formatRelativeTime(file.uploaded_at);
+
+  // Determine if this file is the NDA milestone file
+  const isNdaFile = ndaFileId === file.id;
+  const ndaBadgeVariant: "signed" | "review" | null = isNdaFile
+    ? ndaConfidence !== null && ndaConfidence !== undefined && ndaConfidence < 0.7
+      ? "review"
+      : "signed"
+    : null;
 
   return (
     <button
@@ -124,9 +162,12 @@ function ExplorerRow({ file, onClick }: { file: EntityFile; onClick: () => void 
         <FileTypeIcon kind={kind} />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-[#1E1E1E] truncate group-hover:text-[#1F7A63] transition-colors leading-snug">
-          {displayName}
-        </p>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <p className="text-sm font-semibold text-[#1E1E1E] truncate group-hover:text-[#1F7A63] transition-colors leading-snug">
+            {displayName}
+          </p>
+          {ndaBadgeVariant && <NdaFileBadge variant={ndaBadgeVariant} />}
+        </div>
         <p className="text-[10px] text-[#9CA3AF] leading-none mt-0.5">{getKindLabel(kind)} · {timeAgo}</p>
       </div>
       <svg
@@ -150,6 +191,10 @@ type Props = {
   files: EntityFile[];
   triageSummaryExists?: boolean;
   newFilesAfterTriage?: boolean;
+  /** ID of the entity_file that triggered the NDA milestone (if any) */
+  ndaFileId?: string | null;
+  /** Confidence score for the NDA detection (to distinguish signed vs review) */
+  ndaFileConfidence?: number | null;
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -163,6 +208,8 @@ export default function IntakeSection({
   files,
   triageSummaryExists = false,
   newFilesAfterTriage = false,
+  ndaFileId = null,
+  ndaFileConfidence = null,
 }: Props) {
   const router = useRouter();
   const [isDragOver, setIsDragOver] = useState(false);
@@ -275,6 +322,8 @@ export default function IntakeSection({
                   key={file.id}
                   file={file}
                   onClick={() => setSelectedFile(file)}
+                  ndaFileId={ndaFileId}
+                  ndaConfidence={ndaFileConfidence}
                 />
               ))}
             </div>

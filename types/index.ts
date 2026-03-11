@@ -12,6 +12,19 @@ export type PassReason =
   | "not_enough_info"
   | "other";
 
+// ─── NDA milestone ────────────────────────────────────────────────────────────
+
+/** How the NDA milestone was set */
+export type NdaSource = "auto" | "manual" | "override";
+
+/**
+ * Derived NDA display state — computed from deal fields, not stored directly.
+ * - signed   = nda_signed is true (confident or manually confirmed)
+ * - review   = nda_signed is false but confidence exists and is low
+ * - pending  = no NDA detected yet
+ */
+export type NdaState = "signed" | "review" | "pending";
+
 export type Deal = {
   id: string;
   user_id: string;
@@ -41,7 +54,22 @@ export type Deal = {
   triaged_at: string | null;
   created_at: string;
   updated_at: string;
+  // ── NDA milestone (separate from lifecycle status) ────────────────────────
+  nda_signed: boolean;
+  nda_signed_at: string | null;
+  nda_signed_file_id: string | null;
+  nda_signed_confidence: number | null;
+  nda_signed_notes: string | null;
+  nda_signed_source: NdaSource | null;
 };
+
+/** Derive the NDA display state from a deal */
+export function getNdaState(deal: Pick<Deal, "nda_signed" | "nda_signed_confidence" | "nda_signed_source">): NdaState {
+  if (deal.nda_signed) return "signed";
+  // Low-confidence detection = review needed
+  if (deal.nda_signed_confidence !== null && deal.nda_signed_confidence < 0.7) return "review";
+  return "pending";
+}
 
 // ─── Google Drive ─────────────────────────────────────────────────────────────
 

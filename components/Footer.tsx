@@ -22,10 +22,10 @@ export default function Footer() {
           <a href="#pillars" className="hover:text-slate-900 transition-colors">
             Features
           </a>
-          <Link href="/signin" className="hover:text-slate-900 transition-colors">
+          <Link href="/signin" className="hover:text-slate-900 transition-colors" data-testid="landing-signin">
             Sign in
           </Link>
-          <Link href="/signup" className="hover:text-slate-900 transition-colors">
+          <Link href="/signup" className="hover:text-slate-900 transition-colors" data-testid="landing-start-deal">
             Start a deal
           </Link>
         </nav>

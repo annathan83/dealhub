@@ -433,24 +433,25 @@ export async function uploadFileToDealFolder(params: {
 }
 
 /**
- * Ensure a "Buyer Profile" folder exists inside the DealHub root folder.
+ * Ensure a "Buyer" folder exists inside the DealHub root folder.
+ * Used for buyer profile documents, financials, and other buyer-specific data.
  * Returns the folder ID. Safe to call multiple times.
  */
-export async function ensureBuyerProfileFolder(userId: string): Promise<string> {
+export async function ensureBuyerFolder(userId: string): Promise<string> {
   const drive = await getAuthorizedDriveClient(userId);
   const rootFolderId = await ensureDealHubRootFolder(userId);
 
-  const folderName = "Buyer Profile";
+  const folderName = "Buyer";
   let folderId = await findFolder(drive, folderName, rootFolderId);
   if (!folderId) folderId = await createFolder(drive, folderName, rootFolderId);
   return folderId;
 }
 
 /**
- * Upload a file (binary) to the Buyer Profile folder in Drive.
+ * Upload a file (binary) to the Buyer folder in Drive.
  * Returns the Drive file ID and web view link.
  */
-export async function uploadFileToBuyerProfileFolder(params: {
+export async function uploadFileToBuyerFolder(params: {
   userId: string;
   fileBuffer: Buffer;
   originalFileName: string;
@@ -458,7 +459,7 @@ export async function uploadFileToBuyerProfileFolder(params: {
 }): Promise<{ fileId: string; fileName: string; webViewLink: string | null }> {
   const { userId, fileBuffer, originalFileName, mimeType } = params;
   const drive = await getAuthorizedDriveClient(userId);
-  const folderId = await ensureBuyerProfileFolder(userId);
+  const folderId = await ensureBuyerFolder(userId);
 
   const driveFileName = buildUploadFileName(originalFileName);
   const { Readable } = await import("stream");
@@ -479,16 +480,16 @@ export async function uploadFileToBuyerProfileFolder(params: {
 }
 
 /**
- * Upload a plain-text extract to the Buyer Profile folder in Drive.
+ * Upload a plain-text extract to the Buyer folder in Drive.
  */
-export async function uploadTextToBuyerProfileFolder(params: {
+export async function uploadTextToBuyerFolder(params: {
   userId: string;
   text: string;
   baseName: string;
 }): Promise<{ fileId: string }> {
   const { userId, text, baseName } = params;
   const drive = await getAuthorizedDriveClient(userId);
-  const folderId = await ensureBuyerProfileFolder(userId);
+  const folderId = await ensureBuyerFolder(userId);
 
   const fileName = `${baseName}_extracted.txt`;
   const res = await drive.files.create({

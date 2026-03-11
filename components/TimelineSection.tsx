@@ -451,7 +451,7 @@ export default function TimelineSection({
   const visibleItems = expanded ? items : recentItems;
 
   return (
-    <div>
+    <div data-testid="activity-timeline">
       {/* Section label */}
       <div className="flex items-center gap-3 mb-3">
         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">

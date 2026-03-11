@@ -5,7 +5,7 @@
  * The document flows through the standard entity/fact extraction pipeline:
  *
  *   1. Extract text from the file
- *   2. Upload original file + text extract to Drive "Buyer Profile" folder (best-effort)
+ *   2. Upload original file + text extract to Drive "Buyer" folder (best-effort)
  *   3. Run the entity fact pipeline (ingestBuyerProfileDocument):
  *      - Creates entity_file + file_texts + file_chunks records
  *      - Runs GPT fact extraction against buyer fact definitions
@@ -20,8 +20,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
 import {
-  uploadFileToBuyerProfileFolder,
-  uploadTextToBuyerProfileFolder,
+  uploadFileToBuyerFolder,
+  uploadTextToBuyerFolder,
 } from "@/lib/google/drive";
 import { ingestBuyerProfileDocument } from "@/lib/services/entity/buyerEntityService";
 
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 2. Upload to Drive "Buyer Profile" folder (best-effort) ──────────────
+  // ── 2. Upload to Drive "Buyer" folder (best-effort) ──────────────
   let storagePath = `buyer-profile/${user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
   let webViewLink: string | null = null;
   let driveCreatedTime: string | null = null;
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
   if (tokenRow) {
     try {
-      const fileMeta = await uploadFileToBuyerProfileFolder({
+      const fileMeta = await uploadFileToBuyerFolder({
         userId: user.id,
         fileBuffer: buffer,
         originalFileName: file.name,
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
       // Also upload the text extract alongside the original file (non-fatal)
       const baseName = fileMeta.fileName.replace(/\.[^.]+$/, "");
-      uploadTextToBuyerProfileFolder({
+      uploadTextToBuyerFolder({
         userId: user.id,
         text: extractedText,
         baseName,

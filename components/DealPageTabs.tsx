@@ -1215,6 +1215,8 @@ export default function DealPageTabs({
             files={syncedFiles}
             triageSummaryExists={triageSummaryExists}
             newFilesAfterTriage={newFilesAfterTriage}
+            ndaFileId={deal.nda_signed_file_id ?? null}
+            ndaFileConfidence={deal.nda_signed_confidence ?? null}
           />
 
         </div>

@@ -178,6 +178,51 @@ export async function logEntryAdded(
   }).catch((err) => console.error("[entityEventService] logEntryAdded:", err));
 }
 
+export async function logNdaDetected(
+  entityId: string,
+  fileId: string,
+  meta: EventMeta = {},
+  opts: EventOptions = {}
+): Promise<void> {
+  await insertEntityEvent({
+    entity_id: entityId,
+    event_type: "nda_detected",
+    file_id: fileId,
+    run_id: opts.runId ?? null,
+    actor_user_id: opts.actorUserId ?? null,
+    metadata_json: meta,
+  }).catch((err) => console.error("[entityEventService] logNdaDetected:", err));
+}
+
+export async function logNdaMarkedSigned(
+  entityId: string,
+  meta: EventMeta = {},
+  opts: EventOptions & { fileId?: string | null } = {}
+): Promise<void> {
+  await insertEntityEvent({
+    entity_id: entityId,
+    event_type: "nda_marked_signed",
+    file_id: opts.fileId ?? null,
+    run_id: opts.runId ?? null,
+    actor_user_id: opts.actorUserId ?? null,
+    metadata_json: meta,
+  }).catch((err) => console.error("[entityEventService] logNdaMarkedSigned:", err));
+}
+
+export async function logNdaStatusUpdated(
+  entityId: string,
+  meta: EventMeta = {},
+  opts: EventOptions = {}
+): Promise<void> {
+  await insertEntityEvent({
+    entity_id: entityId,
+    event_type: "nda_status_updated",
+    run_id: opts.runId ?? null,
+    actor_user_id: opts.actorUserId ?? null,
+    metadata_json: meta,
+  }).catch((err) => console.error("[entityEventService] logNdaStatusUpdated:", err));
+}
+
 /** Generic event logger for any event type */
 export async function logEntityEvent(
   entityId: string,

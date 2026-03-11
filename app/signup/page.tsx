@@ -166,7 +166,7 @@ export default function SignUpPage() {
           </div>
 
           {/* Email sign-up form */}
-          <form onSubmit={handleEmailSignUp} className="flex flex-col gap-4">
+          <form onSubmit={handleEmailSignUp} className="flex flex-col gap-4" data-testid="signup-form">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="fullName" className="text-sm font-medium text-slate-700">
                 Full name
@@ -220,6 +220,7 @@ export default function SignUpPage() {
               type="submit"
               disabled={loading || googleLoading}
               className="mt-1 w-full rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm shadow-indigo-200"
+              data-testid="signup-submit"
             >
               {loading ? "Creating account…" : "Create Account"}
             </button>

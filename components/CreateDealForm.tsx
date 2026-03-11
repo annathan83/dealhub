@@ -429,6 +429,7 @@ export default function CreateDealForm() {
         <button
           type="button"
           onClick={() => { setMode("manual"); setError(null); }}
+          data-testid="manual-entry-mode"
           className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all ${
             mode === "manual"
               ? "bg-white shadow-sm text-slate-800 border border-slate-200"
@@ -475,6 +476,7 @@ export default function CreateDealForm() {
                   placeholder="Paste the full listing, broker email, or any description of the business here…"
                   disabled={loading}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-y disabled:opacity-60"
+                  data-testid="paste-listing"
                 />
               </div>
 
@@ -545,6 +547,7 @@ export default function CreateDealForm() {
                 onClick={runExtraction}
                 disabled={pasteText.trim().length < 30 || loading}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F7A63] px-5 py-3 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                data-testid="extract-facts"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -594,10 +597,11 @@ export default function CreateDealForm() {
           {/* Core financials */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-slate-700">
+              <label htmlFor="asking-price" className="text-sm font-semibold text-slate-700">
                 Asking Price <span className="text-red-400">*</span>
               </label>
               <input
+                id="asking-price"
                 type="text"
                 value={askingPrice}
                 onChange={(e) => setAskingPrice(e.target.value)}
@@ -607,10 +611,11 @@ export default function CreateDealForm() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-semibold text-slate-700">
+              <label htmlFor="sde-cashflow" className="text-sm font-semibold text-slate-700">
                 SDE / Cash Flow <span className="text-red-400">*</span>
               </label>
               <input
+                id="sde-cashflow"
                 type="text"
                 value={sde}
                 onChange={(e) => setSde(e.target.value)}
@@ -708,6 +713,7 @@ export default function CreateDealForm() {
             placeholder="e.g. Midwest HVAC Company"
             disabled={loading}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60"
+            data-testid="deal-name-input"
           />
         </div>
       )}
@@ -739,6 +745,7 @@ export default function CreateDealForm() {
             type="submit"
             disabled={loading || !canSubmit}
             className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F7A63] px-6 py-3 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            data-testid="create-deal-submit"
           >
             {loading ? (
               <>

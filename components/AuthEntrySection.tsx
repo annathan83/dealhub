@@ -21,6 +21,7 @@ export default function AuthEntrySection() {
           <Link
             href="/signup"
             className="inline-flex w-full items-center justify-center rounded-xl bg-[#1F7A63] px-6 py-3.5 text-base font-semibold text-white hover:bg-[#1a6854] transition-colors shadow-sm shadow-[#1F7A63]/20 mb-4"
+            data-testid="landing-start-deal"
           >
             Start your first deal — it&apos;s free
           </Link>
@@ -36,6 +37,7 @@ export default function AuthEntrySection() {
           <Link
             href="/signin"
             className="inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+            data-testid="landing-signin"
           >
             Sign in
           </Link>

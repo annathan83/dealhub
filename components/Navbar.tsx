@@ -29,12 +29,14 @@ export default function Navbar() {
           <Link
             href="/signin"
             className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors"
+            data-testid="landing-signin"
           >
             Sign in
           </Link>
           <Link
             href="/signup"
             className="inline-flex items-center justify-center rounded-lg bg-[#1F7A63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1a6854] transition-colors"
+            data-testid="landing-start-deal"
           >
             Start a deal
           </Link>
@@ -61,13 +63,14 @@ export default function Navbar() {
           <a href="#pillars" className="text-sm font-medium text-slate-600" onClick={() => setMenuOpen(false)}>
             Features
           </a>
-          <Link href="/signin" className="text-sm font-medium text-slate-700" onClick={() => setMenuOpen(false)}>
+          <Link href="/signin" className="text-sm font-medium text-slate-700" onClick={() => setMenuOpen(false)} data-testid="landing-signin">
             Sign in
           </Link>
           <Link
             href="/signup"
             className="inline-flex items-center justify-center rounded-lg bg-[#1F7A63] px-4 py-3 text-sm font-semibold text-white hover:bg-[#1a6854] transition-colors"
             onClick={() => setMenuOpen(false)}
+            data-testid="landing-start-deal"
           >
             Start a deal
           </Link>

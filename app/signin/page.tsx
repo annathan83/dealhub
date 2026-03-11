@@ -133,7 +133,7 @@ function SignInForm() {
           </div>
 
           {/* Email / password form */}
-          <form onSubmit={handleEmailSignIn} className="flex flex-col gap-4">
+          <form onSubmit={handleEmailSignIn} className="flex flex-col gap-4" data-testid="signin-form">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="email" className="text-sm font-medium text-slate-700">
                 Email address
@@ -175,6 +175,7 @@ function SignInForm() {
               type="submit"
               disabled={loading || googleLoading}
               className="mt-1 w-full rounded-xl bg-indigo-600 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm shadow-indigo-200"
+              data-testid="signin-submit"
             >
               {loading ? "Signing in…" : "Sign In"}
             </button>

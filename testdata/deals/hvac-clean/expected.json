@@ -1,0 +1,17 @@
+{
+  "dealName": "Metro HVAC Services",
+  "expectedFacts": [
+    { "fact_key": "asking_price", "label": "Asking Price" },
+    { "fact_key": "sde_latest", "label": "SDE" },
+    { "fact_key": "revenue_latest", "label": "Revenue" },
+    { "fact_key": "industry", "label": "Industry" },
+    { "fact_key": "location", "label": "Location" },
+    { "fact_key": "employees_ft", "label": "Full-Time Employees" },
+    { "fact_key": "lease_monthly_rent", "label": "Monthly Rent" }
+  ],
+  "expectedMissingFacts": [],
+  "expectedScoreRange": {
+    "min": 4,
+    "max": 10
+  }
+}

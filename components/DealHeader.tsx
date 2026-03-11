@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Deal, DealStatus } from "@/types";
+import type { Deal, DealStatus, NdaState } from "@/types";
+import { getNdaState } from "@/types";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
 import EditDealModal from "./EditDealModal";
 
@@ -171,6 +172,126 @@ function MetricCell({
   );
 }
 
+// ─── NDA badge ────────────────────────────────────────────────────────────────
+
+const NDA_STATE_CONFIG: Record<NdaState, { label: string; className: string; icon: string }> = {
+  signed: {
+    label: "NDA Signed",
+    className: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    icon: "check",
+  },
+  review: {
+    label: "NDA Review",
+    className: "bg-amber-50 text-amber-700 border border-amber-200",
+    icon: "warning",
+  },
+  pending: {
+    label: "NDA Pending",
+    className: "bg-slate-100 text-slate-500 border border-slate-200",
+    icon: "clock",
+  },
+};
+
+function NdaBadge({
+  state,
+  onClick,
+}: {
+  state: NdaState;
+  onClick?: () => void;
+}) {
+  const cfg = NDA_STATE_CONFIG[state];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Click to update NDA status"
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80 ${cfg.className}`}
+    >
+      {cfg.icon === "check" && (
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      )}
+      {cfg.icon === "warning" && (
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+      )}
+      {cfg.icon === "clock" && (
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <circle cx="12" cy="12" r="10" />
+          <path strokeLinecap="round" d="M12 6v6l4 2" />
+        </svg>
+      )}
+      {cfg.label}
+    </button>
+  );
+}
+
+// ─── NDA override popover ─────────────────────────────────────────────────────
+
+function NdaOverridePopover({
+  dealId,
+  currentState,
+  onClose,
+  onUpdated,
+}: {
+  dealId: string;
+  currentState: NdaState;
+  onClose: () => void;
+  onUpdated: (signed: boolean) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSet(signed: boolean) {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/nda`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signed }),
+      });
+      if (!res.ok) throw new Error();
+      onUpdated(signed);
+      onClose();
+    } catch {
+      // non-fatal
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="absolute left-0 top-full mt-1.5 z-30 w-52 rounded-xl border border-slate-200 bg-white shadow-lg p-2 flex flex-col gap-1">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2 pt-1 pb-0.5">
+        NDA Status
+      </p>
+      <button
+        type="button"
+        disabled={saving || currentState === "signed"}
+        onClick={() => handleSet(true)}
+        className="flex items-center gap-2 w-full rounded-lg px-2.5 py-2 text-xs font-semibold text-left transition-colors hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40 disabled:pointer-events-none"
+      >
+        <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        Mark NDA Signed
+      </button>
+      <button
+        type="button"
+        disabled={saving || currentState === "pending"}
+        onClick={() => handleSet(false)}
+        className="flex items-center gap-2 w-full rounded-lg px-2.5 py-2 text-xs font-semibold text-left transition-colors hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 disabled:pointer-events-none"
+      >
+        <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        Mark NDA Not Signed
+      </button>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DealHeader({
@@ -183,8 +304,18 @@ export default function DealHeader({
   buyerFitLabel?: string | null;
 }) {
   const [editOpen, setEditOpen] = useState(false);
+  const [ndaPopoverOpen, setNdaPopoverOpen] = useState(false);
+  const [ndaOverride, setNdaOverride] = useState<boolean | null>(null);
+
   const hasAnyMetric = deal.asking_price || deal.sde || deal.multiple;
   const score100 = kpiScorecard?.overall_score_100 ?? null;
+
+  // Derive NDA state — allow local override after user action
+  const effectiveDeal =
+    ndaOverride === null
+      ? deal
+      : { ...deal, nda_signed: ndaOverride, nda_signed_confidence: null };
+  const ndaState = getNdaState(effectiveDeal);
 
   return (
     <>
@@ -210,6 +341,31 @@ export default function DealHeader({
           {/* Status + metadata row */}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mt-2">
             <StatusSegmentedControl dealId={deal.id} status={deal.status} />
+
+            {/* NDA milestone badge — separate from lifecycle status */}
+            <div className="relative">
+              <NdaBadge
+                state={ndaState}
+                onClick={() => setNdaPopoverOpen((o) => !o)}
+              />
+              {ndaPopoverOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-20"
+                    onClick={() => setNdaPopoverOpen(false)}
+                  />
+                  <NdaOverridePopover
+                    dealId={deal.id}
+                    currentState={ndaState}
+                    onClose={() => setNdaPopoverOpen(false)}
+                    onUpdated={(signed) => {
+                      setNdaOverride(signed);
+                      setNdaPopoverOpen(false);
+                    }}
+                  />
+                </>
+              )}
+            </div>
 
             {buyerFitLabel && <FitBadgeInline label={buyerFitLabel} />}
 

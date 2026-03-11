@@ -13,6 +13,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
           <nav className="flex gap-1 -mb-px">
             <SettingsNavLink href="/settings/integrations" label="Integrations" />
             <SettingsNavLink href="/settings/buyer-profile" label="Buyer Profile" />
+            <SettingsNavLink href="/settings/scoring" label="Scoring" />
           </nav>
         </div>
       </div>
