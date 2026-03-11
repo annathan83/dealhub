@@ -409,7 +409,7 @@ function FilterPanel({
 
 // ─── Mobile deal card ─────────────────────────────────────────────────────────
 
-function DealCard({ deal, score }: { deal: Deal; score: number | undefined }) {
+function DealCard({ deal, score, fit }: { deal: Deal; score: number | undefined; fit: string | undefined }) {
   const router = useRouter();
   const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
   const displayIndustry = deal.industry ?? deal.industry_category;
@@ -469,7 +469,10 @@ function DealCard({ deal, score }: { deal: Deal; score: number | undefined }) {
               <span className="text-[11px] text-slate-300 italic">No financials</span>
             )}
           </div>
-          <ScoreBadge score={score} />
+          <div className="flex items-center gap-2">
+            {fit && <FitBadge fit={fit} />}
+            <ScoreBadge score={score} />
+          </div>
         </div>
 
         {/* Dates row */}
@@ -490,12 +493,29 @@ function DealCard({ deal, score }: { deal: Deal; score: number | undefined }) {
   );
 }
 
+// ─── Buyer fit badge ──────────────────────────────────────────────────────────
+
+function FitBadge({ fit }: { fit: string | undefined }) {
+  if (!fit) return <span className="text-[11px] text-[#6B7280]">—</span>;
+  const color =
+    fit === "Good Fit" || fit === "Fit"
+      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+      : fit === "Partial"
+      ? "bg-amber-50 text-amber-700 border border-amber-200"
+      : "bg-red-50 text-red-700 border border-red-200";
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap ${color}`}>
+      {fit}
+    </span>
+  );
+}
+
 // ─── Desktop deal row ─────────────────────────────────────────────────────────
 
 function DealRow({
-  deal, index, score, onClick,
+  deal, index, score, fit, onClick,
 }: {
-  deal: Deal; index: number; score: number | undefined; onClick: () => void;
+  deal: Deal; index: number; score: number | undefined; fit: string | undefined; onClick: () => void;
 }) {
   const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
   const displayIndustry = deal.industry ?? deal.industry_category;
@@ -564,6 +584,11 @@ function DealRow({
         <ScoreBadge score={score} />
       </td>
 
+      {/* Buyer Fit */}
+      <td className="px-4 py-2.5 text-center">
+        <FitBadge fit={fit} />
+      </td>
+
       {/* Status */}
       <td className="px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
         <StatusBadge status={deal.status} />
@@ -603,9 +628,11 @@ function DealRow({
 export default function DealsTable({
   deals,
   scoreMap = {},
+  fitMap = {},
 }: {
   deals: Deal[];
   scoreMap?: Record<string, number>;
+  fitMap?: Record<string, string>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -823,7 +850,7 @@ export default function DealsTable({
             {/* ── Mobile cards ───────────────────────────────────────────── */}
             <div className="md:hidden flex flex-col gap-2.5">
               {filtered.map((deal) => (
-                <DealCard key={deal.id} deal={deal} score={scoreMap[deal.id]} />
+                <DealCard key={deal.id} deal={deal} score={scoreMap[deal.id]} fit={fitMap[deal.id]} />
               ))}
             </div>
 
@@ -840,6 +867,7 @@ export default function DealsTable({
                       <Th label="Ask"      sortable colKey="asking_price" align="right" />
                       <Th label="Mult."    sortable colKey="multiple"     align="right" />
                       <Th label="Score"    sortable colKey="score"        align="center" />
+                      <Th label="Fit"                                     align="center" />
                       <Th label="Status"   sortable colKey="status" />
                       <Th label="Created"  sortable colKey="created_at" />
                       <Th label="Updated"  sortable colKey="updated_at" />
@@ -853,6 +881,7 @@ export default function DealsTable({
                         deal={deal}
                         index={i}
                         score={scoreMap[deal.id]}
+                        fit={fitMap[deal.id]}
                         onClick={() => router.push(`/deals/${deal.id}`)}
                       />
                     ))}

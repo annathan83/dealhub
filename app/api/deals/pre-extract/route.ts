@@ -198,7 +198,7 @@ ${text.slice(0, 8000)}
     const extractedKeys = new Set(candidates.map((c) => c.fact_key));
     const missing_required = TRIAGE_FACTS
       .filter((f) => f.required && !extractedKeys.has(f.key))
-      .map((f) => f.fact_key);
+      .map((f) => f.key);
 
     return NextResponse.json({ candidates, missing_required, model: MODEL });
   } catch (err) {

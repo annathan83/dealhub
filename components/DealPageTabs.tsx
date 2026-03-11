@@ -379,10 +379,19 @@ function TriageScoreHeader({
     : score >= 5 ? "text-amber-600"
     : "text-red-600";
 
-  const confColor = conf === null ? "bg-slate-100"
-    : conf.confidence_score >= 70 ? "bg-emerald-500"
-    : conf.confidence_score >= 40 ? "bg-amber-400"
+  const confScore = conf?.confidence_score ?? null;
+  const confLabel = confScore === null ? null
+    : confScore >= 70 ? "High"
+    : confScore >= 40 ? "Medium"
+    : "Low";
+  const confColor = confScore === null ? "bg-slate-100"
+    : confScore >= 70 ? "bg-emerald-500"
+    : confScore >= 40 ? "bg-amber-400"
     : "bg-red-400";
+  const confTextColor = confScore === null ? "text-slate-400"
+    : confScore >= 70 ? "text-emerald-700"
+    : confScore >= 40 ? "text-amber-700"
+    : "text-red-600";
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -435,18 +444,21 @@ function TriageScoreHeader({
           {/* Confidence */}
           <div className="px-4 py-3">
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Confidence</p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-1">
               <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${confColor}`}
-                  style={{ width: `${conf?.confidence_score ?? 0}%` }}
+                  style={{ width: `${confScore ?? 0}%` }}
                 />
               </div>
               <span className="text-xs font-bold text-slate-700 tabular-nums shrink-0">
-                {conf?.confidence_score ?? "—"}
+                {confScore ?? "—"}
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 mt-1">of scoring inputs</p>
+            {confLabel && (
+              <span className={`text-[10px] font-semibold ${confTextColor}`}>{confLabel}</span>
+            )}
+            <p className="text-[10px] text-slate-400 mt-0.5">input reliability</p>
           </div>
 
           {/* Facts used */}
@@ -727,11 +739,11 @@ function BuyerFitCard({
 
   const fit = computeBuyerFit(buyerProfile, dealFacts);
 
-  const fitIcon = fit.verdict === "HIGH_FIT" ? (
+  const fitIcon = (fit.verdict === "GOOD_FIT" || fit.verdict === "FIT") ? (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
-  ) : fit.verdict === "LOW_FIT" ? (
+  ) : fit.verdict === "NOT_A_GOOD_FIT" ? (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
@@ -755,8 +767,8 @@ function BuyerFitCard({
           {fit.bullets.map((bullet, i) => (
             <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
               <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${
-                fit.verdict === "HIGH_FIT" ? "bg-emerald-400" :
-                fit.verdict === "LOW_FIT"  ? "bg-red-400" : "bg-amber-400"
+                (fit.verdict === "GOOD_FIT" || fit.verdict === "FIT") ? "bg-emerald-400" :
+                fit.verdict === "NOT_A_GOOD_FIT" ? "bg-red-400" : "bg-amber-400"
               }`} />
               {bullet}
             </li>
@@ -904,6 +916,115 @@ function KpiTable({
   );
 }
 
+// ─── Strengths & Risks panel ─────────────────────────────────────────────────
+
+function StrengthsRisksPanel({ scorecard }: { scorecard: KpiScorecardResult | null }) {
+  if (!scorecard || scorecard.kpis.length === 0) return null;
+
+  const scored = scorecard.kpis.filter((k) => k.score !== null);
+  if (scored.length === 0) return null;
+
+  const strengths = scored
+    .filter((k) => k.score !== null && k.score >= 7)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, 3);
+
+  const risks = scored
+    .filter((k) => k.score !== null && k.score < 5)
+    .sort((a, b) => (a.score ?? 0) - (b.score ?? 0))
+    .slice(0, 3);
+
+  if (strengths.length === 0 && risks.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="grid grid-cols-2 divide-x divide-slate-100">
+        {/* Strengths */}
+        <div className="px-4 py-3">
+          <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Strengths
+          </p>
+          {strengths.length > 0 ? (
+            <ul className="space-y-2">
+              {strengths.map((k) => (
+                <li key={k.kpi_key} className="text-xs text-slate-700 leading-snug">
+                  <span className="font-medium text-emerald-700">{k.label}</span>
+                  <span className="text-slate-400 ml-1">({k.raw_value})</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-400 italic">No strong KPIs yet</p>
+          )}
+        </div>
+
+        {/* Risks */}
+        <div className="px-4 py-3">
+          <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            Risks
+          </p>
+          {risks.length > 0 ? (
+            <ul className="space-y-2">
+              {risks.map((k) => (
+                <li key={k.kpi_key} className="text-xs text-slate-700 leading-snug">
+                  <span className="font-medium text-red-600">{k.label}</span>
+                  <span className="text-slate-400 ml-1">({k.raw_value})</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-400 italic">No major risks flagged</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Missing key facts panel ──────────────────────────────────────────────────
+
+function MissingKeyFactsPanel({ scorecard }: { scorecard: KpiScorecardResult | null }) {
+  if (!scorecard) return null;
+
+  const missing = scorecard.kpis.filter((k) => k.status === "missing");
+  if (missing.length === 0) return null;
+
+  // Map KPI keys to the facts needed
+  const KPI_FACT_HINTS: Record<string, string> = {
+    price_multiple:       "asking price and SDE",
+    earnings_margin:      "revenue and SDE",
+    revenue_per_employee: "revenue and employee count",
+    rent_ratio:           "monthly rent and revenue",
+    owner_dependence:     "owner hours, manager status",
+    revenue_quality:      "recurring revenue % or customer concentration",
+  };
+
+  return (
+    <div className="bg-amber-50 rounded-xl border border-amber-200 px-4 py-3">
+      <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-2">
+        Missing Data · {missing.length} KPI{missing.length !== 1 ? "s" : ""} need facts
+      </p>
+      <ul className="space-y-1.5">
+        {missing.map((k) => (
+          <li key={k.kpi_key} className="flex items-start gap-2 text-xs text-amber-900">
+            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+            <span>
+              <span className="font-medium">{k.label}:</span>{" "}
+              <span className="text-amber-700">add {KPI_FACT_HINTS[k.kpi_key] ?? "relevant facts"}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ─── Analysis tab (V1 triage) ─────────────────────────────────────────────────
 
 function AnalysisTabContent({
@@ -949,10 +1070,16 @@ function AnalysisTabContent({
         entityData={entityData}
       />
 
-      {/* D. KPI table with benchmark ranges */}
+      {/* D. Strengths & Risks */}
+      <StrengthsRisksPanel scorecard={kpiScorecard} />
+
+      {/* E. Missing key facts */}
+      <MissingKeyFactsPanel scorecard={kpiScorecard} />
+
+      {/* F. KPI table with benchmark ranges */}
       <KpiTable scorecard={kpiScorecard} industry={industryVal} />
 
-      {/* E. Source provenance */}
+      {/* G. Source provenance */}
       <TriageSourceSummary scorecard={kpiScorecard} />
 
     </div>

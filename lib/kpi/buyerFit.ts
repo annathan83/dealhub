@@ -39,11 +39,12 @@ export type DealFacts = {
   owner_hours_per_week?: number | null;
 };
 
-export type FitVerdict = "HIGH_FIT" | "MEDIUM_FIT" | "LOW_FIT";
+export type FitVerdict = "GOOD_FIT" | "FIT" | "PARTIAL_FIT" | "NOT_A_GOOD_FIT";
 
 export type BuyerFitResult = {
   verdict: FitVerdict;
-  label: string;
+  label: string;             // "Good Fit" | "Fit" | "Partial Fit" | "Not a Good Fit"
+  shortLabel: string;        // "Good Fit" | "Fit" | "Partial" | "Not a Fit" (for compact UI)
   color: string;
   bgColor: string;
   borderColor: string;
@@ -180,18 +181,20 @@ export function computeBuyerFit(
 
   let verdict: FitVerdict;
   if (checkedCount === 0) {
-    // No profile data to compare against
-    verdict = "MEDIUM_FIT";
+    // No profile data to compare against — treat as unknown / partial
+    verdict = "PARTIAL_FIT";
   } else if (mismatches.length >= 2) {
-    verdict = "LOW_FIT";
+    verdict = "NOT_A_GOOD_FIT";
   } else if (mismatches.length === 1 && matches.length === 0) {
-    verdict = "LOW_FIT";
-  } else if (mismatches.length === 0 && matches.length >= 2) {
-    verdict = "HIGH_FIT";
-  } else if (mismatches.length === 0 && matches.length === 1) {
-    verdict = "HIGH_FIT";
+    verdict = "NOT_A_GOOD_FIT";
+  } else if (mismatches.length === 0 && matches.length >= 3) {
+    verdict = "GOOD_FIT";
+  } else if (mismatches.length === 0 && matches.length >= 1) {
+    verdict = "FIT";
+  } else if (mismatches.length === 1 && matches.length >= 2) {
+    verdict = "PARTIAL_FIT";
   } else {
-    verdict = "MEDIUM_FIT";
+    verdict = "PARTIAL_FIT";
   }
 
   // ── Build bullets (max 5) ─────────────────────────────────────────────────────
@@ -204,21 +207,31 @@ export function computeBuyerFit(
   }
 
   // ── Styling ───────────────────────────────────────────────────────────────────
-  const styling: Record<FitVerdict, { label: string; color: string; bgColor: string; borderColor: string }> = {
-    HIGH_FIT: {
-      label: "High Fit",
+  const styling: Record<FitVerdict, { label: string; shortLabel: string; color: string; bgColor: string; borderColor: string }> = {
+    GOOD_FIT: {
+      label: "Good Fit",
+      shortLabel: "Good Fit",
       color: "text-emerald-700",
       bgColor: "bg-emerald-50",
       borderColor: "border-emerald-200",
     },
-    MEDIUM_FIT: {
-      label: "Medium Fit",
+    FIT: {
+      label: "Fit",
+      shortLabel: "Fit",
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50/60",
+      borderColor: "border-emerald-200",
+    },
+    PARTIAL_FIT: {
+      label: "Partial Fit",
+      shortLabel: "Partial",
       color: "text-amber-700",
       bgColor: "bg-amber-50",
       borderColor: "border-amber-200",
     },
-    LOW_FIT: {
-      label: "Low Fit",
+    NOT_A_GOOD_FIT: {
+      label: "Not a Good Fit",
+      shortLabel: "Not a Fit",
       color: "text-red-700",
       bgColor: "bg-red-50",
       borderColor: "border-red-200",

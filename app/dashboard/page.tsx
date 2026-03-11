@@ -5,6 +5,8 @@ import { Suspense } from "react";
 import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
 import type { Deal } from "@/types";
+import { computeBuyerFit } from "@/lib/kpi/buyerFit";
+import type { BuyerProfile } from "@/lib/kpi/buyerFit";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -56,12 +58,82 @@ export default async function DashboardPage() {
         const snap = snaps[0] as { content_json?: { overall_score?: number } } | null;
         const score = snap?.content_json?.overall_score;
         if (typeof score === "number" && !scoreMap[dealId]) {
-          // overall_score is 1–5; convert to 1–10 for display
-          scoreMap[dealId] = Math.round(score * 2 * 10) / 10;
+          scoreMap[dealId] = Math.round(score * 10) / 10;
         }
       }
     }
   }
+  // Fetch buyer profile for fit computation
+  const buyerFitMap: Record<string, string> = {};
+  const { data: buyerProfileData } = await supabase
+    .from("buyer_profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const buyerProfile = buyerProfileData as BuyerProfile | null;
+
+  if (buyerProfile && dealList.length > 0) {
+    // Fetch entity fact values for all deals to compute buyer fit
+    const { data: entityRows } = await supabase
+      .from("entities")
+      .select(`
+        legacy_deal_id,
+        entity_fact_values(value_raw, fact_definition_id),
+        fact_definitions:entity_type_id(key, id)
+      `)
+      .in("legacy_deal_id", dealList.map((d) => d.id));
+
+    // Also fetch fact definitions separately
+    const { data: factDefsData } = await supabase
+      .from("fact_definitions")
+      .select("id, key");
+
+    const factDefMap = new Map((factDefsData ?? []).map((fd: { id: string; key: string }) => [fd.id, fd.key]));
+
+    if (entityRows) {
+      for (const entity of entityRows) {
+        const dealId = entity.legacy_deal_id as string | null;
+        if (!dealId) continue;
+
+        const factValues = Array.isArray(entity.entity_fact_values)
+          ? entity.entity_fact_values as { value_raw: string | null; fact_definition_id: string }[]
+          : [];
+
+        function getVal(key: string): string | null {
+          const fv = factValues.find((v) => factDefMap.get(v.fact_definition_id) === key);
+          return fv?.value_raw ?? null;
+        }
+        function parseN(key: string): number | null {
+          const raw = getVal(key);
+          if (!raw) return null;
+          const n = parseFloat(raw.replace(/[^0-9.-]/g, ""));
+          return isNaN(n) ? null : n;
+        }
+        function parseBoolVal(key: string): boolean | null {
+          const raw = getVal(key);
+          if (!raw) return null;
+          return raw.toLowerCase() === "true" || raw.toLowerCase() === "yes";
+        }
+
+        const ft = parseN("employees_ft") ?? 0;
+        const pt = parseN("employees_pt") ?? 0;
+        const dealFacts = {
+          industry: getVal("industry"),
+          location: getVal("location") ?? getVal("location_county"),
+          sde: parseN("sde_latest") ?? parseN("ebitda_latest"),
+          asking_price: parseN("asking_price"),
+          total_employees: (ft + Math.round(pt * 0.5)) || null,
+          manager_in_place: parseBoolVal("manager_in_place"),
+          owner_hours_per_week: parseN("owner_hours_per_week"),
+        };
+
+        const fit = computeBuyerFit(buyerProfile, dealFacts);
+        buyerFitMap[dealId] = fit.shortLabel;
+      }
+    }
+  }
+
   const isDriveConnected = !!driveResult.data;
 
   const totalDeals  = dealList.length;
@@ -214,7 +286,7 @@ export default async function DashboardPage() {
             <div className="w-5 h-5 rounded-full border-2 border-[#C6E4DC] border-t-[#1F7A63] animate-spin" />
           </div>
         }>
-          <DealsTable deals={dealList} scoreMap={scoreMap} />
+          <DealsTable deals={dealList} scoreMap={scoreMap} fitMap={buyerFitMap} />
         </Suspense>
 
       </main>

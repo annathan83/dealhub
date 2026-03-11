@@ -1068,15 +1068,15 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
             )}
             {buyerFitLabel && (
               <div className={`text-center px-3 py-1.5 rounded-xl border ${
-                buyerFitLabel === "High" ? "bg-emerald-50 border-emerald-200" :
-                buyerFitLabel === "Medium" ? "bg-amber-50 border-amber-200" :
-                                             "bg-red-50 border-red-200"
+                buyerFitLabel === "Good Fit" || buyerFitLabel === "Fit" ? "bg-emerald-50 border-emerald-200" :
+                buyerFitLabel === "Partial Fit" ? "bg-amber-50 border-amber-200" :
+                                                  "bg-red-50 border-red-200"
               }`}>
                 <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Fit</p>
-                <p className={`text-base font-bold ${
-                  buyerFitLabel === "High" ? "text-emerald-700" :
-                  buyerFitLabel === "Medium" ? "text-amber-700" :
-                                               "text-red-600"
+                <p className={`text-sm font-bold leading-tight ${
+                  buyerFitLabel === "Good Fit" || buyerFitLabel === "Fit" ? "text-emerald-700" :
+                  buyerFitLabel === "Partial Fit" ? "text-amber-700" :
+                                                    "text-red-600"
                 }`}>{buyerFitLabel}</p>
               </div>
             )}
