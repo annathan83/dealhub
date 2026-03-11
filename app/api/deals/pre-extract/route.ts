@@ -21,24 +21,53 @@ export const maxDuration = 30;
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.DEALHUB_OPENAI_MODEL ?? "gpt-4o-mini";
 
-// The triage fact set we want to extract pre-creation
+// Full fact set — extract as many facts as possible from any input
+// Required = minimum facts needed to activate deal creation and scoring
 const TRIAGE_FACTS = [
-  { key: "asking_price",      label: "Asking Price",          type: "currency", required: true  },
-  { key: "sde_latest",        label: "SDE / Cash Flow",       type: "currency", required: true  },
-  { key: "industry",          label: "Industry",              type: "text",     required: true  },
-  { key: "location",          label: "Location",              type: "text",     required: true  },
-  { key: "revenue_latest",    label: "Annual Revenue",        type: "currency", required: false },
-  { key: "ebitda_latest",     label: "EBITDA",                type: "currency", required: false },
-  { key: "employees_ft",      label: "Full-Time Employees",   type: "number",   required: false },
-  { key: "employees_pt",      label: "Part-Time Employees",   type: "number",   required: false },
-  { key: "years_in_business", label: "Years in Business",     type: "number",   required: false },
-  { key: "lease_monthly_rent",label: "Monthly Rent",          type: "currency", required: false },
-  { key: "manager_in_place",  label: "Manager in Place",      type: "boolean",  required: false },
-  { key: "owner_hours_per_week", label: "Owner Hours/Week",   type: "number",   required: false },
-  { key: "recurring_revenue_pct", label: "Recurring Revenue %", type: "percent", required: false },
-  { key: "customer_concentration_top1_pct", label: "Top Customer %", type: "percent", required: false },
-  { key: "reason_for_sale",   label: "Reason for Sale",       type: "text",     required: false },
-  { key: "deal_structure",    label: "Deal Structure",        type: "text",     required: false },
+  // ── Core / Required ────────────────────────────────────────────────────────
+  { key: "asking_price",                    label: "Asking Price",                type: "currency", required: true  },
+  { key: "sde_latest",                      label: "SDE / Cash Flow",             type: "currency", required: true  },
+  { key: "industry",                        label: "Industry",                    type: "text",     required: true  },
+  { key: "location",                        label: "Location",                    type: "text",     required: true  },
+  // ── Financial ─────────────────────────────────────────────────────────────
+  { key: "revenue_latest",                  label: "Annual Revenue",              type: "currency", required: false },
+  { key: "ebitda_latest",                   label: "EBITDA",                      type: "currency", required: false },
+  { key: "revenue_year_1",                  label: "Revenue (Prior Year)",        type: "currency", required: false },
+  { key: "revenue_year_2",                  label: "Revenue (2 Years Prior)",     type: "currency", required: false },
+  { key: "sde_year_1",                      label: "SDE (Prior Year)",            type: "currency", required: false },
+  { key: "gross_profit",                    label: "Gross Profit",                type: "currency", required: false },
+  { key: "net_income",                      label: "Net Income",                  type: "currency", required: false },
+  { key: "addbacks_summary",                label: "Addbacks Summary",            type: "text",     required: false },
+  // ── Deal Terms ────────────────────────────────────────────────────────────
+  { key: "deal_structure",                  label: "Deal Structure",              type: "text",     required: false },
+  { key: "seller_financing",                label: "Seller Financing",            type: "currency", required: false },
+  { key: "down_payment",                    label: "Down Payment",                type: "currency", required: false },
+  { key: "inventory_included",              label: "Inventory Included",          type: "boolean",  required: false },
+  { key: "real_estate_included",            label: "Real Estate Included",        type: "boolean",  required: false },
+  { key: "lease_monthly_rent",              label: "Monthly Rent",                type: "currency", required: false },
+  { key: "lease_expiration_date",           label: "Lease Expiration",            type: "text",     required: false },
+  { key: "working_capital_intensity",       label: "Working Capital Intensity",   type: "text",     required: false },
+  { key: "capex_intensity",                 label: "CapEx Intensity",             type: "text",     required: false },
+  // ── Operations ────────────────────────────────────────────────────────────
+  { key: "years_in_business",               label: "Years in Business",           type: "number",   required: false },
+  { key: "employees_ft",                    label: "Full-Time Employees",         type: "number",   required: false },
+  { key: "employees_pt",                    label: "Part-Time Employees",         type: "number",   required: false },
+  { key: "owner_hours_per_week",            label: "Owner Hours/Week",            type: "number",   required: false },
+  { key: "owner_in_sales",                  label: "Owner Drives Sales",          type: "boolean",  required: false },
+  { key: "owner_in_operations",             label: "Owner in Operations",         type: "boolean",  required: false },
+  { key: "manager_in_place",                label: "Manager in Place",            type: "boolean",  required: false },
+  { key: "customer_concentration_top1_pct", label: "Top Customer %",             type: "percent",  required: false },
+  { key: "customer_concentration_top5_pct", label: "Top 5 Customers %",          type: "percent",  required: false },
+  { key: "vendor_concentration_top1_pct",   label: "Top Vendor %",               type: "percent",  required: false },
+  { key: "recurring_revenue_pct",           label: "Recurring Revenue %",         type: "percent",  required: false },
+  { key: "repeat_revenue_pct",              label: "Repeat Revenue %",            type: "percent",  required: false },
+  { key: "seasonality",                     label: "Seasonality",                 type: "text",     required: false },
+  { key: "seller_reason",                   label: "Reason for Sale",             type: "text",     required: false },
+  { key: "transition_support",              label: "Transition Support",          type: "text",     required: false },
+  // ── Risk ──────────────────────────────────────────────────────────────────
+  { key: "legal_risk_flag",                 label: "Legal Risk",                  type: "boolean",  required: false },
+  { key: "compliance_risk_flag",            label: "Compliance Risk",             type: "boolean",  required: false },
+  { key: "licensing_dependency",            label: "Licensing Dependency",        type: "boolean",  required: false },
 ];
 
 export type PreExtractCandidate = {
@@ -91,22 +120,23 @@ export async function POST(request: NextRequest) {
     (f) => `- key: "${f.key}" | label: "${f.label}" | type: ${f.type}${f.required ? " | REQUIRED" : ""}`
   ).join("\n");
 
-  const prompt = `You are a business acquisition analyst. Extract structured facts from the listing or document text below.
+  const prompt = `You are a business acquisition analyst. Extract ALL available structured facts from the listing or document text below. Extract as many facts as you can find — do not limit yourself to just the required ones.
 
 Facts to extract:
 ${factList}
 
 Instructions:
-- Extract ONLY facts that are explicitly stated or clearly implied in the text.
-- Do NOT guess or hallucinate values.
+- Extract EVERY fact that is explicitly stated or clearly implied in the text.
+- Do NOT guess or hallucinate values not present in the text.
 - For currency values, return the numeric amount only (e.g. 1500000 for $1.5M, 240000 for $240K).
 - For percentages, return the decimal (e.g. 0.25 for 25%).
 - For boolean facts, return "true" or "false".
 - confidence: 0.0–1.0 (1.0 = explicitly stated, 0.7 = clearly implied, 0.4 = estimated).
 - snippet: the exact phrase from the text that supports this fact (≤150 chars).
-- If a fact is not present, omit it entirely.
+- If a fact is not present in the text, omit it entirely.
 - For industry: return a short label like "Childcare", "HVAC", "Retail", "B2B Services", etc.
 - For location: return city/state or region like "Broward County, FL" or "Dallas, TX".
+- Extract ALL financial figures, employee counts, operational details, and deal terms you can find.
 
 Return a JSON object:
 {
@@ -120,9 +150,9 @@ Return a JSON object:
   ]
 }
 
-Text to analyze (first 5000 chars):
+Text to analyze (first 8000 chars):
 ---
-${text.slice(0, 5000)}
+${text.slice(0, 8000)}
 ---`;
 
   try {
@@ -131,7 +161,7 @@ ${text.slice(0, 5000)}
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: 1500,
+      max_tokens: 3000,
     });
 
     const rawContent = response.choices[0]?.message?.content ?? "{}";

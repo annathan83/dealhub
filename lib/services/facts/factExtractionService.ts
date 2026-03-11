@@ -4,8 +4,8 @@
  * Calls GPT-4o-mini with extracted text + a list of applicable fact_definitions
  * and returns structured fact candidates with confidence scores and snippets.
  *
- * Strategy: extract only is_critical facts on first pass (≈12 facts) to keep
- * token costs low. Full extraction is triggered by explicit "deep analysis".
+ * Strategy: extract ALL available facts from every document upload.
+ * The more facts extracted, the better the scoring and analysis.
  */
 
 import OpenAI from "openai";
@@ -49,7 +49,7 @@ function buildExtractionPrompt(
     )
     .join("\n");
 
-  return `You are a business acquisition analyst. Extract structured facts from the document below.
+  return `You are a business acquisition analyst. Extract ALL available structured facts from the document below. Extract as many facts as you can find.
 
 Entity: ${entityTitle}
 
@@ -57,15 +57,15 @@ Facts to extract:
 ${factList}
 
 Instructions:
-- For each fact, extract the value if present in the document.
-- Return ONLY facts that are explicitly stated or clearly implied.
-- Do NOT guess or hallucinate values.
+- Extract EVERY fact that is explicitly stated or clearly implied in the document.
+- Do NOT guess or hallucinate values not present in the text.
 - For currency values, return the numeric amount (e.g. 1500000 for $1.5M).
 - For percentages, return the decimal (e.g. 0.25 for 25%).
 - For boolean facts, return "true" or "false".
 - confidence: 0.0–1.0 (1.0 = explicitly stated, 0.5 = clearly implied, 0.3 = estimated).
 - snippet: the exact text from the document that supports this fact (≤200 chars).
-- If a fact is not present, omit it entirely.
+- If a fact is not present in the document, omit it entirely.
+- Extract ALL financial figures, employee counts, operational details, and deal terms you can find.
 
 Return a JSON object with this exact structure:
 {
@@ -81,9 +81,9 @@ Return a JSON object with this exact structure:
   ]
 }
 
-Document text (first 6000 chars):
+Document text (first 8000 chars):
 ---
-${text.slice(0, 6000)}
+${text.slice(0, 8000)}
 ---`;
 }
 
@@ -116,7 +116,7 @@ export async function extractFactsFromText(
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: 2000,
+      max_tokens: 3000,
     });
 
     const rawContent = response.choices[0]?.message?.content ?? "{}";

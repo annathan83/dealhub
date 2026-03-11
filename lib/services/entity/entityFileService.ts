@@ -119,16 +119,15 @@ async function runFactExtraction(
   try {
     await updateProcessingRun(runId ?? "", { status: "running" }).catch(() => {});
 
-    // Get applicable fact definitions for this entity type (critical only for speed)
+    // Get ALL applicable fact definitions for this entity type — extract everything possible
     const allFactDefs = await getFactDefinitionsForEntityType(entity.entity_type_id);
-    const criticalFacts = allFactDefs.filter((fd) => fd.is_critical);
-    if (criticalFacts.length === 0) {
-      if (runId) await updateProcessingRun(runId, { status: "skipped", output_summary_json: { reason: "no_critical_facts" } });
+    if (allFactDefs.length === 0) {
+      if (runId) await updateProcessingRun(runId, { status: "skipped", output_summary_json: { reason: "no_fact_definitions" } });
       return;
     }
 
-    // Extract facts from text
-    const extractionResult = await extractFactsFromText(text, criticalFacts, entity.title);
+    // Extract facts from text — use all definitions to maximize fact coverage
+    const extractionResult = await extractFactsFromText(text, allFactDefs, entity.title);
     if (extractionResult.candidates.length === 0) {
       if (runId) await updateProcessingRun(runId, { status: "completed", output_summary_json: { facts_found: 0 } });
       return;
@@ -139,7 +138,7 @@ async function runFactExtraction(
       entityId: entity.id,
       fileId: entityFileId,
       entityTitle: entity.title,
-      factDefinitions: criticalFacts,
+      factDefinitions: allFactDefs,
       candidates: extractionResult.candidates,
       extractor_version: extractionResult.extractor_version,
     });
