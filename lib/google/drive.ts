@@ -432,6 +432,75 @@ export async function uploadFileToDealFolder(params: {
   return metadata;
 }
 
+/**
+ * Ensure a "Buyer Profile" folder exists inside the DealHub root folder.
+ * Returns the folder ID. Safe to call multiple times.
+ */
+export async function ensureBuyerProfileFolder(userId: string): Promise<string> {
+  const drive = await getAuthorizedDriveClient(userId);
+  const rootFolderId = await ensureDealHubRootFolder(userId);
+
+  const folderName = "Buyer Profile";
+  let folderId = await findFolder(drive, folderName, rootFolderId);
+  if (!folderId) folderId = await createFolder(drive, folderName, rootFolderId);
+  return folderId;
+}
+
+/**
+ * Upload a file (binary) to the Buyer Profile folder in Drive.
+ * Returns the Drive file ID and web view link.
+ */
+export async function uploadFileToBuyerProfileFolder(params: {
+  userId: string;
+  fileBuffer: Buffer;
+  originalFileName: string;
+  mimeType: string;
+}): Promise<{ fileId: string; fileName: string; webViewLink: string | null }> {
+  const { userId, fileBuffer, originalFileName, mimeType } = params;
+  const drive = await getAuthorizedDriveClient(userId);
+  const folderId = await ensureBuyerProfileFolder(userId);
+
+  const driveFileName = buildUploadFileName(originalFileName);
+  const { Readable } = await import("stream");
+  const stream = Readable.from(fileBuffer);
+
+  const res = await drive.files.create({
+    requestBody: { name: driveFileName, mimeType, parents: [folderId] },
+    media: { mimeType, body: stream },
+    fields: "id,name,webViewLink",
+  });
+
+  if (!res.data.id) throw new Error("Drive file creation returned no ID.");
+  return {
+    fileId: res.data.id,
+    fileName: res.data.name ?? driveFileName,
+    webViewLink: res.data.webViewLink ?? null,
+  };
+}
+
+/**
+ * Upload a plain-text extract to the Buyer Profile folder in Drive.
+ */
+export async function uploadTextToBuyerProfileFolder(params: {
+  userId: string;
+  text: string;
+  baseName: string;
+}): Promise<{ fileId: string }> {
+  const { userId, text, baseName } = params;
+  const drive = await getAuthorizedDriveClient(userId);
+  const folderId = await ensureBuyerProfileFolder(userId);
+
+  const fileName = `${baseName}_extracted.txt`;
+  const res = await drive.files.create({
+    requestBody: { name: fileName, mimeType: "text/plain", parents: [folderId] },
+    media: { mimeType: "text/plain", body: text },
+    fields: "id",
+  });
+
+  if (!res.data.id) throw new Error("Drive text file creation returned no ID.");
+  return { fileId: res.data.id };
+}
+
 /** @deprecated Use uploadFileToDealFolder instead */
 export async function saveFileToDrive(params: {
   userId: string;

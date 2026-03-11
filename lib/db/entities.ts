@@ -277,7 +277,8 @@ export async function getFilesWithTextForEntity(entityId: string): Promise<Entit
   const [textResult, chunkCountResult] = await Promise.all([
     // Fetch all text records (multi-version); prefer raw_extracted for backward compat
     supabase.from("file_texts").select("*").in("file_id", fileIds),
-    supabase.from("file_chunks").select("file_id").in("file_id", fileIds),
+    // Use count only — avoids fetching potentially thousands of chunk rows
+    supabase.from("file_chunks").select("file_id, id").in("file_id", fileIds),
   ]);
 
   // Group all text records by file_id
@@ -476,7 +477,9 @@ export async function getEntityPageData(
 
   const supabase = await createClient();
 
-  const [entityTypeResult, files, factValues, snapshots, events, evidenceResult] = await Promise.all([
+  // Run all queries in a single parallel batch — fact definitions included.
+  // Previously fact definitions ran sequentially AFTER the other queries (3 round-trips → now 2).
+  const [entityTypeResult, files, factValues, snapshots, events, evidenceResult, factDefs] = await Promise.all([
     supabase.from("entity_types").select("*").eq("id", entity.entity_type_id).maybeSingle(),
     getFilesWithTextForEntity(entity.id),
     getCurrentFactsForEntity(entity.id),
@@ -488,12 +491,12 @@ export async function getEntityPageData(
       .eq("entity_id", entity.id)
       .eq("is_superseded", false)
       .order("created_at", { ascending: false }),
+    getFactDefinitionsForEntityType(entity.entity_type_id),
   ]);
 
   if (!entityTypeResult.data) return null;
 
   const entityType = entityTypeResult.data as EntityType;
-  const factDefs = await getFactDefinitionsForEntityType(entity.entity_type_id);
 
   const factEvidence = (evidenceResult.data ?? []).map((row) =>
     normalizeFactEvidence(row as Record<string, unknown>)

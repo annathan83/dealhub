@@ -1252,8 +1252,8 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
   const [showAllCategories, setShowAllCategories] = useState(false);
 
   const handleScoreUpdated = useCallback(() => {
-    // Delayed refresh to pick up the rescoring result (runs async server-side)
-    setTimeout(() => router.refresh(), 2500);
+    // Refresh after a short delay to pick up the rescoring result (runs async server-side)
+    setTimeout(() => router.refresh(), 1000);
   }, [router]);
 
   // Merge server values with local optimistic overrides

@@ -111,19 +111,13 @@ export async function POST(
   if (dealError || !dealData) return NextResponse.json({ error: "Deal not found" }, { status: 404 });
   const deal = dealData as Pick<Deal, "id" | "name">;
 
-  const { data: tokenRow, error: tokenError } = await supabase
+  const { data: tokenRow } = await supabase
     .from("google_oauth_tokens")
     .select("id")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (!tokenRow) {
-    console.error(`[upload] No Google OAuth token for user ${user.id}:`, tokenError?.message);
-    return NextResponse.json(
-      { error: "Google Drive is not connected. Connect it in Settings → Integrations." },
-      { status: 422 }
-    );
-  }
+  const isDriveConnected = !!tokenRow;
 
   const results: { fileName: string; success: boolean; error?: string; googleFileId?: string }[] = [];
 
@@ -133,17 +127,48 @@ export async function POST(
       const buffer = Buffer.from(await file.arrayBuffer());
       const mimeType = (file.type || "application/octet-stream").split(";")[0].trim();
 
-      // ── 1. Upload to Google Drive ─────────────────────────────────────────
-      console.log(`[upload] Uploading "${file.name}" to Google Drive...`);
-      const driveMeta = await uploadFileToDealFolder({
-        userId: user.id,
-        dealId,
-        dealName: deal.name,
-        fileBuffer: buffer,
-        originalFileName: file.name,
-        mimeType,
-        sourceKind: "uploaded_file",
-      });
+      // ── 1. Upload to Google Drive (optional) ─────────────────────────────
+      // Drive is a best-effort integration — if it's not connected or the token
+      // is expired, we fall back to Supabase Storage so the upload never fails.
+      let driveMeta: { googleFileId: string; googleFileName: string; webViewLink?: string | null; createdTime?: string | null } | null = null;
+      let storagePath = "";
+
+      if (isDriveConnected) {
+        try {
+          console.log(`[upload] Uploading "${file.name}" to Google Drive...`);
+          driveMeta = await uploadFileToDealFolder({
+            userId: user.id,
+            dealId,
+            dealName: deal.name,
+            fileBuffer: buffer,
+            originalFileName: file.name,
+            mimeType,
+            sourceKind: "uploaded_file",
+          });
+          storagePath = driveMeta.googleFileId;
+          console.log(`[upload] Drive upload OK: ${driveMeta.googleFileId}`);
+        } catch (driveErr) {
+          const driveMsg = driveErr instanceof Error ? driveErr.message : String(driveErr);
+          console.warn(`[upload] Drive upload failed for "${file.name}", falling back to Supabase Storage: ${driveMsg}`);
+          driveMeta = null;
+        }
+      }
+
+      // Fall back to Supabase Storage if Drive is unavailable
+      if (!driveMeta) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const storageKey = `deals/${dealId}/${Date.now()}_${safeName}`;
+        const { error: storageErr } = await supabase.storage
+          .from("deal-files")
+          .upload(storageKey, buffer, { contentType: mimeType, upsert: false });
+
+        if (storageErr) {
+          console.error(`[upload] Supabase Storage fallback failed for "${file.name}":`, storageErr.message);
+          throw new Error(`Storage failed: ${storageErr.message}`);
+        }
+        storagePath = storageKey;
+        console.log(`[upload] Stored in Supabase Storage: ${storageKey}`);
+      }
 
       // ── 2. AI analysis + text extraction ─────────────────────────────────
       type EntryAnalysis = { title: string; description: string; summary: string };
@@ -158,21 +183,25 @@ export async function POST(
         if (isImage && buffer.length <= MAX_IMAGE_ANALYSIS_BYTES) {
           const result = await analyzeImageAttachment({
             dealName: deal.name,
-            driveFileName: driveMeta.googleFileName,
+            driveFileName: driveMeta?.googleFileName ?? file.name,
             originalFileName: file.name,
             mimeType,
             imageBase64: buffer.toString("base64"),
           });
           analysis = { title: result.change_log_item.title, description: result.change_log_item.description, summary: result.summary };
-          saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
-            .catch((e) => console.error("Drive AI save failed:", e));
+          if (driveMeta) {
+            saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
+              .catch((e) => console.error("Drive AI save failed:", e));
+          }
 
         } else if (isAudio) {
           const transcript = buffer.length <= MAX_WHISPER_BYTES ? await transcribeAudio(buffer, file.name) : null;
           if (transcript) {
             analysis = { title: "Recording added", description: transcript.slice(0, 200) + (transcript.length > 200 ? "…" : ""), summary: transcript };
-            saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: `AI Transcript\n=============\n\n${transcript}` })
-              .catch((e) => console.error("Drive transcript save failed:", e));
+            if (driveMeta) {
+              saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: `AI Transcript\n=============\n\n${transcript}` })
+                .catch((e) => console.error("Drive transcript save failed:", e));
+            }
           } else {
             analysis = { title: "Recording added", description: `"${file.name}" uploaded. Transcription unavailable.`, summary: `"${file.name}" uploaded.` };
           }
@@ -192,10 +221,12 @@ export async function POST(
 
           const result = isScannedPdf
             ? await analyzePdfAttachment({ dealName: deal.name, originalFileName: file.name, pdfBuffer: buffer })
-            : await analyzeAttachment({ dealName: deal.name, driveFileName: driveMeta.googleFileName, originalFileName: file.name, mimeType, contentPreview });
+            : await analyzeAttachment({ dealName: deal.name, driveFileName: driveMeta?.googleFileName ?? file.name, originalFileName: file.name, mimeType, contentPreview });
           analysis = { title: result.change_log_item.title, description: result.change_log_item.description, summary: result.summary };
-          saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
-            .catch((e) => console.error("Drive AI save failed:", e));
+          if (driveMeta) {
+            saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
+              .catch((e) => console.error("Drive AI save failed:", e));
+          }
         }
       } catch (aiErr) {
         console.error("AI analysis failed, using fallback:", aiErr);
@@ -219,18 +250,18 @@ export async function POST(
       // This ensures the Facts tab shows extracted values immediately after upload.
       await ingestFromDealUpload({
         dealId, userId: user.id,
-        googleFileId: driveMeta.googleFileId,
+        googleFileId: storagePath,
         originalFileName: file.name,
         mimeType, fileSizeBytes: file.size,
         sourceType, extractedText: extractedText ?? null, extractionMethod,
         title: analysis.title,
         summary: analysis.summary,
-        webViewLink: driveMeta.webViewLink ?? null,
-        driveCreatedTime: driveMeta.createdTime ?? null,
+        webViewLink: driveMeta?.webViewLink ?? null,
+        driveCreatedTime: driveMeta?.createdTime ?? null,
       });
 
-      console.log(`[upload] "${file.name}" complete. Drive ID: ${driveMeta.googleFileId}`);
-      results.push({ fileName: file.name, success: true, googleFileId: driveMeta.googleFileId });
+      console.log(`[upload] "${file.name}" complete. Storage path: ${storagePath}`);
+      results.push({ fileName: file.name, success: true, googleFileId: driveMeta?.googleFileId });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[upload] FAILED "${file.name}":`, msg, err);

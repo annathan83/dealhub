@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { seedBuyerProfileFacts } from "@/lib/services/entity/buyerEntityService";
+import type { BuyerProfile } from "@/lib/kpi/buyerFit";
 
 // GET — fetch current user's buyer profile
 export async function GET() {
@@ -50,6 +52,12 @@ export async function POST(req: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Mirror the manual save into entity_fact_values so the fact store stays
+  // in sync with the form (non-fatal — profile is already saved above).
+  seedBuyerProfileFacts(user.id, data as BuyerProfile).catch((err) =>
+    console.warn("[buyer-profile] seedBuyerProfileFacts failed (non-fatal):", err)
+  );
 
   return NextResponse.json({ profile: data });
 }

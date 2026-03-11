@@ -144,9 +144,9 @@ function AddNotePanel({ dealId, onDone }: { dealId: string; onDone: () => void }
       }
       setContent("");
       onDone();
-      router.refresh();
-      // Delayed refresh to pick up scoring results (runs async after extraction)
-      setTimeout(() => router.refresh(), 4000);
+      // Single refresh after a short delay — the entry API awaits extraction,
+      // so facts are ready. The delay picks up async scoring results.
+      setTimeout(() => router.refresh(), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save.");
     } finally {
@@ -251,10 +251,9 @@ export default function QuickAddBar({ dealId }: { dealId: string }) {
       if (!res.ok) throw new Error(data.error ?? "Upload failed.");
       const failed = (data.results ?? []).find((r) => !r.success);
       if (failed) throw new Error(failed.error ?? "Upload failed.");
-      // Immediate refresh to show newly extracted facts and conflicts
+      // Refresh once — the upload API awaits fact extraction before returning,
+      // so facts/conflicts are already in the DB. One refresh is sufficient.
       router.refresh();
-      // Delayed refresh to pick up scoring results (runs async after extraction)
-      setTimeout(() => router.refresh(), 4000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {

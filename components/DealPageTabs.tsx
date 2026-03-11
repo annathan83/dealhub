@@ -720,7 +720,11 @@ function BuyerFitCard({
           </a>
         </div>
         <p className="text-sm text-slate-400">
-          Complete your Buyer Profile in Settings to see personalized fit analysis for this deal.
+          Complete your{" "}
+          <a href="/settings/buyer-profile" className="text-[#1F7A63] hover:underline font-medium">
+            Buyer Profile
+          </a>
+          {" "}in Settings to see personalized fit analysis for this deal. You can fill it in manually or upload a document and AI will extract your criteria automatically.
         </p>
       </div>
     );
@@ -803,7 +807,21 @@ function BuyerFitCard({
             </li>
           ))}
         </ul>
-        <p className="text-[10px] text-slate-400 mt-3">
+        {/* Show source file if profile was imported from a document */}
+        {buyerProfile.profile_source_file_name && (
+          <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-current/10">
+            <svg className="w-3 h-3 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-[10px] text-slate-400 truncate">
+              Profile from: {buyerProfile.profile_source_file_name}
+              {buyerProfile.profile_source_uploaded_at && (
+                <> · {new Date(buyerProfile.profile_source_uploaded_at).toLocaleDateString()}</>
+              )}
+            </p>
+          </div>
+        )}
+        <p className="text-[10px] text-slate-400 mt-2">
           Based on your{" "}
           <a href="/settings/buyer-profile" className="text-[#1F7A63] hover:underline">
             Buyer Profile

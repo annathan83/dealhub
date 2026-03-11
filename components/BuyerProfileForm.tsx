@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { BuyerProfile } from "@/lib/kpi/buyerFit";
 
@@ -188,6 +188,117 @@ function SectionHeader({ title, description }: { title: string; description?: st
   );
 }
 
+// ─── File upload section ──────────────────────────────────────────────────────
+
+function ProfileUploadSection({
+  sourceFileName,
+  sourceUploadedAt,
+  onUploaded,
+}: {
+  sourceFileName: string | null | undefined;
+  sourceUploadedAt: string | null | undefined;
+  onUploaded: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+
+  async function handleFile(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/buyer-profile/upload", { method: "POST", body: form });
+      const data = await res.json() as { error?: string; source_file_name?: string };
+      if (!res.ok) throw new Error(data.error ?? "Upload failed.");
+      setUploadSuccess(data.source_file_name ?? file.name);
+      onUploaded();
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      <SectionHeader
+        title="Import from Document"
+        description="Upload a PDF or Word doc with your acquisition criteria — AI will extract and fill the fields below automatically."
+      />
+
+      {/* Current source file */}
+      {(sourceFileName || uploadSuccess) && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+          <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-emerald-800 truncate">
+              {uploadSuccess ?? sourceFileName}
+            </p>
+            {sourceUploadedAt && !uploadSuccess && (
+              <p className="text-[10px] text-emerald-600">
+                Imported {new Date(sourceUploadedAt).toLocaleDateString()}
+              </p>
+            )}
+            {uploadSuccess && (
+              <p className="text-[10px] text-emerald-600">Just imported — fields updated below</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {uploadError && (
+        <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4">
+          {uploadError}
+        </p>
+      )}
+
+      <div className="flex items-center gap-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.txt"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleFile(f);
+          }}
+        />
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 disabled:opacity-50 transition-colors text-slate-700"
+        >
+          {uploading ? (
+            <>
+              <svg className="w-4 h-4 animate-spin text-slate-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Extracting…
+            </>
+          ) : (
+            <>
+              <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              {sourceFileName ? "Replace document" : "Upload document"}
+            </>
+          )}
+        </button>
+        <p className="text-xs text-slate-400">PDF, Word, or TXT · max 20 MB</p>
+      </div>
+    </section>
+  );
+}
+
 // ─── Main form ────────────────────────────────────────────────────────────────
 
 export default function BuyerProfileForm({ initialProfile }: Props) {
@@ -279,6 +390,13 @@ export default function BuyerProfileForm({ initialProfile }: Props) {
 
   return (
     <div className="space-y-8">
+
+      {/* ── Document import ──────────────────────────────────────────────── */}
+      <ProfileUploadSection
+        sourceFileName={initialProfile?.profile_source_file_name}
+        sourceUploadedAt={initialProfile?.profile_source_uploaded_at}
+        onUploaded={() => router.refresh()}
+      />
 
       {/* ── Industry preferences ─────────────────────────────────────────── */}
       <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">

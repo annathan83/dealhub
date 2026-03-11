@@ -48,28 +48,29 @@ export async function buildDealPageViewModel(
 ): Promise<DealPageViewModel | null> {
   const supabase = await createClient();
 
-  const [dealResult, entityData] = await Promise.all([
+  // Phase 1: fetch deal + entity data + buyer profile all in parallel.
+  // Buyer profile is user-level (not deal-specific) so it can start immediately.
+  const [dealResult, entityData, buyerProfile] = await Promise.all([
     supabase.from("deals").select("*").eq("id", dealId).eq("user_id", userId).maybeSingle(),
     getEntityPageData(dealId, userId).catch(() => null),
+    (async (): Promise<BuyerProfile | null> => {
+      try {
+        const { data } = await supabase
+          .from("buyer_profiles")
+          .select("*")
+          .eq("user_id", userId)
+          .single();
+        return (data as BuyerProfile | null) ?? null;
+      } catch {
+        return null;
+      }
+    })(),
   ]);
 
   if (!dealResult.data) return null;
 
-  // Fetch buyer profile in parallel
-  const buyerProfilePromise: Promise<BuyerProfile | null> = (async () => {
-    try {
-      const { data } = await supabase
-        .from("buyer_profiles")
-        .select("*")
-        .eq("user_id", userId)
-        .single();
-      return (data as BuyerProfile | null) ?? null;
-    } catch {
-      return null;
-    }
-  })();
-
-  const [kpiScorecard, scoreHistory, entityEvents, swotAnalysis, missingInfo, buyerProfile] = await Promise.all([
+  // Phase 2: fetch entity-specific analysis data (requires entity ID from phase 1).
+  const [kpiScorecard, scoreHistory, entityEvents, swotAnalysis, missingInfo] = await Promise.all([
     entityData?.entity
       ? getLatestKpiScorecard(entityData.entity.id).catch(() => null)
       : Promise.resolve(null),
@@ -85,7 +86,6 @@ export async function buildDealPageViewModel(
     entityData?.entity
       ? getLatestMissingInfo(entityData.entity.id).catch(() => null)
       : Promise.resolve(null),
-    buyerProfilePromise,
   ]);
 
   // Extract the most recent triage_summary snapshot for the Initial Review panel

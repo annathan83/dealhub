@@ -27,6 +27,11 @@ export type BuyerProfile = {
   preferred_business_characteristics?: string | null;
   experience_background?: string | null;
   acquisition_goals?: string | null;
+  // Source tracking — set when profile is imported from a document
+  updated_at?: string | null;
+  profile_source_file_name?: string | null;
+  profile_source_drive_file_id?: string | null;
+  profile_source_uploaded_at?: string | null;
 };
 
 export type DealFacts = {

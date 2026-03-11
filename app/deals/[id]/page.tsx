@@ -4,7 +4,6 @@ import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import DealHeader from "@/components/DealHeader";
 import DealPageTabs from "@/components/DealPageTabs";
-import { syncAndListDealDriveFiles } from "@/lib/google/drive";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
@@ -44,17 +43,20 @@ export default async function DealPage({
     buyerProfile,
   } = vm;
 
+  // Check Drive connection status without triggering a live sync.
+  // Files are already loaded from the DB in entityData.files — no need to
+  // hit Google Drive on every page render (major latency source).
   const { data: tokenRow } = await supabase
     .from("google_oauth_tokens")
     .select("id")
     .eq("user_id", user.id)
-    .single();
+    .maybeSingle();
 
   const isDriveConnected = !!tokenRow;
 
-  const syncedFiles = isDriveConnected
-    ? await syncAndListDealDriveFiles(user.id, id).catch(() => entityFiles)
-    : entityFiles;
+  // Use DB-cached files — Drive sync happens in the background after uploads,
+  // not on every page load.
+  const syncedFiles = entityFiles;
 
   // Detect if new files were added after the last triage summary
   const triageSummaryExists = !!triageSummary;
