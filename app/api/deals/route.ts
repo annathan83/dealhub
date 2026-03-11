@@ -3,8 +3,11 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { ensureDealSubfolders } from "@/lib/google/drive";
 import { seedManualFactsFromDeal } from "@/lib/services/entity/dealFactSeedService";
+import { seedExtractedFactsFromDeal } from "@/lib/services/entity/dealFactSeedService";
+import { runPostFactPipeline } from "@/lib/services/analysis/postFactOrchestrator";
+import { getEntityByLegacyDealId } from "@/lib/db/entities";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
@@ -27,21 +30,24 @@ export async function POST(request: NextRequest) {
 
   let body: {
     name?: string;
-    // Structured industry
     industry_category?: string | null;
     industry?: string | null;
-    // Structured location
     state?: string | null;
     county?: string | null;
     city?: string | null;
-    /** Legacy single-field location */
     location?: string | null;
-    // Deal source
     deal_source_category?: string | null;
     deal_source_detail?: string | null;
     asking_price?: string | null;
     sde?: string | null;
     multiple?: string | null;
+    // Pre-extracted facts from the listing (from /api/deals/pre-extract)
+    extracted_facts?: Array<{
+      fact_key: string;
+      value_raw: string;
+      confidence: number;
+      snippet?: string | null;
+    }> | null;
   };
 
   try {
@@ -54,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Deal name is required." }, { status: 422 });
   }
 
-  // ── 1. Insert the deal row (deal_number assigned automatically by DB trigger) ─
+  // ── 1. Insert the deal row ────────────────────────────────────────────────────
   const { data: deal, error: insertError } = await supabase
     .from("deals")
     .insert({
@@ -83,38 +89,64 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // ── 2. Seed manual facts into entity_fact_values (non-fatal) ─────────────────
-  // This ensures the Facts tab shows manual inputs immediately, and that the
-  // reconciliation service can detect conflicts when a CIM is uploaded later.
-  seedManualFactsFromDeal(deal.id as string, user.id, {
-    asking_price: body.asking_price,
-    sde: body.sde,
-    industry: body.industry,
-    location: body.location,
-    state: body.state,
-    county: body.county,
-    city: body.city,
-  }).catch((err) => console.error("[createDeal] seedManualFactsFromDeal failed:", err));
+  const dealId = deal.id as string;
 
-  // ── 3. Provision Drive folder + subfolders (non-fatal if Drive not connected) ─
-  // Creates: DealHub/00001_Deal-Name/raw/, /derived/, /intelligence/
-  // If Drive isn't connected yet the folders are created lazily on first upload.
+  // ── 2. Seed facts and trigger initial scoring ─────────────────────────────────
+  // We await the seeding so scoring can read the facts immediately after.
+  try {
+    // Seed manual fields (asking_price, sde, industry, location) as user_override facts
+    await seedManualFactsFromDeal(dealId, user.id, {
+      asking_price: body.asking_price,
+      sde: body.sde,
+      industry: body.industry,
+      location: body.location,
+      state: body.state,
+      county: body.county,
+      city: body.city,
+    });
+
+    // If pre-extracted facts were provided (from paste-and-extract flow), seed those too.
+    // These are ai_extracted facts — they will not overwrite the manual user_override facts above.
+    if (body.extracted_facts && body.extracted_facts.length > 0) {
+      await seedExtractedFactsFromDeal(dealId, user.id, body.extracted_facts);
+    }
+
+    // Immediately run the post-fact pipeline (scoring + inference).
+    // Scoring is deterministic and fast — we await it so the Analysis tab
+    // has a score ready when the user arrives.
+    // SWOT and missing info run fire-and-forget (they use AI and take longer).
+    const entity = await getEntityByLegacyDealId(dealId, user.id);
+    if (entity) {
+      const industry = body.industry?.trim() || null;
+      await runPostFactPipeline({
+        entityId: entity.id,
+        entityTypeId: entity.entity_type_id,
+        entityTitle: entity.title,
+        industry,
+        triggerType: "extraction",
+        triggerReason: "Initial deal creation",
+      });
+    }
+  } catch (err) {
+    console.error("[createDeal] Post-creation pipeline failed (non-fatal):", err);
+  }
+
+  // ── 3. Provision Drive folder + subfolders (non-fatal) ───────────────────────
   let driveFolderError: string | null = null;
   try {
     await ensureDealSubfolders(
       user.id,
-      deal.id as string,
+      dealId,
       deal.name as string,
       deal.deal_number as number
     );
   } catch (err) {
-    // Non-fatal — folders will be created lazily on first upload if this fails.
     driveFolderError = err instanceof Error ? err.message : "Drive folders could not be created.";
-    console.warn(`[createDeal] Drive folder creation skipped for deal ${deal.id}:`, driveFolderError);
+    console.warn(`[createDeal] Drive folder creation skipped for deal ${dealId}:`, driveFolderError);
   }
 
   return NextResponse.json(
-    { id: deal.id, name: deal.name, deal_number: deal.deal_number, driveFolderError },
+    { id: dealId, name: deal.name, deal_number: deal.deal_number, driveFolderError },
     { status: 201 }
   );
 }

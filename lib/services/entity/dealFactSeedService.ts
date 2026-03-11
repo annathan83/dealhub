@@ -100,3 +100,54 @@ export async function seedManualFactsFromDeal(
     console.error("[dealFactSeedService] seedManualFactsFromDeal failed (non-fatal):", err);
   }
 }
+
+/**
+ * Seeds AI-extracted fact candidates from pre-extraction (paste-and-extract flow).
+ * These facts have value_source_type = "ai_extracted" and will NOT overwrite
+ * any user_override facts already seeded by seedManualFactsFromDeal.
+ */
+export async function seedExtractedFactsFromDeal(
+  dealId: string,
+  userId: string,
+  extractedFacts: Array<{
+    fact_key: string;
+    value_raw: string;
+    confidence: number;
+    snippet?: string | null;
+  }>
+): Promise<void> {
+  if (!extractedFacts || extractedFacts.length === 0) return;
+
+  try {
+    const entity = await getEntityByLegacyDealId(dealId, userId);
+    if (!entity) {
+      console.warn("[dealFactSeedService] Entity not found for deal", dealId);
+      return;
+    }
+
+    const factDefs = await getFactDefinitionsForEntityType(entity.entity_type_id);
+    const factDefByKey = new Map(factDefs.map((fd) => [fd.key, fd]));
+
+    let seeded = 0;
+    for (const ef of extractedFacts) {
+      const fd = factDefByKey.get(ef.fact_key);
+      if (!fd || !ef.value_raw?.trim()) continue;
+
+      await upsertEntityFactValue({
+        entity_id: entity.id,
+        fact_definition_id: fd.id,
+        value_raw: ef.value_raw.trim(),
+        value_normalized_json: {},
+        status: ef.confidence >= 0.5 ? "confirmed" : "unclear",
+        confidence: ef.confidence,
+        current_evidence_id: null,
+        value_source_type: "ai_extracted",
+      });
+      seeded++;
+    }
+
+    console.log(`[dealFactSeedService] Seeded ${seeded} extracted facts for entity ${entity.id}`);
+  } catch (err) {
+    console.error("[dealFactSeedService] seedExtractedFactsFromDeal failed (non-fatal):", err);
+  }
+}

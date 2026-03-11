@@ -21,10 +21,10 @@ export default async function NewDealPage() {
         {/* Page header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
-            New Deal
+            Add Deal
           </h1>
           <p className="text-sm text-slate-500">
-            Create a workspace to track and evaluate this acquisition opportunity.
+            Paste a listing or enter key numbers — AI extracts facts and scores the deal instantly.
           </p>
         </div>
 

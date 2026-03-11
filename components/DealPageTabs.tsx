@@ -59,6 +59,8 @@ export type DealPageTabsProps = {
   swotAnalysis: SwotAnalysisContent | null;
   missingInfo: MissingInfoResult | null;
   buyerProfile: BuyerProfile | null;
+  // Optional: open a specific tab on first render (e.g. after deal creation)
+  initialTab?: TabId;
 };
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
@@ -395,7 +397,7 @@ function TriageScoreHeader({
             <span className="text-lg text-slate-300 font-medium">/10</span>
           </div>
           {score === null && (
-            <p className="text-xs text-slate-400 mt-1.5">Upload a listing to generate a score</p>
+            <p className="text-xs text-slate-400 mt-1.5">Add facts or upload a listing to generate a score</p>
           )}
         </div>
 
@@ -977,8 +979,9 @@ export default function DealPageTabs({
   swotAnalysis,
   missingInfo,
   buyerProfile,
+  initialTab,
 }: DealPageTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("workspace");
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "workspace");
   const handleReviewFacts = () => setActiveTab("facts");
 
   // Badge: count of missing core scoring facts (asking_price, sde_latest, revenue_latest, employees_ft, years_in_business)

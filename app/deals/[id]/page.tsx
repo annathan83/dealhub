@@ -10,10 +10,13 @@ import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
 
 export default async function DealPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { id } = await params;
+  const { tab } = await searchParams;
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -113,6 +116,7 @@ export default async function DealPage({
             swotAnalysis={swotAnalysis}
             missingInfo={missingInfo}
             buyerProfile={buyerProfile}
+            initialTab={tab === "analysis" ? "analysis" : tab === "facts" ? "facts" : undefined}
           />
         </div>
 
