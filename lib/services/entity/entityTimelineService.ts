@@ -48,6 +48,14 @@ export type TimelineItem = {
   analysisType?: string;
   /** Extra context for display */
   metadata?: Record<string, unknown>;
+  /** If this is a conflict event, structured conflict data for the conflict modal */
+  conflictData?: {
+    factLabel: string;
+    existingValue: string;
+    newValue: string;
+    factDefinitionId?: string;
+    snippet?: string;
+  };
 };
 
 // ─── Event grouping window (ms) ───────────────────────────────────────────────
@@ -137,14 +145,25 @@ function titleForEvent(event: EntityEvent, file?: EntityFile): string {
       const count = event.metadata_json?.facts_found as number | undefined;
       return count ? `${count} facts extracted` : "Facts extracted";
     }
-    case "fact_updated":
+    case "fact_updated": {
+      const label = event.metadata_json?.fact_label as string | undefined;
+      const newVal = event.metadata_json?.new_value as string | undefined;
+      if (label && newVal) return `${label} updated to ${newVal}`;
+      if (label) return `${label} updated`;
       return "Fact updated";
-    case "fact_manually_edited":
-      return "Fact edited";
-    case "fact_manually_confirmed":
-      return "Fact confirmed";
-    case "fact_conflict_detected":
-      return "Fact conflict detected";
+    }
+    case "fact_manually_edited": {
+      const label = event.metadata_json?.fact_label as string | undefined;
+      return label ? `${label} edited` : "Fact edited";
+    }
+    case "fact_manually_confirmed": {
+      const label = event.metadata_json?.fact_label as string | undefined;
+      return label ? `${label} confirmed` : "Fact confirmed";
+    }
+    case "fact_conflict_detected": {
+      const label = event.metadata_json?.fact_label as string | undefined;
+      return label ? `Conflict: ${label}` : "Fact conflict detected";
+    }
     case "manual_override_applied":
       return "Manual override applied";
     case "triage_completed":
@@ -216,14 +235,27 @@ function summaryForEvent(event: EntityEvent, file?: EntityFile): string {
       }
       return `Key deal facts extracted and stored.`;
     }
-    case "fact_updated":
+    case "fact_updated": {
+      const oldVal = event.metadata_json?.old_value as string | undefined;
+      const newVal = event.metadata_json?.new_value as string | undefined;
+      const snippet = event.metadata_json?.snippet as string | undefined;
+      if (oldVal && newVal) return `Changed from ${oldVal} to ${newVal}.${snippet ? ` Source: "${snippet.slice(0, 60)}…"` : ""}`;
       return `A deal fact was updated based on new evidence.`;
-    case "fact_manually_edited":
+    }
+    case "fact_manually_edited": {
+      const oldVal = event.metadata_json?.old_value as string | undefined;
+      const newVal = event.metadata_json?.new_value as string | undefined;
+      if (oldVal && newVal) return `Changed from ${oldVal} to ${newVal}.`;
       return `A deal fact was manually edited.`;
+    }
     case "fact_manually_confirmed":
       return `A deal fact was reviewed and confirmed.`;
-    case "fact_conflict_detected":
-      return `Conflicting evidence found for a deal fact — review recommended.`;
+    case "fact_conflict_detected": {
+      const existing = event.metadata_json?.existing_value as string | undefined;
+      const incoming = event.metadata_json?.new_value as string | undefined;
+      if (existing && incoming) return `Existing value ${existing} conflicts with new evidence ${incoming} — review needed.`;
+      return `Conflicting evidence found — review needed in Facts tab.`;
+    }
     case "manual_override_applied":
       return `A fact value was manually overridden.`;
     case "triage_completed":
@@ -384,6 +416,10 @@ export function assembleTimeline(
 
     if (primary.file_id && file) {
       fileId = file.id;
+    } else if (primary.metadata_json?.source_file_id) {
+      // Fact events may store the originating file_id in metadata
+      const metaFileId = primary.metadata_json.source_file_id as string;
+      if (fileMap.has(metaFileId)) fileId = metaFileId;
     } else if (
       primary.event_type === "triage_completed" ||
       primary.event_type === "initial_review_completed"
@@ -396,6 +432,24 @@ export function assembleTimeline(
       analysisType = "deep_analysis";
     }
 
+    // Conflict data for fact_conflict_detected events
+    let conflictData: TimelineItem["conflictData"];
+    if (primary.event_type === "fact_conflict_detected") {
+      const m = primary.metadata_json ?? {};
+      const existingVal = m.existing_value as string | undefined;
+      const newVal = m.new_value as string | undefined;
+      const factLabel = m.fact_label as string | undefined;
+      if (existingVal && newVal && factLabel) {
+        conflictData = {
+          factLabel,
+          existingValue: existingVal,
+          newValue: newVal,
+          factDefinitionId: primary.fact_definition_id ?? undefined,
+          snippet: m.snippet as string | undefined,
+        };
+      }
+    }
+
     return {
       id: primary.id,
       icon,
@@ -406,6 +460,7 @@ export function assembleTimeline(
       fileId,
       analysisType,
       metadata: primary.metadata_json,
+      conflictData,
     };
   });
 

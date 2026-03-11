@@ -110,6 +110,153 @@ function TabBar({
   );
 }
 
+// ─── Conflict Alert Banner ────────────────────────────────────────────────────
+// Shown at the top of the Workspace tab when key scoring facts have conflicting
+// values that need user resolution. Each conflict row shows the fact name,
+// existing vs. new value, and Accept/Keep buttons.
+
+const CONFLICT_SCORING_KEYS = [
+  "asking_price", "sde_latest", "revenue_latest",
+  "ebitda_latest", "employees_ft", "lease_monthly_rent",
+];
+
+function ConflictAlertBanner({
+  entityData,
+  dealId,
+}: {
+  entityData: EntityPageData | null;
+  dealId: string;
+}) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  if (!entityData) return null;
+
+  const valueMap = new Map(entityData.fact_values.map((v) => [v.fact_definition_id, v]));
+  const evidenceMap = new Map<string, typeof entityData.fact_evidence[0][]>();
+  for (const ev of entityData.fact_evidence) {
+    const list = evidenceMap.get(ev.fact_definition_id) ?? [];
+    list.push(ev);
+    evidenceMap.set(ev.fact_definition_id, list);
+  }
+
+  // Find conflicting scoring facts
+  const conflicts = entityData.fact_definitions
+    .filter((fd) => CONFLICT_SCORING_KEYS.includes(fd.key))
+    .map((fd) => {
+      const val = valueMap.get(fd.id);
+      if (!val || val.status !== "conflicting") return null;
+      // Find the two evidence rows to show existing vs. new
+      const allEvidence = evidenceMap.get(fd.id) ?? [];
+      const primary = allEvidence.find((e) => e.is_primary) ?? allEvidence[0];
+      const secondary = allEvidence.find((e) => e.id !== primary?.id);
+      return { fd, val, primary, secondary };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .filter((x) => !dismissed.has(x.fd.id));
+
+  if (conflicts.length === 0) return null;
+
+  async function resolve(
+    factDefId: string,
+    keepValue: string,
+    changeType: "confirm" | "override",
+    oldValue: string
+  ) {
+    setResolving(factDefId);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/facts/${factDefId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          change_type: changeType,
+          value_raw: keepValue,
+          old_value: oldValue,
+          note: `Conflict resolved — kept ${keepValue}`,
+        }),
+      });
+      if (res.ok) {
+        setDismissed((prev) => new Set([...prev, factDefId]));
+        startTransition(() => router.refresh());
+      }
+    } finally {
+      setResolving(null);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-200/60">
+        <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <p className="text-sm font-semibold text-amber-800">
+          {conflicts.length} fact{conflicts.length !== 1 ? "s" : ""} need{conflicts.length === 1 ? "s" : ""} review
+        </p>
+        <p className="text-xs text-amber-600 ml-auto">New evidence conflicts with existing values</p>
+      </div>
+
+      <div className="divide-y divide-amber-100">
+        {conflicts.map(({ fd, val, primary, secondary }) => {
+          const existingVal = primary?.extracted_value_raw ?? val.value_raw ?? "—";
+          const newVal = secondary?.extracted_value_raw ?? "—";
+          const snippet = secondary?.snippet ?? primary?.snippet ?? null;
+          const isResolving = resolving === fd.id;
+
+          return (
+            <div key={fd.id} className="px-4 py-3">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">{fd.label}</p>
+                  {snippet && (
+                    <p className="text-[10px] text-amber-600/80 italic leading-relaxed line-clamp-1">
+                      &ldquo;{snippet.slice(0, 80)}{snippet.length > 80 ? "…" : ""}&rdquo;
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Values side by side */}
+              <div className="grid grid-cols-2 gap-2 mb-2.5">
+                <div className="bg-white rounded-lg border border-amber-200 px-2.5 py-2">
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Current</p>
+                  <p className="text-sm font-bold text-slate-800 tabular-nums truncate">{existingVal}</p>
+                </div>
+                <div className="bg-blue-50 rounded-lg border border-blue-200 px-2.5 py-2">
+                  <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-0.5">New evidence</p>
+                  <p className="text-sm font-bold text-blue-800 tabular-nums truncate">{newVal}</p>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={isResolving || newVal === "—"}
+                  onClick={() => resolve(fd.id, newVal, "override", existingVal)}
+                  className="flex-1 py-1.5 text-xs font-semibold bg-[#1F7A63] text-white rounded-lg hover:bg-[#1a6854] disabled:opacity-40 transition-colors"
+                >
+                  {isResolving ? "Saving…" : `Use ${newVal}`}
+                </button>
+                <button
+                  type="button"
+                  disabled={isResolving}
+                  onClick={() => resolve(fd.id, existingVal, "confirm", existingVal)}
+                  className="flex-1 py-1.5 text-xs font-semibold bg-white text-slate-600 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 transition-colors"
+                >
+                  Keep {existingVal}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── V1 Triage: Analysis tab ─────────────────────────────────────────────────
 //
 // Clean triage-first layout:
@@ -791,6 +938,9 @@ export default function DealPageTabs({
       {/* ── WORKSPACE TAB ───────────────────────────────────────────────── */}
       {activeTab === "workspace" && (
         <div className="px-4 py-4 flex flex-col gap-5">
+
+          {/* Conflict alert — shown when scoring facts have unresolved conflicts */}
+          <ConflictAlertBanner entityData={entityData} dealId={deal.id} />
 
           {/* Activity timeline — shown first */}
           <TimelineSection

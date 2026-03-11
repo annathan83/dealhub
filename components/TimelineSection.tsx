@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import type { TimelineItem, TimelineIconType } from "@/lib/services/entity/entityTimelineService";
 import type { EntityFile } from "@/types/entity";
 import FileDetailModal from "./FileDetailModal";
@@ -157,13 +158,22 @@ function TimelineEntry({
   hasTopConnector,
   hasBottomConnector,
   onFileClick,
+  onConflictClick,
 }: {
   item: TimelineItem;
   hasTopConnector: boolean;
   hasBottomConnector: boolean;
   onFileClick?: (fileId: string) => void;
+  onConflictClick?: (item: TimelineItem) => void;
 }) {
-  const isClickable = !!(item.fileId && onFileClick);
+  const isFileClickable = !!(item.fileId && onFileClick);
+  const isConflict = item.icon === "fact" && !!item.conflictData;
+  const isClickable = isFileClickable || (isConflict && !!onConflictClick);
+
+  function handleClick() {
+    if (isFileClickable) { onFileClick!(item.fileId!); return; }
+    if (isConflict && onConflictClick) { onConflictClick(item); }
+  }
 
   return (
     <div className="flex gap-0">
@@ -186,20 +196,27 @@ function TimelineEntry({
       >
         <button
           type="button"
-          onClick={isClickable ? () => onFileClick!(item.fileId!) : undefined}
+          onClick={isClickable ? handleClick : undefined}
           disabled={!isClickable}
           className={`w-full text-left group ${isClickable ? "cursor-pointer" : "cursor-default"}`}
         >
           {/* Title + timestamp on one line */}
           <div className="flex items-baseline justify-between gap-2">
             <p className={`text-sm font-semibold leading-snug flex-1 min-w-0 ${
-              isClickable
-                ? "text-slate-800 group-hover:text-indigo-700 transition-colors"
-                : "text-slate-800"
+              isConflict
+                ? "text-amber-700 group-hover:text-amber-800 transition-colors"
+                : isClickable
+                  ? "text-slate-800 group-hover:text-[#1F7A63] transition-colors"
+                  : "text-slate-800"
             }`}>
               {item.title}
-              {isClickable && (
-                <svg className="w-3 h-3 inline ml-1 text-indigo-400 opacity-60 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              {isConflict && (
+                <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 rounded-full">
+                  Resolve
+                </span>
+              )}
+              {isFileClickable && (
+                <svg className="w-3 h-3 inline ml-1 text-[#1F7A63] opacity-60 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               )}
@@ -210,7 +227,9 @@ function TimelineEntry({
           </div>
 
           {/* Summary — up to 2 lines */}
-          <p className="text-[11px] text-slate-400 mt-0.5 leading-snug line-clamp-2">
+          <p className={`text-[11px] mt-0.5 leading-snug line-clamp-2 ${
+            isConflict ? "text-amber-600/80" : "text-slate-400"
+          }`}>
             {item.summary}
           </p>
         </button>
@@ -257,6 +276,121 @@ function CreatedEntry({
   );
 }
 
+// ─── Conflict resolution modal ────────────────────────────────────────────────
+// Lightweight modal shown when user clicks a fact_conflict_detected timeline item.
+
+function ConflictResolutionModal({
+  dealId,
+  conflict,
+  onClose,
+  onResolved,
+}: {
+  dealId: string;
+  conflict: NonNullable<TimelineItem["conflictData"]>;
+  onClose: () => void;
+  onResolved: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function resolve(keepValue: string, changeType: "confirm" | "override") {
+    if (!conflict.factDefinitionId) { onClose(); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/facts/${conflict.factDefinitionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          change_type: changeType,
+          value_raw: keepValue,
+          old_value: conflict.existingValue,
+          note: `Conflict resolved via timeline — kept ${keepValue}`,
+        }),
+      });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Failed to resolve."); return; }
+      onResolved();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center">
+              <svg className="w-3 h-3 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </span>
+            <p className="text-sm font-semibold text-slate-800">Conflicting Value</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="px-5 py-4">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+            {conflict.factLabel}
+          </p>
+
+          {conflict.snippet && (
+            <div className="bg-slate-50 rounded-lg px-3 py-2 mb-4 border border-slate-100">
+              <p className="text-[11px] text-slate-500 italic leading-relaxed">
+                &ldquo;{conflict.snippet.slice(0, 120)}{conflict.snippet.length > 120 ? "…" : ""}&rdquo;
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {/* Existing */}
+            <div className="bg-slate-50 rounded-xl border border-slate-200 px-3 py-3">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Current</p>
+              <p className="text-base font-bold text-slate-800 tabular-nums">{conflict.existingValue}</p>
+            </div>
+            {/* New */}
+            <div className="bg-blue-50 rounded-xl border border-blue-200 px-3 py-3">
+              <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider mb-1">New evidence</p>
+              <p className="text-base font-bold text-blue-800 tabular-nums">{conflict.newValue}</p>
+            </div>
+          </div>
+
+          {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
+
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => resolve(conflict.newValue, "override")}
+              className="w-full py-2.5 bg-[#1F7A63] text-white text-sm font-semibold rounded-xl hover:bg-[#1a6854] disabled:opacity-50 transition-colors"
+            >
+              Use new value ({conflict.newValue})
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => resolve(conflict.existingValue, "confirm")}
+              className="w-full py-2.5 bg-slate-100 text-slate-700 text-sm font-semibold rounded-xl hover:bg-slate-200 disabled:opacity-50 transition-colors"
+            >
+              Keep existing ({conflict.existingValue})
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 // Items arrive newest-first. We always show:
@@ -283,8 +417,11 @@ export default function TimelineSection({
   /** Deal ID — needed to fetch facts in the modal */
   dealId?: string;
 }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const [expanded, setExpanded]           = useState(false);
   const [modalFile, setModalFile]         = useState<EntityFile | null>(null);
+  const [conflictItem, setConflictItem]   = useState<TimelineItem | null>(null);
 
   // Build a lookup map for fast file resolution
   const fileMap = new Map(files.map((f) => [f.id, f]));
@@ -292,6 +429,15 @@ export default function TimelineSection({
   function handleItemClick(fileId: string) {
     const file = fileMap.get(fileId);
     if (file && dealId) setModalFile(file);
+  }
+
+  function handleConflictClick(item: TimelineItem) {
+    setConflictItem(item);
+  }
+
+  function handleConflictResolved() {
+    setConflictItem(null);
+    startTransition(() => router.refresh());
   }
 
   // items is newest-first; we show the first RECENT_COUNT at the top.
@@ -328,6 +474,7 @@ export default function TimelineSection({
             hasTopConnector={idx > 0}
             hasBottomConnector={true}
             onFileClick={item.fileId ? handleItemClick : undefined}
+            onConflictClick={item.conflictData ? handleConflictClick : undefined}
           />
         ))}
 
@@ -375,6 +522,16 @@ export default function TimelineSection({
           file={modalFile}
           dealId={dealId}
           onClose={() => setModalFile(null)}
+        />
+      )}
+
+      {/* Conflict resolution modal — opened when a conflict timeline item is clicked */}
+      {conflictItem?.conflictData && dealId && (
+        <ConflictResolutionModal
+          dealId={dealId}
+          conflict={conflictItem.conflictData}
+          onClose={() => setConflictItem(null)}
+          onResolved={handleConflictResolved}
         />
       )}
     </div>

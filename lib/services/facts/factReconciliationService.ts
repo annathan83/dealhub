@@ -162,7 +162,10 @@ export async function reconcileFacts(
             existing_value: bestExisting.extracted_value_raw,
             new_value: candidate.extracted_value_raw,
             fact_key: candidate.fact_key,
-          });
+            fact_label: factDef.label,
+            source_file_id: input.fileId,
+            snippet: candidate.snippet ?? null,
+          }, { fileId: input.fileId });
         } else if (
           candidate.confidence >= MIN_CONFIDENCE_FOR_SUPERSEDE &&
           candidate.confidence > (bestExisting.confidence ?? 0)
@@ -177,7 +180,10 @@ export async function reconcileFacts(
             old_value: bestExisting.extracted_value_raw,
             new_value: candidate.extracted_value_raw,
             fact_key: candidate.fact_key,
-          });
+            fact_label: factDef.label,
+            source_file_id: input.fileId,
+            snippet: candidate.snippet ?? null,
+          }, { fileId: input.fileId });
         } else {
           // Rule 2: New evidence matches or is weaker — update confidence if stronger
           newStatus = "confirmed";

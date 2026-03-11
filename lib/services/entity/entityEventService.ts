@@ -72,12 +72,13 @@ export async function logFactUpdated(
   entityId: string,
   factDefinitionId: string,
   meta: EventMeta = {},
-  opts: EventOptions = {}
+  opts: EventOptions & { fileId?: string | null } = {}
 ): Promise<void> {
   await insertEntityEvent({
     entity_id: entityId,
     event_type: "fact_updated",
     fact_definition_id: factDefinitionId,
+    file_id: opts.fileId ?? null,
     run_id: opts.runId ?? null,
     actor_user_id: opts.actorUserId ?? null,
     metadata_json: meta,
@@ -88,12 +89,13 @@ export async function logFactConflictDetected(
   entityId: string,
   factDefinitionId: string,
   meta: EventMeta = {},
-  opts: EventOptions = {}
+  opts: EventOptions & { fileId?: string | null } = {}
 ): Promise<void> {
   await insertEntityEvent({
     entity_id: entityId,
     event_type: "fact_conflict_detected",
     fact_definition_id: factDefinitionId,
+    file_id: opts.fileId ?? null,
     run_id: opts.runId ?? null,
     actor_user_id: opts.actorUserId ?? null,
     metadata_json: meta,
