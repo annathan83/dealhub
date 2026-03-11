@@ -1057,7 +1057,7 @@ function AnalysisTabContent({
   return (
     <div className="flex flex-col gap-4 py-4">
 
-      {/* A. Score header */}
+      {/* A. Score header (score + confidence + facts used) */}
       <TriageScoreHeader scorecard={kpiScorecard} dealId={dealId} />
 
       {/* B. Recommendation */}
@@ -1070,14 +1070,14 @@ function AnalysisTabContent({
         entityData={entityData}
       />
 
-      {/* D. Strengths & Risks */}
+      {/* D. KPI table — detailed breakdown */}
+      <KpiTable scorecard={kpiScorecard} industry={industryVal} />
+
+      {/* E. Strengths & Risks — derived from KPI scores */}
       <StrengthsRisksPanel scorecard={kpiScorecard} />
 
-      {/* E. Missing key facts */}
+      {/* F. Missing key facts */}
       <MissingKeyFactsPanel scorecard={kpiScorecard} />
-
-      {/* F. KPI table with benchmark ranges */}
-      <KpiTable scorecard={kpiScorecard} industry={industryVal} />
 
       {/* G. Source provenance */}
       <TriageSourceSummary scorecard={kpiScorecard} />

@@ -7,6 +7,7 @@ import DealPageTabs from "@/components/DealPageTabs";
 import { syncAndListDealDriveFiles } from "@/lib/google/drive";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
+import { computeBuyerFit } from "@/lib/kpi/buyerFit";
 
 export default async function DealPage({
   params,
@@ -69,6 +70,41 @@ export default async function DealPage({
     entityData?.analysis_snapshots ?? []
   );
 
+  // Compute buyer fit label for the header
+  let buyerFitLabel: string | null = null;
+  if (buyerProfile && entityData) {
+    const factDefs = entityData.fact_definitions;
+    const factVals = entityData.fact_values;
+    const getVal = (key: string) => {
+      const fd = factDefs.find((d) => d.key === key);
+      if (!fd) return null;
+      return factVals.find((v) => v.fact_definition_id === fd.id)?.value_raw ?? null;
+    };
+    const parseN = (key: string) => {
+      const raw = getVal(key);
+      if (!raw) return null;
+      const n = parseFloat(raw.replace(/[^0-9.-]/g, ""));
+      return isNaN(n) ? null : n;
+    };
+    const parseBoolVal = (key: string) => {
+      const raw = getVal(key);
+      if (!raw) return null;
+      return raw.toLowerCase() === "true" || raw.toLowerCase() === "yes";
+    };
+    const ft = parseN("employees_ft") ?? 0;
+    const pt = parseN("employees_pt") ?? 0;
+    const fit = computeBuyerFit(buyerProfile, {
+      industry: getVal("industry"),
+      location: getVal("location") ?? getVal("location_county"),
+      sde: parseN("sde_latest") ?? parseN("ebitda_latest"),
+      asking_price: parseN("asking_price"),
+      total_employees: (ft + Math.round(pt * 0.5)) || null,
+      manager_in_place: parseBoolVal("manager_in_place"),
+      owner_hours_per_week: parseN("owner_hours_per_week"),
+    });
+    buyerFitLabel = fit.label;
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAF9]">
       <AppHeader />
@@ -93,7 +129,7 @@ export default async function DealPage({
         </div>
 
         {/* ── Deal header (always visible) ─────────────────────────────── */}
-        <DealHeader deal={deal} kpiScorecard={kpiScorecard} />
+        <DealHeader deal={deal} kpiScorecard={kpiScorecard} buyerFitLabel={buyerFitLabel} />
 
         {/* ── 3-tab workspace ──────────────────────────────────────────── */}
         <div className="mt-4">

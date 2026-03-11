@@ -5,6 +5,22 @@ import type { Deal, DealStatus } from "@/types";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
 import EditDealModal from "./EditDealModal";
 
+// ─── Fit badge (compact inline) ───────────────────────────────────────────────
+
+function FitBadgeInline({ label }: { label: string }) {
+  const color =
+    label === "Good Fit" || label === "Fit"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : label === "Partial Fit"
+      ? "bg-amber-50 text-amber-700 border-amber-200"
+      : "bg-red-50 text-red-700 border-red-200";
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${color}`}>
+      {label}
+    </span>
+  );
+}
+
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUSES: DealStatus[] = ["active", "closed", "passed"];
@@ -160,9 +176,11 @@ function MetricCell({
 export default function DealHeader({
   deal,
   kpiScorecard = null,
+  buyerFitLabel = null,
 }: {
   deal: Deal;
   kpiScorecard?: KpiScorecardResult | null;
+  buyerFitLabel?: string | null;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const hasAnyMetric = deal.asking_price || deal.sde || deal.multiple;
@@ -192,6 +210,8 @@ export default function DealHeader({
           {/* Status + metadata row */}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mt-2">
             <StatusSegmentedControl dealId={deal.id} status={deal.status} />
+
+            {buyerFitLabel && <FitBadgeInline label={buyerFitLabel} />}
 
             {deal.industry && (
               <span className="inline-flex items-center gap-1 text-xs text-slate-400">

@@ -14,24 +14,29 @@ export default async function NewDealPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#F8FAF9]">
       <AppHeader />
 
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 pb-20">
+      <main className="max-w-xl mx-auto px-4 sm:px-6 py-8 pb-20">
         {/* Page header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight mb-1">
-            Add Deal
+        <div className="mb-5">
+          <h1 className="text-xl font-bold text-[#1E1E1E] tracking-tight leading-tight">
+            New Deal
           </h1>
-          <p className="text-sm text-slate-500">
-            Paste a listing or enter key numbers — AI extracts facts and scores the deal instantly.
+          <p className="text-sm text-slate-500 mt-1">
+            Paste a listing or fill in the key numbers. AI scores the deal automatically.
           </p>
         </div>
 
         {/* Form card */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 sm:p-8">
+        <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm px-5 py-6 sm:px-7 sm:py-7">
           <CreateDealForm />
         </div>
+
+        {/* Helper note */}
+        <p className="text-center text-[11px] text-slate-400 mt-4">
+          Minimum needed: industry, location, asking price, SDE
+        </p>
       </main>
     </div>
   );

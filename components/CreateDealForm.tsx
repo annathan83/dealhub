@@ -16,7 +16,6 @@ const ALLOWED_EXTENSIONS = new Set([
   ".mp3", ".m4a", ".mp4", ".wav", ".webm", ".ogg", ".aac",
 ]);
 
-// The 4 minimum required facts to activate scoring
 const MIN_REQUIRED_KEYS = ["asking_price", "sde_latest", "industry", "location"] as const;
 type MinRequiredKey = typeof MIN_REQUIRED_KEYS[number];
 
@@ -68,7 +67,6 @@ type ExtractedFact = {
   confidence: number;
   snippet: string | null;
   required: boolean;
-  // User-edited override value (if they change it in the review step)
   userValue?: string;
   accepted: boolean;
 };
@@ -100,7 +98,7 @@ function fileIcon(file: File) {
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
   if (confidence >= 0.8) return <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">High</span>;
-  if (confidence >= 0.5) return <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">Medium</span>;
+  if (confidence >= 0.5) return <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">Med</span>;
   return <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">Low</span>;
 }
 
@@ -109,23 +107,23 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
 export default function CreateDealForm() {
   const router = useRouter();
 
-  // ── Mode: "paste" = paste-first with AI extraction, "manual" = fill fields ──
+  // Mode: "paste" = AI extraction first, "manual" = fill fields directly
   const [mode, setMode] = useState<"paste" | "manual">("paste");
 
-  // ── Shared fields ──
+  // Shared
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("Creating…");
 
-  // ── Paste mode ──
+  // Paste mode
   const [pasteText, setPasteText] = useState("");
   const [extraction, setExtraction] = useState<ExtractionState>({ status: "idle" });
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Manual mode ──
+  // Manual mode
   const [askingPrice, setAskingPrice] = useState("");
   const [sde, setSde] = useState("");
   const [metadata, setMetadata] = useState<DealMetadataValues>({
@@ -139,13 +137,13 @@ export default function CreateDealForm() {
   });
   const [manualNotes, setManualNotes] = useState("");
   const [manualFiles, setManualFiles] = useState<StagedFile[]>([]);
-  const [manualUploadProgress, setManualUploadProgress] = useState<{ done: number; total: number } | null>(null);
 
   function setMeta(field: keyof DealMetadataValues, value: string) {
     setMetadata((prev) => ({ ...prev, [field]: value }));
   }
 
-  // ── File staging (paste mode) ──
+  // ── File staging ──────────────────────────────────────────────────────────
+
   function stageFiles(files: File[]) {
     setError(null);
     const toAdd: StagedFile[] = [];
@@ -177,7 +175,7 @@ export default function CreateDealForm() {
   const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragOver(true); }, []);
   const handleDragLeave = useCallback(() => setIsDragOver(false), []);
 
-  // ── AI Extraction (paste mode) ────────────────────────────────────────────
+  // ── AI Extraction ─────────────────────────────────────────────────────────
 
   async function runExtraction() {
     const text = pasteText.trim();
@@ -219,9 +217,7 @@ export default function CreateDealForm() {
         missingRequired: data.missing_required ?? [],
       });
 
-      // Auto-fill deal name from extracted facts if not already set
       if (!name.trim()) {
-        // Try to derive a name from industry + location
         const industry = facts.find((f) => f.fact_key === "industry");
         const location = facts.find((f) => f.fact_key === "location");
         if (industry && location) {
@@ -256,7 +252,7 @@ export default function CreateDealForm() {
     });
   }
 
-  // ── Derived: which minimum required facts are still missing ──────────────
+  // ── Missing required facts ────────────────────────────────────────────────
 
   function getMissingRequired(): MinRequiredKey[] {
     if (mode === "manual") {
@@ -297,7 +293,6 @@ export default function CreateDealForm() {
     setLoading(true);
     setLoadingLabel("Creating deal…");
 
-    // Build extracted_facts array for the API (paste mode only)
     let extractedFacts: Array<{ fact_key: string; value_raw: string; confidence: number; snippet?: string | null }> | null = null;
 
     if (mode === "paste" && extraction.status === "done") {
@@ -311,7 +306,6 @@ export default function CreateDealForm() {
         }));
     }
 
-    // Get the 4 key values for the deal row
     let askingPriceVal: string | null = null;
     let sdeVal: string | null = null;
     let industryVal: string | null = null;
@@ -335,7 +329,6 @@ export default function CreateDealForm() {
 
     const multiple = askingPriceVal && sdeVal ? computeMultiple(askingPriceVal, sdeVal) : null;
 
-    // 1. Create the deal (with extracted facts + immediate scoring)
     setLoadingLabel("Creating deal & running initial score…");
     let dealId: string;
     try {
@@ -371,7 +364,6 @@ export default function CreateDealForm() {
       return;
     }
 
-    // 2. Upload staged files (if any) — paste mode or manual mode
     const filesToUpload = mode === "paste" ? stagedFiles : manualFiles;
     if (filesToUpload.length > 0) {
       setLoadingLabel(`Uploading ${filesToUpload.length} file${filesToUpload.length > 1 ? "s" : ""}…`);
@@ -389,9 +381,8 @@ export default function CreateDealForm() {
       }
     }
 
-    // 3. Submit initial notes (manual mode only)
-    const notes = mode === "manual" ? manualNotes.trim() : pasteText.trim();
-    if (notes && mode === "manual") {
+    const notes = mode === "manual" ? manualNotes.trim() : "";
+    if (notes) {
       try {
         await fetch(`/api/deals/${dealId}/entries`, {
           method: "POST",
@@ -403,27 +394,23 @@ export default function CreateDealForm() {
       }
     }
 
-    // 4. Navigate to the deal page — open Analysis tab directly since we have a score
     router.push(`/deals/${dealId}?tab=analysis`);
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  const showReviewPanel = mode === "paste" && extraction.status === "done";
+  const showSubmit = mode === "manual" || showReviewPanel;
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-0">
 
-      {error && (
-        <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
-      )}
-
-      {/* ── Mode switcher ───────────────────────────────────────────────────── */}
-      <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1 gap-1">
+      {/* ── Mode switcher ─────────────────────────────────────────────────── */}
+      <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1 gap-1 mb-5">
         <button
           type="button"
           onClick={() => { setMode("paste"); setError(null); }}
-          className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
+          className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all ${
             mode === "paste"
               ? "bg-white shadow-sm text-slate-800 border border-slate-200"
               : "text-slate-500 hover:text-slate-700"
@@ -431,15 +418,18 @@ export default function CreateDealForm() {
         >
           <span className="flex items-center justify-center gap-1.5">
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             Paste Listing
           </span>
+          {mode === "paste" && (
+            <p className="text-[10px] text-slate-400 font-normal mt-0.5">AI extracts facts automatically</p>
+          )}
         </button>
         <button
           type="button"
           onClick={() => { setMode("manual"); setError(null); }}
-          className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
+          className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all ${
             mode === "manual"
               ? "bg-white shadow-sm text-slate-800 border border-slate-200"
               : "text-slate-500 hover:text-slate-700"
@@ -451,58 +441,93 @@ export default function CreateDealForm() {
             </svg>
             Manual Entry
           </span>
+          {mode === "manual" && (
+            <p className="text-[10px] text-slate-400 font-normal mt-0.5">Fill in the key fields directly</p>
+          )}
         </button>
       </div>
 
-      {/* ── PASTE MODE ──────────────────────────────────────────────────────── */}
+      {/* ── Error ─────────────────────────────────────────────────────────── */}
+      {error && (
+        <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
+          {error}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          PASTE MODE
+      ══════════════════════════════════════════════════════════════════════ */}
       {mode === "paste" && (
-        <>
-          {/* Step 1: Paste text */}
-          {extraction.status === "idle" || extraction.status === "error" ? (
-            <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
+
+          {/* Step 1: Input area (idle / error) */}
+          {(extraction.status === "idle" || extraction.status === "error") && (
+            <>
+              {/* Paste textarea */}
               <div>
-                <p className="text-sm font-semibold text-slate-700 mb-0.5">Paste listing or broker email</p>
-                <p className="text-xs text-slate-400">AI will extract key facts automatically — asking price, SDE, industry, location, and more.</p>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Listing text or broker email
+                </label>
+                <textarea
+                  rows={6}
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste the full listing, broker email, or any description of the business here…"
+                  disabled={loading}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-y disabled:opacity-60"
+                />
               </div>
 
-              <textarea
-                rows={7}
-                value={pasteText}
-                onChange={(e) => setPasteText(e.target.value)}
-                placeholder="Paste the full listing text, broker email, or any description of the business here…"
-                disabled={loading}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-y disabled:opacity-60"
-              />
-
-              {/* File attachment */}
+              {/* File attachment area */}
               <div
-                className={`rounded-xl border-2 border-dashed transition-all ${isDragOver ? "border-[#1F7A63] bg-emerald-50" : "border-slate-200 bg-slate-50"}`}
+                className={`rounded-xl border-2 border-dashed transition-all ${isDragOver ? "border-[#1F7A63] bg-emerald-50" : "border-slate-200 bg-slate-50/60"}`}
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
               >
-                <div className="px-4 py-2.5 flex items-center gap-2 flex-wrap">
+                <div className="px-4 py-3 flex items-center gap-3 flex-wrap">
                   <div className="relative">
-                    <input ref={uploadInputRef} type="file" accept={ALL_ACCEPT} multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      onChange={(e) => { if (e.target.files?.length) stageFiles(Array.from(e.target.files)); e.target.value = ""; }} disabled={loading} />
-                    <button type="button" disabled={loading} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors shadow-sm disabled:opacity-50">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                    <input
+                      ref={uploadInputRef}
+                      type="file"
+                      accept={ALL_ACCEPT}
+                      multiple
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      onChange={(e) => { if (e.target.files?.length) stageFiles(Array.from(e.target.files)); e.target.value = ""; }}
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      disabled={loading}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
                       Attach files
                     </button>
                   </div>
                   {stagedFiles.length === 0 && !isDragOver && (
-                    <p className="text-xs text-slate-400">or drag & drop</p>
+                    <p className="text-xs text-slate-400">or drag & drop · PDF, Excel, images, audio</p>
                   )}
                   {isDragOver && <p className="text-xs font-medium text-[#1F7A63] animate-pulse">Drop to attach…</p>}
                 </div>
+
                 {stagedFiles.length > 0 && (
                   <div className="border-t border-slate-200 divide-y divide-slate-100">
                     {stagedFiles.map((sf) => (
                       <div key={sf.id} className="flex items-center gap-2 px-4 py-1.5">
                         {fileIcon(sf.file)}
                         <span className="flex-1 text-xs text-slate-700 truncate">{sf.preview}</span>
-                        <button type="button" onClick={() => setStagedFiles((p) => p.filter((f) => f.id !== sf.id))} disabled={loading} className="text-slate-300 hover:text-red-400 transition-colors">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        <button
+                          type="button"
+                          onClick={() => setStagedFiles((p) => p.filter((f) => f.id !== sf.id))}
+                          disabled={loading}
+                          className="text-slate-300 hover:text-red-400 transition-colors"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
                       </div>
                     ))}
@@ -514,31 +539,39 @@ export default function CreateDealForm() {
                 <p className="text-xs text-red-600">{extraction.message}</p>
               )}
 
+              {/* Extract button */}
               <button
                 type="button"
                 onClick={runExtraction}
                 disabled={pasteText.trim().length < 30 || loading}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F7A63] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F7A63] px-5 py-3 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
                 Extract Facts with AI
               </button>
-            </div>
-          ) : extraction.status === "extracting" ? (
-            <div className="flex flex-col items-center gap-3 py-8">
-              <div className="w-10 h-10 rounded-full bg-[#1F7A63]/10 flex items-center justify-center">
-                <svg className="w-5 h-5 text-[#1F7A63] animate-spin" fill="none" viewBox="0 0 24 24">
+            </>
+          )}
+
+          {/* Step 2: Extracting spinner */}
+          {extraction.status === "extracting" && (
+            <div className="flex flex-col items-center gap-3 py-10">
+              <div className="w-12 h-12 rounded-full bg-[#1F7A63]/10 flex items-center justify-center">
+                <svg className="w-6 h-6 text-[#1F7A63] animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
                 </svg>
               </div>
-              <p className="text-sm font-semibold text-slate-700">Extracting facts…</p>
-              <p className="text-xs text-slate-400">AI is reading the listing and pulling out key numbers.</p>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700">Extracting facts…</p>
+                <p className="text-xs text-slate-400 mt-0.5">Reading the listing and pulling out key numbers</p>
+              </div>
             </div>
-          ) : (
-            /* extraction.status === "done" */
+          )}
+
+          {/* Step 3: Review extracted facts */}
+          {extraction.status === "done" && (
             <ExtractedFactsReview
               extraction={extraction}
               name={name}
@@ -549,33 +582,46 @@ export default function CreateDealForm() {
               missingRequired={missingRequired}
             />
           )}
-        </>
+        </div>
       )}
 
-      {/* ── MANUAL MODE ─────────────────────────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          MANUAL MODE
+      ══════════════════════════════════════════════════════════════════════ */}
       {mode === "manual" && (
-        <>
-          {/* Asking Price + SDE */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-4">
+
+          {/* Core financials */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-slate-700">
-                Asking Price <span className="text-red-500">*</span>
+                Asking Price <span className="text-red-400">*</span>
               </label>
-              <input type="text" value={askingPrice} onChange={(e) => setAskingPrice(e.target.value)}
-                placeholder="e.g. $1.2M or 600K" disabled={loading}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60" />
+              <input
+                type="text"
+                value={askingPrice}
+                onChange={(e) => setAskingPrice(e.target.value)}
+                placeholder="e.g. $1.2M or 600K"
+                disabled={loading}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-semibold text-slate-700">
-                SDE / Cash Flow <span className="text-red-500">*</span>
+                SDE / Cash Flow <span className="text-red-400">*</span>
               </label>
-              <input type="text" value={sde} onChange={(e) => setSde(e.target.value)}
-                placeholder="e.g. $240K or 200K" disabled={loading}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60" />
+              <input
+                type="text"
+                value={sde}
+                onChange={(e) => setSde(e.target.value)}
+                placeholder="e.g. $240K or 200K"
+                disabled={loading}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60"
+              />
             </div>
           </div>
 
-          {/* Industry + Location (required) */}
+          {/* Industry + Location */}
           <DealMetadataFields values={metadata} onChange={setMeta} disabled={loading} compact />
 
           {/* Notes */}
@@ -583,12 +629,17 @@ export default function CreateDealForm() {
             <label className="text-sm font-semibold text-slate-700">
               Notes <span className="text-slate-400 font-normal text-xs">(optional)</span>
             </label>
-            <textarea rows={3} value={manualNotes} onChange={(e) => setManualNotes(e.target.value)}
-              placeholder="Any additional context, broker notes, or raw listing text…" disabled={loading}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-y disabled:opacity-60" />
+            <textarea
+              rows={3}
+              value={manualNotes}
+              onChange={(e) => setManualNotes(e.target.value)}
+              placeholder="Any additional context, broker notes, or raw listing text…"
+              disabled={loading}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-y disabled:opacity-60"
+            />
           </div>
 
-          {/* File staging */}
+          {/* Files */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-semibold text-slate-700">
               Files <span className="text-slate-400 font-normal text-xs">(optional)</span>
@@ -596,10 +647,22 @@ export default function CreateDealForm() {
             <div className="rounded-xl border border-slate-200 bg-slate-50">
               <div className="px-4 py-2.5 flex items-center gap-2">
                 <div className="relative">
-                  <input type="file" accept={ALL_ACCEPT} multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    onChange={(e) => { if (e.target.files?.length) stageManualFiles(Array.from(e.target.files)); e.target.value = ""; }} disabled={loading} />
-                  <button type="button" disabled={loading} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors shadow-sm disabled:opacity-50">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                  <input
+                    type="file"
+                    accept={ALL_ACCEPT}
+                    multiple
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    onChange={(e) => { if (e.target.files?.length) stageManualFiles(Array.from(e.target.files)); e.target.value = ""; }}
+                    disabled={loading}
+                  />
+                  <button
+                    type="button"
+                    disabled={loading}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
                     Attach files
                   </button>
                 </div>
@@ -611,8 +674,15 @@ export default function CreateDealForm() {
                     <div key={sf.id} className="flex items-center gap-2 px-4 py-1.5">
                       {fileIcon(sf.file)}
                       <span className="flex-1 text-xs text-slate-700 truncate">{sf.preview}</span>
-                      <button type="button" onClick={() => setManualFiles((p) => p.filter((f) => f.id !== sf.id))} disabled={loading} className="text-slate-300 hover:text-red-400 transition-colors">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      <button
+                        type="button"
+                        onClick={() => setManualFiles((p) => p.filter((f) => f.id !== sf.id))}
+                        disabled={loading}
+                        className="text-slate-300 hover:text-red-400 transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
                       </button>
                     </div>
                   ))}
@@ -620,28 +690,17 @@ export default function CreateDealForm() {
               )}
             </div>
           </div>
-
-          {manualUploadProgress && (
-            <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs font-medium text-emerald-700">Uploading files… {manualUploadProgress.done}/{manualUploadProgress.total}</p>
-              </div>
-              <div className="h-1.5 bg-emerald-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 rounded-full transition-all duration-300" style={{ width: `${(manualUploadProgress.done / manualUploadProgress.total) * 100}%` }} />
-              </div>
-            </div>
-          )}
-        </>
+        </div>
       )}
 
-      {/* ── Deal Name (always shown, auto-filled in paste mode) ─────────────── */}
-      {(mode === "manual" || extraction.status === "done") && (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="name" className="text-sm font-semibold text-slate-700">
-            Deal Name <span className="text-red-500">*</span>
+      {/* ── Deal Name ─────────────────────────────────────────────────────── */}
+      {showSubmit && (
+        <div className="flex flex-col gap-1.5 mt-4">
+          <label htmlFor="deal-name" className="text-sm font-semibold text-slate-700">
+            Deal Name <span className="text-red-400">*</span>
           </label>
           <input
-            id="name"
+            id="deal-name"
             type="text"
             required
             value={name}
@@ -653,14 +712,19 @@ export default function CreateDealForm() {
         </div>
       )}
 
-      {/* ── Minimum required facts gate ─────────────────────────────────────── */}
-      {(mode === "manual" || extraction.status === "done") && missingRequired.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-xs font-semibold text-amber-800 mb-1">Required before scoring:</p>
+      {/* ── Missing required facts gate ───────────────────────────────────── */}
+      {showSubmit && missingRequired.length > 0 && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-xs font-semibold text-amber-800 mb-1.5">Still needed before scoring:</p>
           <div className="flex flex-wrap gap-1.5">
             {missingRequired.map((key) => (
-              <span key={key} className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full">
-                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01" /></svg>
+              <span
+                key={key}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-white border border-amber-200 px-2 py-0.5 rounded-full shadow-sm"
+              >
+                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01" />
+                </svg>
                 {MIN_REQUIRED_LABELS[key]}
               </span>
             ))}
@@ -668,13 +732,13 @@ export default function CreateDealForm() {
         </div>
       )}
 
-      {/* ── Submit ──────────────────────────────────────────────────────────── */}
-      {(mode === "manual" || extraction.status === "done") && (
-        <div className="flex items-center gap-3 pt-1">
+      {/* ── Submit / Cancel ───────────────────────────────────────────────── */}
+      {showSubmit && (
+        <div className="flex items-center gap-3 mt-4">
           <button
             type="submit"
             disabled={loading || !canSubmit}
-            className="inline-flex items-center gap-2 justify-center rounded-xl bg-[#1F7A63] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 rounded-xl bg-[#1F7A63] px-6 py-3 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
           >
             {loading ? (
               <>
@@ -693,15 +757,19 @@ export default function CreateDealForm() {
               </>
             )}
           </button>
-          <Link href="/dashboard" className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+          <Link
+            href="/dashboard"
+            className="text-sm font-medium text-slate-400 hover:text-slate-700 transition-colors"
+          >
             Cancel
           </Link>
         </div>
       )}
 
-      {(mode === "paste" && extraction.status === "idle") && (
-        <div className="flex justify-end">
-          <Link href="/dashboard" className="text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+      {/* Cancel link for paste idle state */}
+      {mode === "paste" && extraction.status === "idle" && (
+        <div className="flex justify-end mt-2">
+          <Link href="/dashboard" className="text-sm font-medium text-slate-400 hover:text-slate-700 transition-colors">
             Cancel
           </Link>
         </div>
@@ -733,11 +801,11 @@ function ExtractedFactsReview({
   const requiredFacts = extraction.facts.filter((f) => f.required);
   const otherFacts = extraction.facts.filter((f) => !f.required);
   const [showAll, setShowAll] = useState(false);
-
   const acceptedCount = extraction.facts.filter((f) => f.accepted).length;
 
   return (
     <div className="flex flex-col gap-3">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -745,22 +813,33 @@ function ExtractedFactsReview({
             {extraction.facts.length} facts extracted
           </p>
           <p className="text-xs text-slate-400 mt-0.5">
-            Review and confirm the values below before creating the deal.
+            {acceptedCount} accepted · review before creating
           </p>
         </div>
         <button
           type="button"
           onClick={onReset}
-          className="text-xs text-slate-400 hover:text-slate-600 transition-colors underline"
+          className="text-xs text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1"
         >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
           Re-paste
         </button>
       </div>
 
-      {/* Required facts */}
+      {/* Required facts — always visible */}
       <div className="rounded-xl border border-slate-200 overflow-hidden">
-        <div className="bg-slate-50 px-3 py-2 border-b border-slate-200">
+        <div className="bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center justify-between">
           <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Required for scoring</p>
+          {missingRequired.length === 0 && (
+            <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              All found
+            </span>
+          )}
         </div>
         <div className="divide-y divide-slate-100">
           {requiredFacts.map((fact) => (
@@ -772,7 +851,6 @@ function ExtractedFactsReview({
               onToggleAccepted={onToggleAccepted}
             />
           ))}
-          {/* Show missing required facts that weren't extracted */}
           {missingRequired.map((key) => {
             const alreadyShown = requiredFacts.some((f) => f.fact_key === key);
             if (alreadyShown) return null;
@@ -788,46 +866,53 @@ function ExtractedFactsReview({
         </div>
       </div>
 
-      {/* Other extracted facts */}
+      {/* Deal name (auto-filled) */}
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-semibold text-slate-700">
+          Deal Name <span className="text-red-400">*</span>
+        </label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Midwest HVAC Company"
+          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition"
+        />
+      </div>
+
+      {/* Additional facts (collapsible) */}
       {otherFacts.length > 0 && (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="w-full bg-slate-50 px-3 py-2 border-b border-slate-100 flex items-center justify-between hover:bg-slate-100 transition-colors"
+          >
             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
               Additional facts ({otherFacts.length})
             </p>
-            <button
-              type="button"
-              onClick={() => setShowAll((v) => !v)}
-              className="text-[11px] text-[#1F7A63] font-medium hover:underline"
+            <svg
+              className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showAll ? "rotate-180" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
-              {showAll ? "Show less" : "Show all"}
-            </button>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {(showAll ? otherFacts : otherFacts.slice(0, 4)).map((fact) => (
-              <FactReviewRow
-                key={fact.fact_key}
-                fact={fact}
-                isMissing={false}
-                onUpdateValue={onUpdateValue}
-                onToggleAccepted={onToggleAccepted}
-              />
-            ))}
-            {!showAll && otherFacts.length > 4 && (
-              <div className="px-3 py-2 text-center">
-                <button type="button" onClick={() => setShowAll(true)} className="text-xs text-[#1F7A63] hover:underline">
-                  +{otherFacts.length - 4} more facts
-                </button>
-              </div>
-            )}
-          </div>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showAll && (
+            <div className="divide-y divide-slate-100">
+              {otherFacts.map((fact) => (
+                <FactReviewRow
+                  key={fact.fact_key}
+                  fact={fact}
+                  isMissing={false}
+                  onUpdateValue={onUpdateValue}
+                  onToggleAccepted={onToggleAccepted}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
-
-      <p className="text-xs text-slate-400">
-        {acceptedCount} of {extraction.facts.length} facts will be used for scoring.
-        You can edit any value before creating the deal.
-      </p>
     </div>
   );
 }
@@ -851,7 +936,6 @@ function FactReviewRow({
   const displayValue = fact.userValue ?? fact.extracted_value_raw;
   const isEdited = !!fact.userValue && fact.userValue !== fact.extracted_value_raw;
 
-  // Format display value for currency facts
   const formattedDisplay = (() => {
     if (["asking_price", "sde_latest", "revenue_latest", "ebitda_latest", "lease_monthly_rent"].includes(fact.fact_key)) {
       return formatCurrency(displayValue);
@@ -861,14 +945,12 @@ function FactReviewRow({
   })();
 
   function commitEdit() {
-    if (editValue.trim()) {
-      onUpdateValue(fact.fact_key, editValue.trim());
-    }
+    if (editValue.trim()) onUpdateValue(fact.fact_key, editValue.trim());
     setEditing(false);
   }
 
   return (
-    <div className={`flex items-start gap-3 px-3 py-2.5 ${isMissing ? "bg-red-50/50" : ""}`}>
+    <div className={`flex items-start gap-3 px-3 py-2.5 ${isMissing ? "bg-red-50/40" : ""}`}>
       {/* Accept toggle */}
       <button
         type="button"
@@ -941,16 +1023,17 @@ function MissingFactRow({
   onFill: (value: string) => void;
 }) {
   const [value, setValue] = useState("");
+  void factKey;
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 bg-red-50/60">
+    <div className="flex items-center gap-3 px-3 py-2.5 bg-red-50/50">
       <div className="w-4 h-4 rounded border-2 border-red-300 bg-white flex items-center justify-center shrink-0">
         <svg className="w-2.5 h-2.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01" />
         </svg>
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-semibold text-red-600 mb-1">{label} — not found in listing</p>
+        <p className="text-xs font-semibold text-red-600 mb-1">{label} — not found</p>
         <div className="flex items-center gap-1.5">
           <input
             type="text"

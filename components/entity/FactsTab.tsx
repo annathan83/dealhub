@@ -72,16 +72,9 @@ const FACT_CATEGORIES: FactCategory[] = [
     factKeys: [
       "ebitda_latest", "revenue_year_1", "revenue_year_2", "sde_year_1",
       "gross_profit", "net_income", "addbacks_summary", "financial_quality_notes",
-    ],
-  },
-  {
-    key: "deal_terms",
-    label: "Deal Terms",
-    icon: "📋",
-    factKeys: [
-      "deal_structure", "seller_financing", "down_payment",
-      "inventory_included", "real_estate_included",
-      "lease_expiration_date", "working_capital_intensity", "capex_intensity",
+      "recurring_revenue_pct", "repeat_revenue_pct",
+      "customer_concentration_top1_pct", "customer_concentration_top5_pct",
+      "vendor_concentration_top1_pct",
     ],
   },
   {
@@ -90,7 +83,7 @@ const FACT_CATEGORIES: FactCategory[] = [
     icon: "⚙️",
     factKeys: [
       "years_in_business", "seasonality", "seller_reason", "transition_support",
-      "recurring_revenue_pct", "repeat_revenue_pct",
+      "capex_intensity", "working_capital_intensity",
     ],
   },
   {
@@ -103,12 +96,28 @@ const FACT_CATEGORIES: FactCategory[] = [
     ],
   },
   {
-    key: "customers",
-    label: "Customers & Revenue Quality",
-    icon: "🎯",
+    key: "facility",
+    label: "Facility / Real Estate",
+    icon: "🏢",
     factKeys: [
-      "customer_concentration_top1_pct", "customer_concentration_top5_pct",
-      "vendor_concentration_top1_pct",
+      "lease_monthly_rent", "lease_expiration_date", "real_estate_included",
+      "inventory_included",
+    ],
+  },
+  {
+    key: "deal_structure",
+    label: "Deal Structure",
+    icon: "📋",
+    factKeys: [
+      "deal_structure", "seller_financing", "down_payment",
+    ],
+  },
+  {
+    key: "market",
+    label: "Market & Location",
+    icon: "📍",
+    factKeys: [
+      "location_county", "location_state",
     ],
   },
   {
