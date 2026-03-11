@@ -21,14 +21,15 @@ import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
 import type { DeepAnalysisContent } from "@/lib/services/entity/deepAnalysisService";
 import type { TimelineItem } from "@/lib/services/entity/entityTimelineService";
 import type { ScoreHistoryEntry } from "@/lib/kpi/kpiScoringService";
+// DeepAnalysisContent, ScoreHistoryEntry kept for prop types (passed through but not rendered in V1 triage view)
 
 import QuickAddBar from "./QuickAddBar";
 import IntakeSection from "./IntakeSection";
 import TimelineSection from "./TimelineSection";
 import FactsTab from "./entity/FactsTab";
-import KpiScorecardTab from "./entity/KpiScorecardTab";
-import DeepAnalysisPanel from "./DeepAnalysisPanel";
-import { computeDerivedMetrics } from "@/lib/kpi/derivedMetricsService";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { computeTriageRecommendation } from "@/lib/kpi/triageRecommendation";
 import type { SwotAnalysisContent } from "@/lib/services/analysis/swotAnalysisService";
 import type { MissingInfoResult } from "@/lib/services/analysis/missingInfoService";
 
@@ -105,170 +106,290 @@ function TabBar({
   );
 }
 
-// ─── Score trend chart ────────────────────────────────────────────────────────
+// ─── V1 Triage: Analysis tab ─────────────────────────────────────────────────
+//
+// Clean triage-first layout:
+//   A. Score header (score + confidence + facts used)
+//   B. Recommendation (Request NDA / Borderline / Probably Pass + opinion)
+//   C. KPI inputs used in scoring (derived metrics with weight)
+//   D. Facts used (provenance summary)
+//   E. Re-run button
+//
+// Secondary items (SWOT, deep analysis, score history, trend chart) are
+// hidden in V1 to keep the interface fast and decision-oriented.
+// The backend still generates them — they are just not surfaced here yet.
 
-function ScoreTrendChart({ history }: { history: ScoreHistoryEntry[] }) {
-  // Show last 10 entries, oldest-first for left-to-right display
-  const entries = [...history].reverse().slice(0, 10);
+// ─── Score header ─────────────────────────────────────────────────────────────
 
-  if (entries.length < 2) return null;
+function TriageScoreHeader({
+  scorecard,
+  dealId,
+}: {
+  scorecard: KpiScorecardResult | null;
+  dealId: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
-  const scores = entries.map((e) => e.overall_score_10 ?? 0);
-  const maxScore = 10;
-  const chartH = 60;
-  const chartW = 280;
-  const padX = 8;
-  const padY = 8;
-  const innerW = chartW - padX * 2;
-  const innerH = chartH - padY * 2;
+  async function runAnalysis() {
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/analysis`, { method: "POST" });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) { setError(data.error ?? "Analysis failed."); return; }
+      startTransition(() => router.refresh());
+    } catch {
+      setError("Network error. Please try again.");
+    }
+  }
 
-  const points = scores.map((s, i) => {
-    const x = padX + (i / Math.max(scores.length - 1, 1)) * innerW;
-    const y = padY + innerH - (s / maxScore) * innerH;
-    return `${x},${y}`;
-  });
+  const score = scorecard?.overall_score ?? null;
+  const conf = scorecard?.confidence ?? null;
+  const factsUsed = conf?.total_facts_used ?? scorecard?.kpis.filter((k) => k.status !== "missing").length ?? null;
 
-  const latestScore = history[0]?.overall_score_10 ?? null;
-  const prevScore = history[1]?.overall_score_10 ?? null;
-  const delta = latestScore !== null && prevScore !== null ? latestScore - prevScore : null;
+  const scoreColor = score === null ? "text-slate-300"
+    : score >= 7 ? "text-emerald-600"
+    : score >= 5 ? "text-amber-600"
+    : "text-red-600";
 
-  const lineColor = latestScore === null ? "#94a3b8"
-    : latestScore >= 7 ? "#10b981"
-    : latestScore >= 5 ? "#f59e0b"
-    : "#ef4444";
+  const confColor = conf === null ? "bg-slate-100"
+    : conf.confidence_score >= 70 ? "bg-emerald-500"
+    : conf.confidence_score >= 40 ? "bg-amber-400"
+    : "bg-red-400";
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Score Trend</p>
-        {latestScore !== null && (
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-slate-800 tabular-nums">{latestScore.toFixed(1)}</span>
-            <span className="text-xs text-slate-400">/10</span>
-            {delta !== null && Math.abs(delta) >= 0.1 && (
-              <span className={`text-xs font-semibold tabular-nums ${delta > 0 ? "text-emerald-600" : "text-red-500"}`}>
-                {delta > 0 ? "+" : ""}{delta.toFixed(1)}
-              </span>
-            )}
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Score row */}
+      <div className="px-5 pt-5 pb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Deal Score</p>
+          <div className="flex items-baseline gap-1.5">
+            <span className={`text-5xl font-extrabold tabular-nums leading-none ${scoreColor}`}>
+              {score !== null ? score.toFixed(1) : "—"}
+            </span>
+            <span className="text-lg text-slate-300 font-medium">/10</span>
           </div>
-        )}
+          {score === null && (
+            <p className="text-xs text-slate-400 mt-1.5">Upload a listing to generate a score</p>
+          )}
+        </div>
+
+        <button
+          onClick={runAnalysis}
+          disabled={isPending}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#1F7A63] text-white text-xs font-medium rounded-lg hover:bg-[#1a6854] disabled:opacity-50 transition-colors shrink-0 mt-1"
+        >
+          {isPending ? (
+            <>
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Running…
+            </>
+          ) : (
+            <>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Re-run
+            </>
+          )}
+        </button>
       </div>
 
-      <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ height: chartH }}>
-        {/* Grid lines */}
-        {[2, 4, 6, 8, 10].map((v) => {
-          const y = padY + innerH - (v / maxScore) * innerH;
-          return (
-            <line key={v} x1={padX} y1={y} x2={chartW - padX} y2={y}
-              stroke="#f1f5f9" strokeWidth="1" />
-          );
-        })}
-        {/* Area fill */}
-        <polyline
-          points={[
-            `${padX},${padY + innerH}`,
-            ...points,
-            `${chartW - padX},${padY + innerH}`,
-          ].join(" ")}
-          fill={lineColor}
-          fillOpacity="0.08"
-          stroke="none"
-        />
-        {/* Line */}
-        <polyline
-          points={points.join(" ")}
-          fill="none"
-          stroke={lineColor}
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        {/* Dots */}
-        {points.map((pt, i) => {
-          const [x, y] = pt.split(",").map(Number);
-          return (
-            <circle key={i} cx={x} cy={y} r="3"
-              fill="white" stroke={lineColor} strokeWidth="2" />
-          );
-        })}
-      </svg>
+      {error && (
+        <p className="px-5 pb-2 text-xs text-red-500">{error}</p>
+      )}
 
-      <div className="flex justify-between mt-1">
-        <span className="text-[10px] text-slate-300">
-          {new Date(entries[0].created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+      {/* Confidence + facts row */}
+      {scorecard && (
+        <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+          {/* Confidence */}
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Confidence</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${confColor}`}
+                  style={{ width: `${conf?.confidence_score ?? 0}%` }}
+                />
+              </div>
+              <span className="text-xs font-bold text-slate-700 tabular-nums shrink-0">
+                {conf?.confidence_score ?? "—"}
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-400 mt-1">of scoring inputs</p>
+          </div>
+
+          {/* Facts used */}
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Facts Used</p>
+            <p className="text-xl font-bold text-slate-800 tabular-nums">{factsUsed ?? "—"}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">scoring inputs</p>
+          </div>
+
+          {/* Coverage */}
+          <div className="px-4 py-3">
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Coverage</p>
+            <p className="text-xl font-bold text-slate-800 tabular-nums">{scorecard.coverage_pct}%</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">of KPIs scored</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Recommendation card ──────────────────────────────────────────────────────
+
+function TriageRecommendationCard({ scorecard }: { scorecard: KpiScorecardResult | null }) {
+  if (!scorecard || scorecard.overall_score === null) {
+    return (
+      <div className="bg-slate-50 rounded-xl border border-slate-200 px-5 py-4">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Recommendation</p>
+        <p className="text-sm text-slate-400">Add facts to generate a triage recommendation.</p>
+      </div>
+    );
+  }
+
+  const rec = computeTriageRecommendation(scorecard);
+
+  // Icon per verdict
+  const icon = rec.verdict === "REQUEST_NDA" ? (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ) : rec.verdict === "BORDERLINE" ? (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ) : (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+
+  return (
+    <div className={`rounded-xl border ${rec.borderColor} ${rec.bgColor} overflow-hidden`}>
+      {/* Verdict header */}
+      <div className={`flex items-center gap-2.5 px-5 py-3.5 border-b ${rec.borderColor}`}>
+        <span className={rec.color}>{icon}</span>
+        <span className={`text-base font-bold ${rec.color}`}>{rec.label}</span>
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider ml-auto">
+          Triage opinion
         </span>
-        <span className="text-[10px] text-slate-300">
-          {new Date(entries[entries.length - 1].created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        </span>
+      </div>
+
+      {/* Opinion text */}
+      <div className="px-5 py-4">
+        <p className="text-sm text-slate-700 leading-relaxed">{rec.opinion}</p>
+
+        {/* Flags */}
+        {rec.flags.length > 0 && (
+          <ul className="mt-3 space-y-1.5">
+            {rec.flags.map((flag, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-slate-600">
+                <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
+                  rec.verdict === "REQUEST_NDA" && i < 2 ? "bg-emerald-400" :
+                  rec.verdict === "PROBABLY_PASS" ? "bg-red-400" : "bg-amber-400"
+                }`} />
+                {flag}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="text-[10px] text-slate-400 mt-3">
+          This is a triage opinion based on available facts, not investment advice.
+        </p>
       </div>
     </div>
   );
 }
 
-// ─── Score history list ───────────────────────────────────────────────────────
+// ─── KPI inputs panel ─────────────────────────────────────────────────────────
 
-function ScoreHistoryList({ history }: { history: ScoreHistoryEntry[] }) {
+function TriageKpiInputsPanel({ scorecard }: { scorecard: KpiScorecardResult | null }) {
   const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? history : history.slice(0, 5);
 
-  if (history.length === 0) return null;
+  if (!scorecard || scorecard.kpis.length === 0) return null;
+
+  // Show only scored (non-missing) KPIs, sorted by weight descending
+  const scored = scorecard.kpis
+    .filter((k) => k.status !== "missing" && k.score !== null)
+    .sort((a, b) => b.weight - a.weight);
+
+  const missing = scorecard.kpis.filter((k) => k.status === "missing");
+
+  const visible = expanded ? scored : scored.slice(0, 6);
+
+  if (scored.length === 0) return null;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Score History</p>
-        <span className="text-[11px] text-slate-400">{history.length} recalculations</span>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">KPI Inputs</p>
+        <span className="text-[10px] text-slate-400">{scored.length} scored · {missing.length} missing</span>
       </div>
+
       <div className="divide-y divide-slate-50">
-        {visible.map((entry) => {
-          const score = entry.overall_score_10 ?? null;
-          const score100 = entry.overall_score_100 ?? null;
-          const date = new Date(entry.created_at).toLocaleDateString("en-US", {
-            month: "short", day: "numeric",
-          });
-          const time = new Date(entry.created_at).toLocaleTimeString("en-US", {
-            hour: "numeric", minute: "2-digit",
-          });
-          const color = score === null ? "text-slate-400"
-            : score >= 7 ? "text-emerald-600"
-            : score >= 5 ? "text-amber-600"
+        {visible.map((kpi) => {
+          const scoreColor = kpi.score === null ? "text-slate-300"
+            : kpi.score >= 8 ? "text-emerald-600"
+            : kpi.score >= 5 ? "text-amber-600"
             : "text-red-500";
-          const barColor = score === null ? "bg-slate-200"
-            : score >= 7 ? "bg-emerald-400"
-            : score >= 5 ? "bg-amber-400"
+          const barColor = kpi.score === null ? "bg-slate-100"
+            : kpi.score >= 8 ? "bg-emerald-400"
+            : kpi.score >= 5 ? "bg-amber-400"
             : "bg-red-400";
+          const pct = kpi.score !== null ? (kpi.score / 10) * 100 : 0;
 
           return (
-            <div key={entry.id} className="flex items-center gap-3 px-4 py-2.5">
-              <div className="w-14 shrink-0">
-                <div className="text-[11px] text-slate-500 font-medium tabular-nums">{date}</div>
-                <div className="text-[10px] text-slate-300 tabular-nums">{time}</div>
-              </div>
+            <div key={kpi.kpi_key} className="flex items-center gap-3 px-4 py-2.5">
+              {/* Score dot */}
+              <span className={`text-sm font-bold tabular-nums w-8 text-right shrink-0 ${scoreColor}`}>
+                {kpi.score !== null ? kpi.score.toFixed(1) : "—"}
+              </span>
+
+              {/* Label + bar */}
               <div className="flex-1 min-w-0">
-                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-1">
-                  {score100 !== null && (
-                    <div className={`h-full rounded-full transition-all ${barColor}`}
-                      style={{ width: `${score100}%` }} />
-                  )}
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-slate-700 truncate">{kpi.label}</span>
+                  <span className="text-[10px] text-slate-400 shrink-0 ml-2">{Math.round(kpi.weight * 100)}%</span>
                 </div>
-                {entry.trigger_reason && (
-                  <div className="text-[10px] text-slate-400 truncate">{entry.trigger_reason}</div>
-                )}
+                <div className="h-1 bg-slate-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                </div>
               </div>
-              <span className={`text-sm font-bold tabular-nums w-10 text-right shrink-0 ${color}`}>
-                {score !== null ? `${score.toFixed(1)}` : "—"}
+
+              {/* Value */}
+              <span className="text-xs text-slate-500 tabular-nums w-20 text-right shrink-0">
+                {kpi.raw_value ?? "—"}
               </span>
             </div>
           );
         })}
       </div>
-      {history.length > 5 && (
+
+      {/* Missing KPIs summary */}
+      {missing.length > 0 && (
+        <div className="px-4 py-2.5 border-t border-slate-50 bg-slate-50/60">
+          <p className="text-[11px] text-slate-400">
+            <span className="font-semibold text-amber-600">{missing.length} KPI{missing.length !== 1 ? "s" : ""} need data:</span>{" "}
+            {missing.map((k) => k.label).join(", ")}
+          </p>
+        </div>
+      )}
+
+      {scored.length > 6 && (
         <div className="px-4 py-2 border-t border-slate-50">
           <button
             onClick={() => setExpanded((v) => !v)}
             className="text-[11px] text-slate-400 hover:text-[#1F7A63] transition-colors"
           >
-            {expanded ? "Show less" : `Show all ${history.length} entries`}
+            {expanded ? "Show less" : `Show all ${scored.length} KPIs`}
           </button>
         </div>
       )}
@@ -276,30 +397,34 @@ function ScoreHistoryList({ history }: { history: ScoreHistoryEntry[] }) {
   );
 }
 
-// ─── Derived metrics panel ────────────────────────────────────────────────────
+// ─── Source provenance summary ────────────────────────────────────────────────
 
-function DerivedMetricsPanel({ entityData }: { entityData: EntityPageData | null }) {
-  if (!entityData) return null;
+function TriageSourceSummary({ scorecard }: { scorecard: KpiScorecardResult | null }) {
+  const conf = scorecard?.confidence ?? null;
+  if (!conf || conf.total_facts_used === 0) return null;
 
-  const metrics = computeDerivedMetrics(entityData.fact_values, entityData.fact_definitions);
-  const items = Object.values(metrics);
+  const items = [
+    { label: "Document-backed", count: conf.document_backed_count, dot: "bg-emerald-500", show: conf.document_backed_count > 0 },
+    { label: "User override", count: conf.override_count, dot: "bg-blue-400", show: conf.override_count > 0 },
+    { label: "AI estimate", count: conf.inferred_count, dot: "bg-amber-400", show: conf.inferred_count > 0 },
+    { label: "Manual entry", count: conf.manual_count - conf.inferred_count, dot: "bg-slate-300", show: (conf.manual_count - conf.inferred_count) > 0 },
+  ].filter((i) => i.show);
 
-  // Only show if at least one metric is available
-  if (!items.some((m) => m.available)) return null;
+  if (items.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Derived Metrics</p>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3">
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Facts Used</p>
+        <span className="text-[10px] text-slate-400">
+          Confidence reflects document-backed inputs
+        </span>
       </div>
-      <div className="grid grid-cols-2 divide-x divide-y divide-slate-100">
-        {items.map((m) => (
-          <div key={m.key} className="px-4 py-3">
-            <div className="text-[11px] text-slate-400 mb-0.5">{m.label}</div>
-            <div className={`text-base font-bold tabular-nums ${m.available ? "text-slate-800" : "text-slate-300"}`}>
-              {m.formatted}
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">{m.description}</div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        {items.map((item) => (
+          <div key={item.label} className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.dot}`} />
+            <span className="text-xs text-slate-600">{item.count} {item.label.toLowerCase()}</span>
           </div>
         ))}
       </div>
@@ -307,145 +432,11 @@ function DerivedMetricsPanel({ entityData }: { entityData: EntityPageData | null
   );
 }
 
-// ─── SWOT panel ───────────────────────────────────────────────────────────────
-
-function SwotPanel({ swot }: { swot: SwotAnalysisContent }) {
-  const categories: { key: keyof SwotAnalysisContent; label: string; color: string; bg: string }[] = [
-    { key: "strengths",     label: "Strengths",     color: "text-emerald-700", bg: "bg-emerald-50 border-emerald-100" },
-    { key: "weaknesses",    label: "Weaknesses",    color: "text-red-700",     bg: "bg-red-50 border-red-100" },
-    { key: "opportunities", label: "Opportunities", color: "text-blue-700",    bg: "bg-blue-50 border-blue-100" },
-    { key: "threats",       label: "Threats",       color: "text-amber-700",   bg: "bg-amber-50 border-amber-100" },
-  ];
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {categories.map(({ key, label, color, bg }) => {
-        const bullets = swot[key] as { text: string; fact_key: string | null }[];
-        return (
-          <div key={key} className={`rounded-xl border p-3.5 ${bg}`}>
-            <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${color}`}>{label}</p>
-            {bullets.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No data available yet.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {bullets.map((b, i) => (
-                  <li key={i} className="flex items-start gap-1.5">
-                    <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${color.replace("text-", "bg-")}`} />
-                    <span className="text-xs text-slate-700 leading-relaxed">{b.text}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Missing info panel ───────────────────────────────────────────────────────
-
-function MissingInfoPanel({ info }: { info: MissingInfoResult }) {
-  const [showAll, setShowAll] = useState(false);
-
-  const critical = info.missing.filter((m) => m.priority === "critical");
-  const important = info.missing.filter((m) => m.priority === "important");
-  const niceToHave = info.missing.filter((m) => m.priority === "nice_to_have");
-
-  if (info.missing.length === 0) {
-    return (
-      <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 flex items-center gap-2">
-        <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-        </svg>
-        <p className="text-sm text-emerald-700 font-medium">All key information collected</p>
-      </div>
-    );
-  }
-
-  const PriorityGroup = ({
-    items,
-    label,
-    dotColor,
-  }: {
-    items: typeof info.missing;
-    label: string;
-    dotColor: string;
-  }) => {
-    if (items.length === 0) return null;
-    const visible = showAll ? items : items.slice(0, 4);
-    return (
-      <div>
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">{label}</p>
-        <div className="space-y-1">
-          {visible.map((item) => (
-            <div key={item.key} className="flex items-start gap-2 py-1.5 border-b border-slate-50 last:border-0">
-              <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-700">{item.label}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">{item.why}</p>
-              </div>
-              <span className={`text-[10px] font-semibold shrink-0 px-1.5 py-0.5 rounded-full ${
-                item.category === "financial"  ? "bg-blue-50 text-blue-600" :
-                item.category === "legal"      ? "bg-red-50 text-red-600" :
-                item.category === "deal_terms" ? "bg-purple-50 text-purple-600" :
-                                                  "bg-slate-100 text-slate-500"
-              }`}>
-                {item.category.replace("_", " ")}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Missing Information</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            {info.critical_count > 0 && <span className="text-red-500 font-semibold">{info.critical_count} critical</span>}
-            {info.critical_count > 0 && info.important_count > 0 && " · "}
-            {info.important_count > 0 && <span>{info.important_count} important</span>}
-            {" "}of {info.total_checked} checked
-          </p>
-        </div>
-      </div>
-      <div className="px-4 py-3 space-y-4">
-        <PriorityGroup items={critical}   label="Critical"   dotColor="bg-red-400" />
-        <PriorityGroup items={important}  label="Important"  dotColor="bg-amber-400" />
-        {showAll && <PriorityGroup items={niceToHave} label="Nice to Have" dotColor="bg-slate-300" />}
-      </div>
-      {(info.missing.length > 8 || niceToHave.length > 0) && (
-        <div className="px-4 py-2 border-t border-slate-50">
-          <button
-            onClick={() => setShowAll((v) => !v)}
-            className="text-[11px] text-slate-400 hover:text-[#1F7A63] transition-colors"
-          >
-            {showAll ? "Show less" : `Show all ${info.missing.length} items`}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Analysis tab ─────────────────────────────────────────────────────────────
+// ─── Analysis tab (V1 triage) ─────────────────────────────────────────────────
 
 function AnalysisTabContent({
   dealId,
-  dealStatus,
   kpiScorecard,
-  scoreHistory,
-  deepAnalysis,
-  deepAnalysisStale,
-  deepAnalysisRunAt,
-  latestSourceAt,
-  entityData,
-  swotAnalysis,
-  missingInfo,
 }: {
   dealId: string;
   dealStatus: DealStatus;
@@ -460,94 +451,20 @@ function AnalysisTabContent({
   missingInfo: MissingInfoResult | null;
 }) {
   return (
-    <div className="flex flex-col gap-5 py-4">
+    <div className="flex flex-col gap-4 py-4">
 
-      {/* ── Score trend ─────────────────────────────────────────────────── */}
-      {scoreHistory.length >= 2 && (
-        <section>
-          <SectionLabel label="Score Trend" />
-          <ScoreTrendChart history={scoreHistory} />
-        </section>
-      )}
+      {/* A. Score header */}
+      <TriageScoreHeader scorecard={kpiScorecard} dealId={dealId} />
 
-      {/* ── Derived metrics — only shown when inputs are available ─────── */}
-      {entityData && Object.values(computeDerivedMetrics(entityData.fact_values, entityData.fact_definitions)).some((m) => m.available) && (
-        <section>
-          <SectionLabel label="Derived Metrics" />
-          <DerivedMetricsPanel entityData={entityData} />
-        </section>
-      )}
+      {/* B. Recommendation */}
+      <TriageRecommendationCard scorecard={kpiScorecard} />
 
-      {/* ── KPI Scorecard ───────────────────────────────────────────────── */}
-      <section>
-        <SectionLabel label="KPI Scorecard" />
-        <KpiScorecardTab scorecard={kpiScorecard} dealId={dealId} />
-      </section>
+      {/* C. KPI inputs */}
+      <TriageKpiInputsPanel scorecard={kpiScorecard} />
 
-      {/* ── SWOT Analysis ───────────────────────────────────────────────── */}
-      {swotAnalysis ? (
-        <section>
-          <div className="flex items-center gap-3 mb-3">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">SWOT Analysis</p>
-            <div className="flex-1 h-px bg-slate-100" />
-            <span className="text-[10px] text-slate-300 shrink-0">
-              from {swotAnalysis.facts_used} facts · {new Date(swotAnalysis.generated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-            </span>
-          </div>
-          <SwotPanel swot={swotAnalysis} />
-        </section>
-      ) : (
-        <section>
-          <SectionLabel label="SWOT Analysis" />
-          <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-5 text-center">
-            <p className="text-sm text-slate-400">SWOT analysis generates automatically after facts are filled.</p>
-            <p className="text-xs text-slate-300 mt-1">Add at least 2 facts to trigger analysis.</p>
-          </div>
-        </section>
-      )}
+      {/* D. Source provenance */}
+      <TriageSourceSummary scorecard={kpiScorecard} />
 
-      {/* ── Missing Information ─────────────────────────────────────────── */}
-      {missingInfo && (
-        <section>
-          <SectionLabel label="Missing Information" />
-          <MissingInfoPanel info={missingInfo} />
-        </section>
-      )}
-
-      {/* ── Deep Analysis ───────────────────────────────────────────────── */}
-      <section>
-        <SectionLabel label="AI Deep Analysis" />
-        <DeepAnalysisPanel
-          dealId={dealId}
-          dealStatus={dealStatus}
-          analysis={deepAnalysis}
-          isStale={deepAnalysisStale}
-          runAt={deepAnalysisRunAt}
-          latestSourceAt={latestSourceAt}
-        />
-      </section>
-
-      {/* ── Score history ───────────────────────────────────────────────── */}
-      {scoreHistory.length > 0 && (
-        <section>
-          <SectionLabel label="Score History" />
-          <ScoreHistoryList history={scoreHistory} />
-        </section>
-      )}
-
-    </div>
-  );
-}
-
-// ─── Section label ────────────────────────────────────────────────────────────
-
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 mb-3">
-      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">
-        {label}
-      </p>
-      <div className="flex-1 h-px bg-slate-100" />
     </div>
   );
 }

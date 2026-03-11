@@ -1,21 +1,21 @@
 /**
- * KPI Configuration Registry
+ * KPI Configuration Registry — V1 Triage
  *
- * Single source of truth for all KPI definitions, weights, and scoring logic.
- * To add a new KPI: add an entry here. Nothing else needs to change.
+ * Triage-first scoring: derived KPIs that answer "should I ask for the NDA?"
  *
  * Scoring scale: 0–10
- *   10 = excellent
+ *   10 = excellent / strong buy signal
  *   8  = good
  *   6  = average / acceptable
  *   4  = below average / concern
  *   2  = poor / red flag
  *   0  = critical failure
  *
- * Weights must sum to 1.0 across all KPIs.
+ * Weights must sum to 1.0.
  *
- * Future: industry-specific overlays can replace or extend this config
- * by merging a vertical-specific config object on top of KPI_DEFINITIONS.
+ * Design principle:
+ *   Score derived metrics (multiple, margin, RPE) rather than raw values alone.
+ *   This gives a buyer-oriented first-pass screen, not a data dump.
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -59,6 +59,8 @@ export type KpiFactInputs = {
   revenue_year_1?: number | null;  // prior year
   revenue_year_2?: number | null;  // two years prior
   sde_year_1?: number | null;
+  lease_monthly_rent?: number | null;
+  years_in_business?: number | null;
   customer_concentration_top1_pct?: number | null;
   recurring_revenue_pct?: number | null;
   owner_hours_per_week?: number | null;
@@ -101,245 +103,186 @@ function formatPct(n: number): string {
 }
 
 // ─── KPI Definitions ──────────────────────────────────────────────────────────
+//
+// V1 Triage KPIs — ordered by triage importance:
+//   1. Purchase Multiple      (30%) — core valuation check
+//   2. SDE Margin             (20%) — profitability quality
+//   3. Revenue per Employee   (12%) — labor efficiency
+//   4. Rent Ratio             (10%) — fixed-cost exposure
+//   5. Business Stability     (10%) — years + trend
+//   6. Owner Dependence       (10%) — transition risk
+//   7. Revenue Quality         (8%) — recurring / concentration
+//
+// Total: 1.00
 
 export const KPI_DEFINITIONS: KpiDefinition[] = [
 
-  // ── 1. Asking Price ──────────────────────────────────────────────────────────
-  // Informational only — neutral score since price alone can't be judged without multiple
-  {
-    kpi_key: "asking_price",
-    label: "Asking Price",
-    description: "Seller's stated asking price",
-    weight: 0.05,
-    score: ({ asking_price }) => {
-      if (!asking_price) return missing("Asking price");
-      return {
-        score: 6, // neutral — evaluate alongside multiple and SDE
-        raw_value: formatCurrency(asking_price),
-        rationale: `Asking price is ${formatCurrency(asking_price)}. Evaluate alongside multiple and SDE.`,
-        status: "known",
-      };
-    },
-  },
-
-  // ── 2. Revenue ───────────────────────────────────────────────────────────────
-  {
-    kpi_key: "revenue",
-    label: "Annual Revenue",
-    description: "Latest full-year revenue",
-    weight: 0.08,
-    score: ({ revenue_latest }) => {
-      if (!revenue_latest) return missing("Revenue");
-      let score: number;
-      let rationale: string;
-      if (revenue_latest >= 2_000_000) {
-        score = 10; rationale = `Strong revenue of ${formatCurrency(revenue_latest)}.`;
-      } else if (revenue_latest >= 1_000_000) {
-        score = 8;  rationale = `Solid revenue of ${formatCurrency(revenue_latest)}.`;
-      } else if (revenue_latest >= 500_000) {
-        score = 6;  rationale = `Moderate revenue of ${formatCurrency(revenue_latest)}.`;
-      } else if (revenue_latest >= 200_000) {
-        score = 4;  rationale = `Low revenue of ${formatCurrency(revenue_latest)} — limited scale.`;
-      } else {
-        score = 2;  rationale = `Very low revenue of ${formatCurrency(revenue_latest)}.`;
-      }
-      return { score, raw_value: formatCurrency(revenue_latest), rationale, status: "known" };
-    },
-  },
-
-  // ── 3. SDE or EBITDA ─────────────────────────────────────────────────────────
-  {
-    kpi_key: "sde_or_ebitda",
-    label: "SDE / EBITDA",
-    description: "Owner earnings or EBITDA — the core profitability measure",
-    weight: 0.12,
-    score: ({ sde_latest, ebitda_latest }) => {
-      const earnings = sde_latest ?? ebitda_latest;
-      const label = sde_latest ? "SDE" : "EBITDA";
-      if (!earnings) return missing("SDE or EBITDA");
-      let score: number;
-      let rationale: string;
-      if (earnings >= 500_000) {
-        score = 10; rationale = `Strong ${label} of ${formatCurrency(earnings)}.`;
-      } else if (earnings >= 250_000) {
-        score = 8;  rationale = `Good ${label} of ${formatCurrency(earnings)}.`;
-      } else if (earnings >= 100_000) {
-        score = 6;  rationale = `Acceptable ${label} of ${formatCurrency(earnings)}.`;
-      } else if (earnings >= 50_000) {
-        score = 4;  rationale = `Low ${label} of ${formatCurrency(earnings)} — thin cushion.`;
-      } else {
-        score = 2;  rationale = `Very low ${label} of ${formatCurrency(earnings)}.`;
-      }
-      const status: KpiStatus = sde_latest ? "known" : "estimated";
-      return { score, raw_value: formatCurrency(earnings), rationale, status };
-    },
-  },
-
-  // ── 4. Price Multiple ────────────────────────────────────────────────────────
+  // ── 1. Purchase Multiple ─────────────────────────────────────────────────────
+  // Core triage check: is the asking price reasonable relative to earnings?
   {
     kpi_key: "price_multiple",
-    label: "Price Multiple",
+    label: "Purchase Multiple",
     description: "Asking price ÷ SDE (or EBITDA) — key valuation metric",
-    weight: 0.12,
+    weight: 0.30,
     score: ({ asking_price, sde_latest, ebitda_latest }) => {
       const earnings = sde_latest ?? ebitda_latest;
-      if (!asking_price || !earnings || earnings <= 0) return missing("Price multiple");
+      if (!asking_price || !earnings || earnings <= 0) return missing("Purchase multiple");
       const multiple = asking_price / earnings;
       let score: number;
       let rationale: string;
       if (multiple <= 2.0) {
-        score = 10; rationale = `Excellent multiple of ${multiple.toFixed(2)}x — strong value.`;
+        score = 10; rationale = `Excellent multiple of ${multiple.toFixed(2)}x — strong value relative to earnings.`;
       } else if (multiple <= 3.0) {
-        score = 8;  rationale = `Good multiple of ${multiple.toFixed(2)}x — fair value.`;
+        score = 8;  rationale = `Good multiple of ${multiple.toFixed(2)}x — fair market value.`;
       } else if (multiple <= 4.0) {
-        score = 6;  rationale = `Average multiple of ${multiple.toFixed(2)}x — market rate.`;
+        score = 6;  rationale = `Average multiple of ${multiple.toFixed(2)}x — at market rate.`;
       } else if (multiple <= 5.5) {
-        score = 4;  rationale = `High multiple of ${multiple.toFixed(2)}x — premium pricing.`;
+        score = 4;  rationale = `High multiple of ${multiple.toFixed(2)}x — premium pricing, validate earnings quality.`;
       } else {
-        score = 2;  rationale = `Very high multiple of ${multiple.toFixed(2)}x — difficult to justify.`;
+        score = 2;  rationale = `Very high multiple of ${multiple.toFixed(2)}x — difficult to justify returns.`;
       }
       return { score, raw_value: `${multiple.toFixed(2)}x`, rationale, status: "known" };
     },
   },
 
-  // ── 5. Earnings Margin ───────────────────────────────────────────────────────
+  // ── 2. SDE Margin ────────────────────────────────────────────────────────────
+  // Profitability quality: what % of revenue flows to the owner?
   {
     kpi_key: "earnings_margin",
-    label: "Earnings Margin",
-    description: "SDE or EBITDA as a % of revenue",
-    weight: 0.10,
+    label: "SDE Margin",
+    description: "SDE or EBITDA as a % of revenue — profitability quality",
+    weight: 0.20,
     score: ({ revenue_latest, sde_latest, ebitda_latest }) => {
       const earnings = sde_latest ?? ebitda_latest;
-      if (!revenue_latest || !earnings || revenue_latest <= 0) return missing("Earnings margin");
+      if (!revenue_latest || !earnings || revenue_latest <= 0) return missing("SDE margin");
       const margin = earnings / revenue_latest;
       let score: number;
       let rationale: string;
       if (margin >= 0.30) {
-        score = 10; rationale = `Excellent margin of ${formatPct(margin)} — highly profitable.`;
+        score = 10; rationale = `Excellent SDE margin of ${formatPct(margin)} — highly profitable.`;
       } else if (margin >= 0.20) {
-        score = 8;  rationale = `Good margin of ${formatPct(margin)}.`;
+        score = 8;  rationale = `Good SDE margin of ${formatPct(margin)}.`;
       } else if (margin >= 0.12) {
-        score = 6;  rationale = `Average margin of ${formatPct(margin)}.`;
+        score = 6;  rationale = `Average SDE margin of ${formatPct(margin)}.`;
       } else if (margin >= 0.06) {
-        score = 4;  rationale = `Thin margin of ${formatPct(margin)} — limited buffer.`;
+        score = 4;  rationale = `Thin SDE margin of ${formatPct(margin)} — limited buffer for debt service.`;
       } else {
-        score = 2;  rationale = `Very thin margin of ${formatPct(margin)} — high risk.`;
+        score = 2;  rationale = `Very thin SDE margin of ${formatPct(margin)} — high risk.`;
       }
       return { score, raw_value: formatPct(margin), rationale, status: "known" };
     },
   },
 
-  // ── 6. Revenue Trend ─────────────────────────────────────────────────────────
+  // ── 3. Revenue per Employee ──────────────────────────────────────────────────
+  // Labor efficiency: how much revenue does each employee generate?
   {
-    kpi_key: "revenue_trend",
-    label: "Revenue Trend",
-    description: "Year-over-year revenue growth or decline",
-    weight: 0.08,
-    score: ({ revenue_latest, revenue_year_1, revenue_year_2 }) => {
-      if (!revenue_latest || !revenue_year_1) return missing("Revenue trend");
-      const yoy = (revenue_latest - revenue_year_1) / revenue_year_1;
+    kpi_key: "revenue_per_employee",
+    label: "Revenue / Employee",
+    description: "Annual revenue per full-time employee — labor efficiency",
+    weight: 0.12,
+    score: ({ revenue_latest, employees_ft, employees_pt }) => {
+      if (!revenue_latest) return missing("Revenue per employee");
+      const totalEmployees = (employees_ft ?? 0) + Math.round((employees_pt ?? 0) * 0.5);
+      if (totalEmployees <= 0) return missing("Employee count");
+      const rpe = revenue_latest / totalEmployees;
       let score: number;
       let rationale: string;
-      if (yoy >= 0.15) {
-        score = 10; rationale = `Strong growth of ${formatPct(yoy)} YoY.`;
-      } else if (yoy >= 0.05) {
-        score = 8;  rationale = `Steady growth of ${formatPct(yoy)} YoY.`;
-      } else if (yoy >= -0.02) {
-        score = 6;  rationale = `Flat revenue (${formatPct(yoy)} YoY).`;
-      } else if (yoy >= -0.10) {
-        score = 4;  rationale = `Revenue declining ${formatPct(Math.abs(yoy))} YoY — investigate.`;
+      if (rpe >= 300_000) {
+        score = 10; rationale = `Excellent revenue per employee of ${formatCurrency(rpe)} — highly efficient.`;
+      } else if (rpe >= 200_000) {
+        score = 8;  rationale = `Good revenue per employee of ${formatCurrency(rpe)}.`;
+      } else if (rpe >= 120_000) {
+        score = 6;  rationale = `Average revenue per employee of ${formatCurrency(rpe)}.`;
+      } else if (rpe >= 70_000) {
+        score = 4;  rationale = `Below-average revenue per employee of ${formatCurrency(rpe)} — labor-intensive.`;
       } else {
-        score = 2;  rationale = `Significant revenue decline of ${formatPct(Math.abs(yoy))} YoY.`;
+        score = 2;  rationale = `Low revenue per employee of ${formatCurrency(rpe)} — high labor cost relative to revenue.`;
       }
-      const status: KpiStatus = revenue_year_2 ? "known" : "estimated";
-      return { score, raw_value: `${yoy >= 0 ? "+" : ""}${formatPct(yoy)} YoY`, rationale, status };
+      return { score, raw_value: formatCurrency(rpe), rationale, status: "known" };
     },
   },
 
-  // ── 7. Earnings Trend ────────────────────────────────────────────────────────
+  // ── 4. Rent Ratio ────────────────────────────────────────────────────────────
+  // Fixed-cost exposure: what % of revenue goes to rent?
   {
-    kpi_key: "earnings_trend",
-    label: "Earnings Trend",
-    description: "Year-over-year SDE growth or decline",
-    weight: 0.08,
-    score: ({ sde_latest, sde_year_1 }) => {
-      if (!sde_latest || !sde_year_1) return missing("Earnings trend");
-      const yoy = (sde_latest - sde_year_1) / Math.abs(sde_year_1);
+    kpi_key: "rent_ratio",
+    label: "Rent Ratio",
+    description: "Annual rent as a % of revenue — fixed-cost exposure",
+    weight: 0.10,
+    score: ({ lease_monthly_rent, revenue_latest }) => {
+      if (!lease_monthly_rent || !revenue_latest || revenue_latest <= 0) return missing("Rent ratio");
+      const annualRent = lease_monthly_rent * 12;
+      const ratio = annualRent / revenue_latest;
       let score: number;
       let rationale: string;
-      if (yoy >= 0.15) {
-        score = 10; rationale = `Strong earnings growth of ${formatPct(yoy)} YoY.`;
-      } else if (yoy >= 0.05) {
-        score = 8;  rationale = `Steady earnings growth of ${formatPct(yoy)} YoY.`;
-      } else if (yoy >= -0.02) {
-        score = 6;  rationale = `Flat earnings (${formatPct(yoy)} YoY).`;
-      } else if (yoy >= -0.15) {
-        score = 4;  rationale = `Earnings declining ${formatPct(Math.abs(yoy))} YoY.`;
+      if (ratio <= 0.05) {
+        score = 10; rationale = `Excellent rent ratio of ${formatPct(ratio)} — very low fixed-cost exposure.`;
+      } else if (ratio <= 0.10) {
+        score = 8;  rationale = `Good rent ratio of ${formatPct(ratio)}.`;
+      } else if (ratio <= 0.15) {
+        score = 6;  rationale = `Average rent ratio of ${formatPct(ratio)}.`;
+      } else if (ratio <= 0.25) {
+        score = 4;  rationale = `High rent ratio of ${formatPct(ratio)} — significant fixed-cost exposure.`;
       } else {
-        score = 2;  rationale = `Significant earnings decline of ${formatPct(Math.abs(yoy))} YoY.`;
+        score = 2;  rationale = `Very high rent ratio of ${formatPct(ratio)} — rent is a major risk factor.`;
       }
-      return { score, raw_value: `${yoy >= 0 ? "+" : ""}${formatPct(yoy)} YoY`, rationale, status: "known" };
+      return { score, raw_value: formatPct(ratio), rationale, status: "known" };
     },
   },
 
-  // ── 8. Customer Concentration ────────────────────────────────────────────────
+  // ── 5. Business Stability ────────────────────────────────────────────────────
+  // Track record + revenue trend: is this a stable, proven business?
   {
-    kpi_key: "customer_concentration",
-    label: "Customer Concentration",
-    description: "Revenue dependency on top customer(s)",
-    weight: 0.08,
-    score: ({ customer_concentration_top1_pct }) => {
-      if (customer_concentration_top1_pct == null) return missing("Customer concentration");
-      const pct = customer_concentration_top1_pct;
-      let score: number;
-      let rationale: string;
-      if (pct <= 0.10) {
-        score = 10; rationale = `Excellent diversification — top customer is only ${formatPct(pct)}.`;
-      } else if (pct <= 0.20) {
-        score = 8;  rationale = `Good diversification — top customer is ${formatPct(pct)}.`;
-      } else if (pct <= 0.35) {
-        score = 6;  rationale = `Moderate concentration — top customer is ${formatPct(pct)}.`;
-      } else if (pct <= 0.50) {
-        score = 4;  rationale = `High concentration — top customer is ${formatPct(pct)} of revenue.`;
+    kpi_key: "business_stability",
+    label: "Business Stability",
+    description: "Years in business + revenue trend — proven track record",
+    weight: 0.10,
+    score: ({ years_in_business, revenue_latest, revenue_year_1 }) => {
+      if (!years_in_business) return missing("Years in business");
+
+      let baseScore: number;
+      let ageNote: string;
+      if (years_in_business >= 15) {
+        baseScore = 10; ageNote = `${years_in_business} years in business`;
+      } else if (years_in_business >= 8) {
+        baseScore = 8;  ageNote = `${years_in_business} years in business`;
+      } else if (years_in_business >= 4) {
+        baseScore = 6;  ageNote = `${years_in_business} years in business`;
+      } else if (years_in_business >= 2) {
+        baseScore = 4;  ageNote = `${years_in_business} years in business — limited track record`;
       } else {
-        score = 2;  rationale = `Critical concentration — top customer is ${formatPct(pct)} of revenue.`;
+        baseScore = 2;  ageNote = `Only ${years_in_business} year(s) in business`;
       }
-      return { score, raw_value: formatPct(pct), rationale, status: "known" };
+
+      // Adjust ±1 for revenue trend if available
+      let trendAdj = 0;
+      let trendNote = "";
+      if (revenue_latest && revenue_year_1 && revenue_year_1 > 0) {
+        const yoy = (revenue_latest - revenue_year_1) / revenue_year_1;
+        if (yoy >= 0.10) { trendAdj = 1; trendNote = `, revenue growing ${formatPct(yoy)} YoY`; }
+        else if (yoy <= -0.10) { trendAdj = -1; trendNote = `, revenue declining ${formatPct(Math.abs(yoy))} YoY`; }
+        else { trendNote = `, revenue flat YoY`; }
+      }
+
+      const finalScore = Math.max(0, Math.min(10, baseScore + trendAdj));
+      const status: KpiStatus = revenue_year_1 ? "known" : "estimated";
+
+      return {
+        score: finalScore,
+        raw_value: `${years_in_business}yr${trendNote}`,
+        rationale: `${ageNote}${trendNote}.`,
+        status,
+      };
     },
   },
 
-  // ── 9. Recurring Revenue Quality ─────────────────────────────────────────────
-  {
-    kpi_key: "recurring_revenue_quality",
-    label: "Recurring Revenue",
-    description: "Percentage of revenue that is recurring or contracted",
-    weight: 0.08,
-    score: ({ recurring_revenue_pct }) => {
-      if (recurring_revenue_pct == null) return missing("Recurring revenue %");
-      const pct = recurring_revenue_pct;
-      let score: number;
-      let rationale: string;
-      if (pct >= 0.70) {
-        score = 10; rationale = `Excellent — ${formatPct(pct)} recurring revenue.`;
-      } else if (pct >= 0.50) {
-        score = 8;  rationale = `Good — ${formatPct(pct)} recurring revenue.`;
-      } else if (pct >= 0.30) {
-        score = 6;  rationale = `Moderate — ${formatPct(pct)} recurring revenue.`;
-      } else if (pct >= 0.10) {
-        score = 4;  rationale = `Low — only ${formatPct(pct)} recurring revenue.`;
-      } else {
-        score = 2;  rationale = `Minimal recurring revenue (${formatPct(pct)}) — transactional model.`;
-      }
-      return { score, raw_value: formatPct(pct), rationale, status: "known" };
-    },
-  },
-
-  // ── 10. Owner Dependence ─────────────────────────────────────────────────────
+  // ── 6. Owner Dependence ──────────────────────────────────────────────────────
+  // Transition risk: how much does the business depend on the current owner?
   {
     kpi_key: "owner_dependence",
     label: "Owner Dependence",
     description: "How much the business relies on the current owner",
-    weight: 0.08,
+    weight: 0.10,
     score: ({ owner_hours_per_week, owner_in_sales, owner_in_operations, manager_in_place }) => {
       const hasData = owner_hours_per_week != null || owner_in_sales != null || manager_in_place != null;
       if (!hasData) return missing("Owner dependence indicators");
@@ -363,70 +306,55 @@ export const KPI_DEFINITIONS: KpiDefinition[] = [
       else if (riskPoints === 3) score = 4;
       else score = 2;
 
+      const rawLabel = riskPoints <= 0 ? "Low" : riskPoints <= 1 ? "Low-Med" : riskPoints <= 2 ? "Medium" : "High";
       const rationale = notes.length > 0
-        ? `Owner dependence indicators: ${notes.join(", ")}.`
+        ? `Owner dependence: ${notes.join(", ")}.`
         : "Owner dependence assessed from available data.";
 
-      return { score, raw_value: riskPoints <= 1 ? "Low" : riskPoints <= 2 ? "Medium" : "High", rationale, status: "known" };
+      return { score, raw_value: rawLabel, rationale, status: "known" };
     },
   },
 
-  // ── 11. Management Depth ─────────────────────────────────────────────────────
+  // ── 7. Revenue Quality ───────────────────────────────────────────────────────
+  // Recurring revenue % and customer concentration — revenue reliability
   {
-    kpi_key: "management_depth",
-    label: "Management Depth",
-    description: "Quality of management team beyond the owner",
-    weight: 0.07,
-    score: ({ manager_in_place, employees_ft, employees_pt }) => {
-      const totalEmployees = (employees_ft ?? 0) + (employees_pt ?? 0);
-      const hasData = manager_in_place != null || employees_ft != null;
-      if (!hasData) return missing("Management depth indicators");
+    kpi_key: "revenue_quality",
+    label: "Revenue Quality",
+    description: "Recurring revenue % and customer concentration",
+    weight: 0.08,
+    score: ({ recurring_revenue_pct, customer_concentration_top1_pct }) => {
+      const hasRecurring = recurring_revenue_pct != null;
+      const hasConcentration = customer_concentration_top1_pct != null;
 
-      let score: number;
-      let rationale: string;
+      if (!hasRecurring && !hasConcentration) return missing("Revenue quality indicators");
 
-      if (manager_in_place === true && totalEmployees >= 5) {
-        score = 10; rationale = `Strong — manager in place with ${totalEmployees} employees.`;
-      } else if (manager_in_place === true) {
-        score = 8;  rationale = `Good — manager in place (${totalEmployees} employees).`;
-      } else if (totalEmployees >= 10) {
-        score = 6;  rationale = `${totalEmployees} employees but no confirmed manager in place.`;
-      } else if (totalEmployees >= 3) {
-        score = 4;  rationale = `Small team (${totalEmployees} employees), no manager confirmed.`;
-      } else {
-        score = 2;  rationale = `Minimal team (${totalEmployees} employees) — high key-person risk.`;
+      let score = 6; // neutral baseline
+      const notes: string[] = [];
+
+      if (hasRecurring) {
+        const pct = recurring_revenue_pct!;
+        if (pct >= 0.70) { score = Math.min(10, score + 3); notes.push(`${formatPct(pct)} recurring`); }
+        else if (pct >= 0.50) { score = Math.min(10, score + 2); notes.push(`${formatPct(pct)} recurring`); }
+        else if (pct >= 0.30) { score = Math.min(10, score + 1); notes.push(`${formatPct(pct)} recurring`); }
+        else if (pct < 0.10) { score = Math.max(2, score - 2); notes.push(`low recurring (${formatPct(pct)})`); }
+        else { notes.push(`${formatPct(pct)} recurring`); }
       }
 
-      return { score, raw_value: manager_in_place === true ? "Manager in place" : `${totalEmployees} employees`, rationale, status: "known" };
-    },
-  },
-
-  // ── 12. Risk Flags ───────────────────────────────────────────────────────────
-  {
-    kpi_key: "risk_flags",
-    label: "Risk Flags",
-    description: "Legal, compliance, or licensing risks",
-    weight: 0.06,
-    score: ({ legal_risk_flag, compliance_risk_flag, licensing_dependency }) => {
-      const hasData = legal_risk_flag != null || compliance_risk_flag != null || licensing_dependency != null;
-      if (!hasData) return missing("Risk flag data");
-
-      const flags: string[] = [];
-      if (legal_risk_flag === true)      flags.push("legal risk");
-      if (compliance_risk_flag === true) flags.push("compliance risk");
-      if (licensing_dependency === true) flags.push("licensing dependency");
-
-      let score: number;
-      let rationale: string;
-      if (flags.length === 0) {
-        score = 10; rationale = "No risk flags identified.";
-      } else if (flags.length === 1) {
-        score = 6;  rationale = `One risk flag: ${flags[0]}.`;
-      } else {
-        score = 2;  rationale = `Multiple risk flags: ${flags.join(", ")}.`;
+      if (hasConcentration) {
+        const pct = customer_concentration_top1_pct!;
+        if (pct > 0.50) { score = Math.max(2, score - 2); notes.push(`top customer ${formatPct(pct)} of revenue`); }
+        else if (pct > 0.35) { score = Math.max(3, score - 1); notes.push(`top customer ${formatPct(pct)}`); }
+        else if (pct <= 0.10) { score = Math.min(10, score + 1); notes.push(`well-diversified (top customer ${formatPct(pct)})`); }
+        else { notes.push(`top customer ${formatPct(pct)}`); }
       }
 
-      return { score, raw_value: flags.length === 0 ? "None" : flags.join(", "), rationale, status: "known" };
+      const status: KpiStatus = hasRecurring && hasConcentration ? "known" : "estimated";
+      return {
+        score: Math.max(0, Math.min(10, score)),
+        raw_value: notes.join(" · "),
+        rationale: `Revenue quality: ${notes.join(", ")}.`,
+        status,
+      };
     },
   },
 

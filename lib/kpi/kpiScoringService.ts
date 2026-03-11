@@ -241,18 +241,14 @@ export type ScoringConfidence = {
  * Used to determine which fact values were actually used in scoring.
  */
 const KPI_FACT_KEYS: Record<string, string[]> = {
-  asking_price:              ["asking_price"],
-  revenue:                   ["revenue_latest"],
-  sde_or_ebitda:             ["sde_latest", "ebitda_latest"],
-  price_multiple:            ["asking_price", "sde_latest", "ebitda_latest"],
-  earnings_margin:           ["revenue_latest", "sde_latest", "ebitda_latest"],
-  revenue_trend:             ["revenue_latest", "revenue_year_1", "revenue_year_2"],
-  earnings_trend:            ["sde_latest", "sde_year_1"],
-  customer_concentration:    ["customer_concentration_top1_pct"],
-  recurring_revenue_quality: ["recurring_revenue_pct"],
-  owner_dependence:          ["owner_hours_per_week", "owner_in_sales", "owner_in_operations", "manager_in_place"],
-  management_depth:          ["manager_in_place", "employees_ft", "employees_pt"],
-  risk_flags:                ["legal_risk_flag", "compliance_risk_flag", "licensing_dependency"],
+  // V1 Triage KPIs
+  price_multiple:      ["asking_price", "sde_latest", "ebitda_latest"],
+  earnings_margin:     ["revenue_latest", "sde_latest", "ebitda_latest"],
+  revenue_per_employee:["revenue_latest", "employees_ft", "employees_pt"],
+  rent_ratio:          ["lease_monthly_rent", "revenue_latest"],
+  business_stability:  ["years_in_business", "revenue_latest", "revenue_year_1"],
+  owner_dependence:    ["owner_hours_per_week", "owner_in_sales", "owner_in_operations", "manager_in_place"],
+  revenue_quality:     ["recurring_revenue_pct", "customer_concentration_top1_pct"],
 };
 
 export function computeScoringConfidence(
@@ -332,6 +328,8 @@ export function computeKpiScorecard(
     revenue_year_1:                  rawInputs.revenue_year_1 as number | null ?? null,
     revenue_year_2:                  rawInputs.revenue_year_2 as number | null ?? null,
     sde_year_1:                      rawInputs.sde_year_1 as number | null ?? null,
+    lease_monthly_rent:              rawInputs.lease_monthly_rent as number | null ?? null,
+    years_in_business:               rawInputs.years_in_business as number | null ?? null,
     customer_concentration_top1_pct: rawInputs.customer_concentration_top1_pct as number | null ?? null,
     recurring_revenue_pct:           rawInputs.recurring_revenue_pct as number | null ?? null,
     owner_hours_per_week:            rawInputs.owner_hours_per_week as number | null ?? null,
