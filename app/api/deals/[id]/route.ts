@@ -105,6 +105,7 @@ export async function PATCH(
     "state", "county", "city", "location",
     "deal_source_category", "deal_source_detail",
     "status", "asking_price", "sde", "multiple",
+    "broker_name", "broker_email", "broker_phone",
   ] as const;
 
   type EditableField = typeof editableFields[number];

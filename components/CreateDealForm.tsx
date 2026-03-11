@@ -77,6 +77,18 @@ type ExtractionState =
   | { status: "done"; facts: ExtractedFact[]; missingRequired: string[] }
   | { status: "error"; message: string };
 
+type IntakeRejection = {
+  dealId: string;
+  verdict: string;
+  flags: string[];
+  score: number | null;
+  opinion: string | null;
+  industry: string | null;
+  location: string | null;
+  price: string | null;
+  sde: string | null;
+};
+
 // ─── File icon helper ─────────────────────────────────────────────────────────
 
 function fileIcon(file: File) {
@@ -115,6 +127,8 @@ export default function CreateDealForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("Creating…");
+  const [intakeRejection, setIntakeRejection] = useState<IntakeRejection | null>(null);
+  const [keepingAnyway, setKeepingAnyway] = useState(false);
 
   // Paste mode
   const [pasteText, setPasteText] = useState("");
@@ -351,13 +365,74 @@ export default function CreateDealForm() {
           extracted_facts: extractedFacts,
         }),
       });
-      const data = await res.json() as { id?: string; error?: string };
+      const data = await res.json() as {
+        id?: string;
+        error?: string;
+        intake_verdict?: string | null;
+        intake_flags?: string[];
+        intake_score?: number | null;
+        intake_opinion?: string | null;
+      };
       if (!res.ok || !data.id) {
         setError(data.error ?? "Failed to create deal. Please try again.");
         setLoading(false);
         return;
       }
       dealId = data.id;
+
+      // ── Intake rejection check ─────────────────────────────────────────────
+      // If the initial assessment verdict is PROBABLY_PASS, show the rejection
+      // screen instead of navigating to the deal. The user can dismiss or keep.
+      if (data.intake_verdict === "PROBABLY_PASS") {
+        // Upload files and notes first so they're available if user keeps the deal
+        const filesToUploadEarly = mode === "paste" ? stagedFiles : manualFiles;
+        if (filesToUploadEarly.length > 0) {
+          setLoadingLabel(`Uploading ${filesToUploadEarly.length} file${filesToUploadEarly.length > 1 ? "s" : ""}…`);
+          const BATCH = 3;
+          for (let i = 0; i < filesToUploadEarly.length; i += BATCH) {
+            const batch = filesToUploadEarly.slice(i, i + BATCH);
+            const form = new FormData();
+            for (const sf of batch) form.append("files", sf.file);
+            form.append("captureSource", "file");
+            try {
+              await fetch(`/api/deals/${dealId}/files`, { method: "POST", body: form });
+            } catch (err) {
+              console.warn("[createDeal] File upload batch error:", err);
+            }
+          }
+        }
+
+        // Fire-and-forget: record the rejection in the audit log and clean up Drive
+        fetch(`/api/deals/${dealId}/intake-reject`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "reject",
+            rejection_reason: "PROBABLY_PASS",
+            rejection_flags: data.intake_flags ?? [],
+            score: data.intake_score ?? null,
+            ai_summary_short: data.intake_opinion ?? null,
+            extracted_industry: industryVal,
+            extracted_location: locationVal,
+            extracted_price: askingPriceVal,
+            extracted_sde: sdeVal,
+          }),
+        }).catch(() => {});
+
+        setIntakeRejection({
+          dealId,
+          verdict: "PROBABLY_PASS",
+          flags: data.intake_flags ?? [],
+          score: data.intake_score ?? null,
+          opinion: data.intake_opinion ?? null,
+          industry: industryVal,
+          location: locationVal,
+          price: askingPriceVal,
+          sde: sdeVal,
+        });
+        setLoading(false);
+        return;
+      }
     } catch {
       setError("Network error. Please try again.");
       setLoading(false);
@@ -397,7 +472,137 @@ export default function CreateDealForm() {
     router.push(`/deals/${dealId}?tab=analysis`);
   }
 
+  // ── Keep Anyway handler ───────────────────────────────────────────────────
+  async function handleKeepAnyway() {
+    if (!intakeRejection) return;
+    setKeepingAnyway(true);
+    try {
+      await fetch(`/api/deals/${intakeRejection.dealId}/intake-reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "keep" }),
+      });
+    } catch {
+      // Non-fatal — navigate anyway
+    }
+    router.push(`/deals/${intakeRejection.dealId}?tab=analysis`);
+  }
+
   // ─── Render ───────────────────────────────────────────────────────────────
+
+  // ── Intake rejection screen ───────────────────────────────────────────────
+  if (intakeRejection) {
+    return (
+      <div className="flex flex-col gap-5">
+        {/* Header */}
+        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-5">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </span>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-semibold text-red-800 leading-snug">
+                This listing was screened out
+              </h2>
+              <p className="mt-1 text-sm text-red-700 leading-relaxed">
+                The initial assessment flagged this deal as unlikely to meet your criteria. It was not added to your deal list.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Score & opinion */}
+        {(intakeRejection.score !== null || intakeRejection.opinion) && (
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 flex flex-col gap-3">
+            {intakeRejection.score !== null && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500 font-medium">Initial score</span>
+                <span className="text-sm font-bold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full">
+                  {intakeRejection.score.toFixed(1)}/10
+                </span>
+              </div>
+            )}
+            {intakeRejection.opinion && (
+              <p className="text-sm text-slate-600 leading-relaxed">{intakeRejection.opinion}</p>
+            )}
+          </div>
+        )}
+
+        {/* Flags */}
+        {intakeRejection.flags.length > 0 && (
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Reasons</p>
+            <ul className="flex flex-col gap-1.5">
+              {intakeRejection.flags.map((flag, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                  {flag}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Deal summary */}
+        {(intakeRejection.industry || intakeRejection.location || intakeRejection.price || intakeRejection.sde) && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Extracted details</p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+              {intakeRejection.industry && (
+                <>
+                  <span className="text-slate-500">Industry</span>
+                  <span className="text-slate-800 font-medium">{intakeRejection.industry}</span>
+                </>
+              )}
+              {intakeRejection.location && (
+                <>
+                  <span className="text-slate-500">Location</span>
+                  <span className="text-slate-800 font-medium">{intakeRejection.location}</span>
+                </>
+              )}
+              {intakeRejection.price && (
+                <>
+                  <span className="text-slate-500">Asking Price</span>
+                  <span className="text-slate-800 font-medium">{formatCurrency(intakeRejection.price)}</span>
+                </>
+              )}
+              {intakeRejection.sde && (
+                <>
+                  <span className="text-slate-500">SDE</span>
+                  <span className="text-slate-800 font-medium">{formatCurrency(intakeRejection.sde)}</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex flex-col gap-2 pt-1">
+          <button
+            type="button"
+            onClick={handleKeepAnyway}
+            disabled={keepingAnyway}
+            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {keepingAnyway ? "Opening deal…" : "Keep anyway — open the deal"}
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard")}
+            className="w-full rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+          >
+            Dismiss — go back to dashboard
+          </button>
+        </div>
+
+        <p className="text-xs text-slate-400 text-center leading-relaxed">
+          Screened-out listings are not saved to your deal list and do not affect your statistics.
+        </p>
+      </div>
+    );
+  }
 
   const showReviewPanel = mode === "paste" && extraction.status === "done";
   const showSubmit = mode === "manual" || showReviewPanel;

@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 2,
+  "industry": "Dental Practice",
+  "location": "Orlando, FL",
+  "broker_name": "Christopher Allen",
+  "broker_firm": "Transworld Business Advisors",
+  "broker_phone": "230-435-8058",
+  "years_in_business": 15,
+  "employees": 9,
+  "listing": {
+    "asking_price": 1014530,
+    "revenue": 3830784,
+    "sde": 537799,
+    "multiple": 1.9
+  },
+  "email": {
+    "asking_price": 1001877,
+    "revenue": 3516827,
+    "sde": 489938
+  },
+  "financials": {
+    "revenue_ttm": 3790222,
+    "sde_ttm": 538808,
+    "revenue_2022": 3107982,
+    "revenue_2023": 3449102,
+    "sde_2022": 431046,
+    "sde_2023": 484927
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 8.2%. SDE in email differs by 8.9%."
+}

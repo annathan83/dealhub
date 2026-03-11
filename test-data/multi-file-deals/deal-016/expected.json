@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 16,
+  "industry": "Auto Repair Shop",
+  "location": "Orlando, FL",
+  "broker_name": "Daniel Robinson",
+  "broker_firm": "Sunbelt Business Advisors",
+  "broker_phone": "936-215-5227",
+  "years_in_business": 18,
+  "employees": 26,
+  "listing": {
+    "asking_price": 838992,
+    "revenue": 3286889,
+    "sde": 370631,
+    "multiple": 2.3
+  },
+  "email": {
+    "asking_price": 805453,
+    "revenue": 3089471,
+    "sde": 338255
+  },
+  "financials": {
+    "revenue_ttm": 3266550,
+    "sde_ttm": 370366,
+    "revenue_2022": 2678571,
+    "revenue_2023": 2972560,
+    "sde_2022": 296293,
+    "sde_2023": 333329
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 6%. SDE in email differs by 8.7%."
+}

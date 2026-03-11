@@ -1,0 +1,13 @@
+﻿Laundromat -- Financial Summary
+Naples, FL
+
+Year    Revenue         SDE             COGS
+2022    2,615,133    628,607    862,994
+2023    2,902,159    707,183    957,712
+2024    3,189,186    785,759    1,052,431
+
+TTM Revenue: 3,189,186
+TTM SDE:     785,759
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

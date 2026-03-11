@@ -1,0 +1,13 @@
+﻿Laundromat -- Financial Summary
+Orlando, FL
+
+Year    Revenue         SDE             COGS
+2022    385,746    59,786    127,296
+2023    428,084    67,259    141,268
+2024    470,422    74,732    155,239
+
+TTM Revenue: 470,422
+TTM SDE:     74,732
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

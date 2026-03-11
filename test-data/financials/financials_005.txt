@@ -1,0 +1,21 @@
+﻿STAFFING AGENCY -- FINANCIAL SUMMARY
+Tampa, FL
+Prepared for Buyer Review -- Confidential
+
+PROFIT AND LOSS STATEMENT (UNAUDITED)
+
+                          2021          2022          2023          2024
+                          ----          ----          ----          ----
+Revenue               1,899,135    2,178,697    2,503,964    2,981,633
+Cost of Goods Sold    583,101    737,674    849,244    972,370
+Gross Profit          1,316,034    1,441,023    1,654,720    2,009,263
+Operating Expenses    860,619    955,683    1,134,980    1,429,679
+SDE                   455,415    485,340    519,740    579,584
+
+SDE Margin            24%          22.3%          20.8%          19.4%
+
+NOTES:
+- Owner salary addback: included in SDE calculation
+- Depreciation addback: included
+- One-time expenses removed from 2022 and 2023
+- Figures are unaudited and subject to verification

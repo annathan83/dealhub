@@ -29,6 +29,9 @@ type FormState = {
   status: DealStatus;
   asking_price: string;
   sde: string;
+  broker_name: string;
+  broker_email: string;
+  broker_phone: string;
 };
 
 /** Parse a money/number string like "$1.2M", "1,200,000", "240K" → number or null */
@@ -189,6 +192,9 @@ export default function EditDealModal({ deal, onClose }: Props) {
           location: formatLocation(metadata.city, metadata.county, metadata.state) || null,
           deal_source_category: metadata.deal_source_category || null,
           deal_source_detail: metadata.deal_source_detail || null,
+          broker_name: form.broker_name.trim() || null,
+          broker_email: form.broker_email.trim() || null,
+          broker_phone: form.broker_phone.trim() || null,
         }),
       });
 
@@ -328,6 +334,46 @@ export default function EditDealModal({ deal, onClose }: Props) {
                     {computedMultiple ? "auto-calculated" : "enter price + SDE"}
                   </span>
                 </div>
+              </Field>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-100" />
+
+          {/* ── Section: Broker contact ───────────────────── */}
+          <div>
+            <SectionHeader title="Broker contact" description="Primary broker name, email, and phone — optional" />
+            <div className="flex flex-col gap-4">
+              <Field label="Broker name" optional>
+                <input
+                  type="text"
+                  value={form.broker_name}
+                  onChange={(e) => set("broker_name", e.target.value)}
+                  disabled={loading}
+                  className={INPUT}
+                  placeholder="e.g. John Smith"
+                />
+              </Field>
+              <Field label="Broker email" optional>
+                <input
+                  type="email"
+                  value={form.broker_email}
+                  onChange={(e) => set("broker_email", e.target.value)}
+                  disabled={loading}
+                  className={INPUT}
+                  placeholder="e.g. john@broker.com"
+                />
+              </Field>
+              <Field label="Broker phone" optional>
+                <input
+                  type="tel"
+                  value={form.broker_phone}
+                  onChange={(e) => set("broker_phone", e.target.value)}
+                  disabled={loading}
+                  className={INPUT}
+                  placeholder="e.g. (305) 555-1234"
+                />
               </Field>
             </div>
           </div>

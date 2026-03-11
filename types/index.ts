@@ -2,6 +2,14 @@
 
 export type DealStatus = "active" | "closed" | "passed";
 
+/**
+ * Intake lifecycle gate — separate from the main deal status.
+ * - null / "promoted" → visible normal deal (all existing deals)
+ * - "pending"         → deal created, initial scoring in progress
+ * - "rejected"        → screened out at intake; hidden from list and stats
+ */
+export type IntakeStatus = "pending" | "rejected" | "promoted" | null;
+
 export type PassReason =
   | "price_too_high"
   | "financials_dont_work"
@@ -44,6 +52,10 @@ export type Deal = {
   deal_source_category: string | null;
   deal_source_detail: string | null;
   status: DealStatus;
+  /** Optional broker/primary contact — for search and forms. deal_contacts is source of truth. */
+  broker_name: string | null;
+  broker_email: string | null;
+  broker_phone: string | null;
   asking_price: string | null;
   sde: string | null;
   multiple: string | null;
@@ -52,6 +64,8 @@ export type Deal = {
   pass_note: string | null;
   passed_at: string | null;
   triaged_at: string | null;
+  /** Intake lifecycle gate. null or 'promoted' = normal deal. 'rejected' = screened out. */
+  intake_status: IntakeStatus;
   created_at: string;
   updated_at: string;
   // ── NDA milestone (separate from lifecycle status) ────────────────────────

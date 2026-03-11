@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 18,
+  "industry": "Plumbing Company",
+  "location": "Fort Lauderdale, FL",
+  "broker_name": "Susan Clark",
+  "broker_firm": "First Choice Business Brokers",
+  "broker_phone": "(684) 646-4217",
+  "years_in_business": 5,
+  "employees": 33,
+  "listing": {
+    "asking_price": 984389,
+    "revenue": 2758909,
+    "sde": 334240,
+    "multiple": 2.9
+  },
+  "email": {
+    "asking_price": 944493,
+    "revenue": 2547613,
+    "sde": 341093
+  },
+  "financials": {
+    "revenue_ttm": 2691707,
+    "sde_ttm": 334727,
+    "revenue_2022": 2207200,
+    "revenue_2023": 2449453,
+    "sde_2022": 267782,
+    "sde_2023": 301254
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 7.7%. SDE in email differs by 2.1%."
+}

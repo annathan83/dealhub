@@ -5,6 +5,8 @@ import type { Deal, DealStatus, NdaState } from "@/types";
 import { getNdaState } from "@/types";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
 import EditDealModal from "./EditDealModal";
+import BrokerContactCard from "./BrokerContactCard";
+import type { DealContact } from "@/lib/services/contacts/dealContactService";
 
 // ─── Fit badge (compact inline) ───────────────────────────────────────────────
 
@@ -326,16 +328,21 @@ function NdaOverridePopover({
   );
 }
 
+// BrokerContactStrip removed — replaced by BrokerContactCard component.
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DealHeader({
   deal,
   kpiScorecard = null,
   buyerFitLabel = null,
+  contacts = [],
 }: {
   deal: Deal;
   kpiScorecard?: KpiScorecardResult | null;
   buyerFitLabel?: string | null;
+  /** Structured contacts from deal_contacts table */
+  contacts?: DealContact[];
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [ndaPopoverOpen, setNdaPopoverOpen] = useState(false);
@@ -424,6 +431,9 @@ export default function DealHeader({
           </div>
         </div>
 
+        {/* ── Broker contact (at top, near deal title) ─────────────────── */}
+        <BrokerContactCard dealId={deal.id} initialContacts={contacts} />
+
         {/* ── Metrics grid ────────────────────────────────────────────── */}
         {/* Mobile: 2×2 grid. Tablet+: single 4-column row. No absolute  */}
         {/* dividers — they break on mobile. Dividers are CSS border-r    */}
@@ -471,6 +481,7 @@ export default function DealHeader({
             </button>
           </div>
         )}
+
       </div>
 
       {editOpen && (

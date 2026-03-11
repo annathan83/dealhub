@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 3,
+  "industry": "Electrical Contractor",
+  "location": "Clearwater, FL",
+  "broker_name": "David Martinez",
+  "broker_firm": "Southeast Business Brokers",
+  "broker_phone": "914.464.7921",
+  "years_in_business": 20,
+  "employees": 33,
+  "listing": {
+    "asking_price": 1103478,
+    "revenue": 2978287,
+    "sde": 622075,
+    "multiple": 1.8
+  },
+  "email": {
+    "asking_price": 1127808,
+    "revenue": 2847418,
+    "sde": 640387
+  },
+  "financials": {
+    "revenue_ttm": 3001107,
+    "sde_ttm": 608784,
+    "revenue_2022": 2460908,
+    "revenue_2023": 2731007,
+    "sde_2022": 487027,
+    "sde_2023": 547906
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 4.4%. SDE in email differs by 2.9%."
+}

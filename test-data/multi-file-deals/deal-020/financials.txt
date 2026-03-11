@@ -1,0 +1,13 @@
+﻿Laundromat -- Financial Summary
+Jacksonville, FL
+
+Year    Revenue         SDE             COGS
+2022    3,084,111    623,127    1,017,757
+2023    3,422,611    701,018    1,129,462
+2024    3,761,111    778,909    1,241,167
+
+TTM Revenue: 3,761,111
+TTM SDE:     778,909
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

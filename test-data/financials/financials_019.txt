@@ -1,0 +1,17 @@
+﻿HVAC Company -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    1,297,970    209,989    480,393    607,588
+2023    1,403,996    235,011    484,846    684,139
+2024    1,524,275    252,782    500,493    771,000
+
+YoY Revenue Growth:
+  2022 to 2023: 8.2%
+  2023 to 2024: 8.6%
+
+YoY SDE Growth:
+  2022 to 2023: 11.9%
+  2023 to 2024: 7.6%
+
+TTM SDE: 252,782
+Location: Miami, FL

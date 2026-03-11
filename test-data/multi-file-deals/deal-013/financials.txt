@@ -1,0 +1,13 @@
+﻿Physical Therapy Clinic -- Financial Summary
+Jacksonville, FL
+
+Year    Revenue         SDE             COGS
+2022    1,171,379    139,185    386,555
+2023    1,299,945    156,583    428,982
+2024    1,428,511    173,981    471,409
+
+TTM Revenue: 1,428,511
+TTM SDE:     173,981
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

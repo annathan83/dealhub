@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 6,
+  "industry": "Laundromat",
+  "location": "Naples, FL",
+  "broker_name": "Barbara Garcia",
+  "broker_firm": "Coastal Business Advisors",
+  "broker_phone": "456 491 3841",
+  "years_in_business": 13,
+  "employees": 12,
+  "listing": {
+    "asking_price": 1395422,
+    "revenue": 3285624,
+    "sde": 803964,
+    "multiple": 1.7
+  },
+  "email": {
+    "asking_price": 1314652,
+    "revenue": 3322218,
+    "sde": 791607
+  },
+  "financials": {
+    "revenue_ttm": 3189186,
+    "sde_ttm": 785759,
+    "revenue_2022": 2615133,
+    "revenue_2023": 2902159,
+    "sde_2022": 628607,
+    "sde_2023": 707183
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 1.1%. SDE in email differs by 1.5%."
+}

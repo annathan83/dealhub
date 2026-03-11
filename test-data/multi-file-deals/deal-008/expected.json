@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 8,
+  "industry": "Auto Repair Shop",
+  "location": "Tampa, FL",
+  "broker_name": "Linda Hall",
+  "broker_firm": "First Choice Business Brokers",
+  "broker_phone": "(876) 879-4616",
+  "years_in_business": 7,
+  "employees": 36,
+  "listing": {
+    "asking_price": 1084826,
+    "revenue": 3067836,
+    "sde": 578831,
+    "multiple": 1.9
+  },
+  "email": {
+    "asking_price": 1025308,
+    "revenue": 2921539,
+    "sde": 528424
+  },
+  "financials": {
+    "revenue_ttm": 3122771,
+    "sde_ttm": 589507,
+    "revenue_2022": 2560672,
+    "revenue_2023": 2841722,
+    "sde_2022": 471606,
+    "sde_2023": 530556
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 4.8%. SDE in email differs by 8.7%."
+}

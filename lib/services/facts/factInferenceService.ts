@@ -350,6 +350,10 @@ export async function runAndApplyFactInference(
       continue;
     }
 
+    // Auto-confirm high-confidence inferred facts (≥0.7) so users are not
+    // prompted to review derivations that are mathematically certain.
+    const inferenceReviewStatus = inf.confidence >= 0.7 ? "confirmed" : "unreviewed";
+
     // upsertEntityFactValue respects user_override — will not overwrite
     const result = await upsertEntityFactValue({
       entity_id: entityId,
@@ -359,6 +363,7 @@ export async function runAndApplyFactInference(
       status: "estimated",
       confidence: inf.confidence,
       value_source_type: "ai_inferred",
+      review_status: inferenceReviewStatus,
     });
 
     if (result) applied++;

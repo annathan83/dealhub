@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 7,
+  "industry": "Pest Control Company",
+  "location": "Fort Lauderdale, FL",
+  "broker_name": "Lisa Young",
+  "broker_firm": "Southeast Business Brokers",
+  "broker_phone": "433.269.6399",
+  "years_in_business": 18,
+  "employees": 28,
+  "listing": {
+    "asking_price": 482049,
+    "revenue": 1070003,
+    "sde": 241064,
+    "multiple": 2
+  },
+  "email": {
+    "asking_price": 495039,
+    "revenue": 1075214,
+    "sde": 239208
+  },
+  "financials": {
+    "revenue_ttm": 1086576,
+    "sde_ttm": 236971,
+    "revenue_2022": 890992,
+    "revenue_2023": 988784,
+    "sde_2022": 189577,
+    "sde_2023": 213274
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 0.5%. SDE in email differs by 0.8%."
+}

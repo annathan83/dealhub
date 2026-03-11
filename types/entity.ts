@@ -366,38 +366,39 @@ export type AnalysisSnapshot = {
 
 // ─── Entity Events ────────────────────────────────────────────────────────────
 
-export type EntityEventType =
-  // File lifecycle
-  | "file_uploaded"
-  | "file_removed"
-  // Text extraction
-  | "text_extracted"
-  | "ocr_completed"
-  | "transcript_completed"
-  // Fact lifecycle
-  | "facts_extracted"
-  | "fact_updated"
-  | "fact_conflict_detected"
-  | "fact_manually_edited"
-  | "fact_manually_confirmed"
-  | "manual_override_applied"
-  // Analysis lifecycle
-  | "analysis_refreshed"
-  | "revaluation_completed"
-  | "deep_scan_started"
-  | "deep_scan_completed"
-  | "triage_completed"
-  | "deep_analysis_started"
-  | "deep_analysis_completed"
-  | "initial_review_completed"
-  // Entity lifecycle
-  | "entity_passed"
-  | "entity_archived"
-  | "entity_deleted"
-  | "status_changed"
-  // Legacy / compat
-  | "deal_edited"
-  | "entry_added";
+/** All valid entity_events.event_type values. Derive type from this so literals are always accepted. */
+export const ENTITY_EVENT_TYPES = [
+  "file_uploaded",
+  "file_removed",
+  "text_extracted",
+  "ocr_completed",
+  "transcript_completed",
+  "facts_extracted",
+  "fact_updated",
+  "fact_conflict_detected",
+  "fact_manually_edited",
+  "fact_manually_confirmed",
+  "manual_override_applied",
+  "analysis_refreshed",
+  "revaluation_completed",
+  "deep_scan_started",
+  "deep_scan_completed",
+  "triage_completed",
+  "deep_analysis_started",
+  "deep_analysis_completed",
+  "initial_review_completed",
+  "entity_passed",
+  "entity_archived",
+  "entity_deleted",
+  "status_changed",
+  "nda_detected",
+  "nda_marked_signed",
+  "nda_status_updated",
+  "deal_edited",
+  "entry_added",
+] as const;
+
+export type EntityEventType = (typeof ENTITY_EVENT_TYPES)[number];
 
 export type EntityEvent = {
   id: string;

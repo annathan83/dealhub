@@ -1,0 +1,17 @@
+﻿Physical Therapy Clinic -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    713,179    100,015    226,118    387,046
+2023    802,082    107,345    270,775    423,962
+2024    860,989    128,890    316,349    415,750
+
+YoY Revenue Growth:
+  2022 to 2023: 12.5%
+  2023 to 2024: 7.3%
+
+YoY SDE Growth:
+  2022 to 2023: 7.3%
+  2023 to 2024: 20.1%
+
+TTM SDE: 128,890
+Location: Sarasota, FL

@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 14,
+  "industry": "Laundromat",
+  "location": "Orlando, FL",
+  "broker_name": "Robert Clark",
+  "broker_firm": "Southeast Business Brokers",
+  "broker_phone": "343.340.5359",
+  "years_in_business": 18,
+  "employees": 18,
+  "listing": {
+    "asking_price": 182329,
+    "revenue": 475465,
+    "sde": 75839,
+    "multiple": 2.4
+  },
+  "email": {
+    "asking_price": 183999,
+    "revenue": 430251,
+    "sde": 69842
+  },
+  "financials": {
+    "revenue_ttm": 470422,
+    "sde_ttm": 74732,
+    "revenue_2022": 385746,
+    "revenue_2023": 428084,
+    "sde_2022": 59786,
+    "sde_2023": 67259
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 9.5%. SDE in email differs by 7.9%."
+}

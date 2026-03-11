@@ -7,6 +7,21 @@ import type { Deal, DealStatus, NdaState } from "@/types";
 import { getNdaState } from "@/types";
 import { US_STATES, INDUSTRY_CATEGORIES, DEAL_SOURCE_CATEGORIES } from "@/lib/config/dealMetadata";
 import { formatLocation } from "@/lib/config/dealMetadata";
+import { formatPhoneDisplay, looksLikePhone, normalizePhoneForDial } from "@/lib/phoneUtils";
+
+// ─── Broker contact types ─────────────────────────────────────────────────────
+
+export type BrokerInfo = {
+  name: string | null;
+  /** Combined phone/email string for legacy search compatibility */
+  contact: string | null;
+  /** Separate phone field from deal_contacts */
+  phone?: string | null;
+  /** Separate email field from deal_contacts */
+  email?: string | null;
+  /** Brokerage name */
+  brokerage?: string | null;
+};
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -78,6 +93,55 @@ function formatMultiple(raw: string | null): string | null {
   const n = parseFloat(raw.replace(/[^0-9.-]/g, ""));
   if (isNaN(n)) return raw;
   return `${n.toFixed(1)}×`;
+}
+
+// ─── Broker phone button (tel: on mobile, copy on desktop) ───────────────────
+function BrokerPhoneButton({
+  phone,
+  stopPropagation,
+}: {
+  phone: string | null | undefined;
+  stopPropagation?: boolean;
+}) {
+  const dialString = normalizePhoneForDial(phone);
+  const display = formatPhoneDisplay(phone ?? "");
+  const [copied, setCopied] = useState(false);
+
+  if (!dialString) return null;
+
+  function handleClick(e: React.MouseEvent) {
+    if (stopPropagation) e.stopPropagation();
+    e.preventDefault();
+    const isMobile = typeof window !== "undefined" && (window.innerWidth < 768 || "ontouchstart" in window);
+    if (isMobile) {
+      window.location.href = `tel:${dialString}`;
+      return;
+    }
+    navigator.clipboard.writeText(display ?? dialString).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      aria-label={copied ? "Copied" : `Call ${display ?? dialString}`}
+      title={copied ? "Copied!" : `Call ${display ?? dialString}`}
+      className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] w-10 h-10 rounded-lg text-[#1F7A63] hover:bg-[#E8F5F2] transition-colors touch-manipulation"
+    >
+      {copied ? (
+        <svg className="w-5 h-5 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 function matchSdeFilter(raw: string | null, filter: SdeFilterKey): boolean {
@@ -409,7 +473,7 @@ function FilterPanel({
 
 // ─── Mobile deal card ─────────────────────────────────────────────────────────
 
-function DealCard({ deal, score, fit }: { deal: Deal; score: number | undefined; fit: string | undefined }) {
+function DealCard({ deal, score, fit, broker }: { deal: Deal; score: number | undefined; fit: string | undefined; broker?: BrokerInfo }) {
   const router = useRouter();
   const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
   const displayIndustry = deal.industry ?? deal.industry_category;
@@ -474,6 +538,22 @@ function DealCard({ deal, score, fit }: { deal: Deal; score: number | undefined;
             <ScoreBadge score={score} />
           </div>
         </div>
+
+        {/* Broker: name + phone icon (tap to call or copy) */}
+        {(broker?.name || broker?.phone || broker?.email || deal.broker_name || deal.broker_phone) && (
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <svg className="w-3 h-3 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <span className="text-[11px] text-slate-400">
+              {broker?.name ?? deal.broker_name ?? "Broker"}
+            </span>
+            <BrokerPhoneButton
+              phone={broker?.phone ?? broker?.contact ?? deal.broker_phone}
+              stopPropagation
+            />
+          </div>
+        )}
 
         {/* Dates + NDA row */}
         <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-50">
@@ -547,9 +627,9 @@ function NdaTableBadge({ state }: { state: NdaState }) {
 // ─── Desktop deal row ─────────────────────────────────────────────────────────
 
 function DealRow({
-  deal, score, fit, onClick,
+  deal, score, fit, broker, onClick,
 }: {
-  deal: Deal; score: number | undefined; fit: string | undefined; onClick: () => void;
+  deal: Deal; score: number | undefined; fit: string | undefined; broker?: BrokerInfo; onClick: () => void;
 }) {
   const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
   const displayIndustry = deal.industry ?? deal.industry_category;
@@ -574,9 +654,26 @@ function DealRow({
     >
       {/* Deal identity */}
       <td className="px-4 py-2.5 min-w-[180px]">
-        <span className="font-bold text-[14px] text-[#1E1E1E] group-hover:text-[#1F7A63] transition-colors leading-snug">
+        <span className="font-bold text-[14px] text-[#1E1E1E] group-hover:text-[#1F7A63] transition-colors leading-snug block">
           {deal.name}
         </span>
+      </td>
+
+      {/* Broker: name + phone icon (tel: on mobile, copy on desktop) */}
+      <td className="px-4 py-2.5 max-w-[160px]" onClick={(e) => e.stopPropagation()}>
+        {(broker?.name || broker?.phone || broker?.email || deal.broker_name || deal.broker_phone) ? (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[12px] text-slate-600 truncate">
+              {broker?.name ?? deal.broker_name ?? "Broker"}
+            </span>
+            <BrokerPhoneButton
+              phone={broker?.phone ?? broker?.contact ?? deal.broker_phone}
+              stopPropagation
+            />
+          </div>
+        ) : (
+          <span className="text-[12px] text-slate-300">—</span>
+        )}
       </td>
 
       {/* Industry */}
@@ -674,10 +771,13 @@ export default function DealsTable({
   deals,
   scoreMap = {},
   fitMap = {},
+  brokerMap = {},
 }: {
   deals: Deal[];
   scoreMap?: Record<string, number>;
   fitMap?: Record<string, string>;
+  /** Map of dealId → broker contact info (name + contact string) */
+  brokerMap?: Record<string, BrokerInfo>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -722,13 +822,26 @@ export default function DealsTable({
       const q = search.trim().toLowerCase();
       const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location || "";
       const displayIndustry = deal.industry ?? deal.industry_category ?? "";
+      const broker = brokerMap[deal.id];
+      // Normalize phone digits for search — check deal.broker_* and brokerMap
+      const brokerPhone = broker?.phone ?? broker?.contact ?? deal.broker_phone ?? "";
+      const brokerPhoneDigits = brokerPhone.replace(/\D/g, "");
+      const queryDigits = q.replace(/\D/g, "");
       const matchesSearch =
         !q ||
         deal.name.toLowerCase().includes(q) ||
         displayIndustry.toLowerCase().includes(q) ||
         displayLocation.toLowerCase().includes(q) ||
         deal.deal_source_category?.toLowerCase().includes(q) ||
-        deal.deal_source_detail?.toLowerCase().includes(q);
+        deal.deal_source_detail?.toLowerCase().includes(q) ||
+        broker?.name?.toLowerCase().includes(q) ||
+        broker?.email?.toLowerCase().includes(q) ||
+        broker?.brokerage?.toLowerCase().includes(q) ||
+        broker?.contact?.toLowerCase().includes(q) ||
+        deal.broker_name?.toLowerCase().includes(q) ||
+        deal.broker_email?.toLowerCase().includes(q) ||
+        deal.broker_phone?.toLowerCase().includes(q) ||
+        (queryDigits.length >= 4 && brokerPhoneDigits.includes(queryDigits));
       const matchesStatus   = statusFilter === "all" || deal.status === statusFilter;
       const matchesIndustry = !industryFilter || deal.industry_category === industryFilter || deal.industry === industryFilter;
       const matchesState    = !stateFilter || deal.state === stateFilter;
@@ -752,7 +865,7 @@ export default function DealsTable({
     });
 
     return list;
-  }, [deals, search, statusFilter, industryFilter, stateFilter, sourceFilter, sdeFilter, askFilter, sortKey, sortDir, scoreMap]);
+  }, [deals, search, statusFilter, industryFilter, stateFilter, sourceFilter, sdeFilter, askFilter, sortKey, sortDir, scoreMap, brokerMap]);
 
   const hasSecondaryFilters = !!(statusFilter !== "all" || industryFilter || stateFilter || sourceFilter || sdeFilter || askFilter);
   const isFiltered = !!(search || hasSecondaryFilters);
@@ -814,7 +927,7 @@ export default function DealsTable({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search deals by name, industry, location…"
+              placeholder="Search by name, industry, location, broker…"
               className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-[#E5E7EB] bg-white text-[#1E1E1E] placeholder-[#6B7280] focus:border-[#1F7A63] focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition"
             />
             {search && (
@@ -895,7 +1008,7 @@ export default function DealsTable({
             {/* ── Mobile cards ───────────────────────────────────────────── */}
             <div className="md:hidden flex flex-col gap-2.5">
               {filtered.map((deal) => (
-                <DealCard key={deal.id} deal={deal} score={scoreMap[deal.id]} fit={fitMap[deal.id]} />
+                <DealCard key={deal.id} deal={deal} score={scoreMap[deal.id]} fit={fitMap[deal.id]} broker={brokerMap[deal.id]} />
               ))}
             </div>
 
@@ -906,6 +1019,7 @@ export default function DealsTable({
                   <thead>
                     <tr className="border-b border-[#E5E7EB] bg-[#F8FAF9]">
                       <Th label="Deal"     sortable colKey="name" />
+                      <Th label="Broker" />
                       <Th label="Industry" />
                       <Th label="Location" />
                       <Th label="SDE"      sortable colKey="sde"          align="right" />
@@ -927,6 +1041,7 @@ export default function DealsTable({
                         deal={deal}
                         score={scoreMap[deal.id]}
                         fit={fitMap[deal.id]}
+                        broker={brokerMap[deal.id]}
                         onClick={() => router.push(`/deals/${deal.id}`)}
                       />
                     ))}

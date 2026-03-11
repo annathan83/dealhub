@@ -1,0 +1,17 @@
+﻿Landscaping Company -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    308,022    61,828    102,852    143,342
+2023    360,337    72,843    133,796    153,698
+2024    418,379    83,596    159,706    175,077
+
+YoY Revenue Growth:
+  2022 to 2023: 17%
+  2023 to 2024: 16.1%
+
+YoY SDE Growth:
+  2022 to 2023: 17.8%
+  2023 to 2024: 14.8%
+
+TTM SDE: 83,596
+Location: West Palm Beach, FL

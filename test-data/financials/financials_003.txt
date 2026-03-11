@@ -1,0 +1,16 @@
+﻿Recast P&L -- Insurance Agency
+Sarasota FL
+
+                    FY2022          FY2023          FY2024
+Gross Revenue       1,640,466      1,944,362      2,099,249
+Less: COGS         (562,673)    (719,035)    (754,001)
+Gross Profit        1,077,793      1,225,327      1,345,248
+Less: Op Expenses  (727,412)    (800,681)    (848,389)
+Net Income          350,381      424,646      496,859
+Add: Owner Salary   210,229      254,788      298,115
+Add: Depreciation   52,557      63,697      74,529
+Add: One-Time Items 87,595      106,162      124,215
+                    --------        --------        --------
+Recast SDE          350,381      424,646      496,859
+
+Prepared by seller's accountant. Not audited.

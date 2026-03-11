@@ -1,0 +1,13 @@
+﻿Medical Spa -- Financial Summary
+Sarasota, FL
+
+Year    Revenue         SDE             COGS
+2022    821,779    117,599    271,187
+2023    911,975    132,299    300,952
+2024    1,002,170    146,999    330,716
+
+TTM Revenue: 1,002,170
+TTM SDE:     146,999
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

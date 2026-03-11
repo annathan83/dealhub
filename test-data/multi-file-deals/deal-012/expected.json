@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 12,
+  "industry": "IT Managed Services",
+  "location": "Boca Raton, FL",
+  "broker_name": "Karen Anderson",
+  "broker_firm": "Amerivest Business Brokers",
+  "broker_phone": "360-539-6444",
+  "years_in_business": 10,
+  "employees": 9,
+  "listing": {
+    "asking_price": 741565,
+    "revenue": 1791606,
+    "sde": 296873,
+    "multiple": 2.5
+  },
+  "email": {
+    "asking_price": 711347,
+    "revenue": 1849923,
+    "sde": 284308
+  },
+  "financials": {
+    "revenue_ttm": 1827982,
+    "sde_ttm": 303752,
+    "revenue_2022": 1498945,
+    "revenue_2023": 1663464,
+    "sde_2022": 243002,
+    "sde_2023": 273377
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 3.3%. SDE in email differs by 4.2%."
+}

@@ -1,0 +1,13 @@
+﻿Plumbing Company -- Financial Summary
+Fort Lauderdale, FL
+
+Year    Revenue         SDE             COGS
+2022    2,207,200    267,782    728,376
+2023    2,449,453    301,254    808,319
+2024    2,691,707    334,727    888,263
+
+TTM Revenue: 2,691,707
+TTM SDE:     334,727
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

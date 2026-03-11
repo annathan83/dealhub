@@ -1,0 +1,13 @@
+﻿Pest Control Company -- Financial Summary
+Fort Lauderdale, FL
+
+Year    Revenue         SDE             COGS
+2022    890,992    189,577    294,027
+2023    988,784    213,274    326,299
+2024    1,086,576    236,971    358,570
+
+TTM Revenue: 1,086,576
+TTM SDE:     236,971
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

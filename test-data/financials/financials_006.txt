@@ -1,0 +1,17 @@
+﻿Pizza Restaurant -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    439,831    76,606    171,301    191,924
+2023    476,391    88,743    180,019    207,629
+2024    548,570    99,735    207,525    241,310
+
+YoY Revenue Growth:
+  2022 to 2023: 8.3%
+  2023 to 2024: 15.2%
+
+YoY SDE Growth:
+  2022 to 2023: 15.8%
+  2023 to 2024: 12.4%
+
+TTM SDE: 99,735
+Location: Naples, FL

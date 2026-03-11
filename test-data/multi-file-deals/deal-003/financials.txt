@@ -1,0 +1,13 @@
+﻿Electrical Contractor -- Financial Summary
+Clearwater, FL
+
+Year    Revenue         SDE             COGS
+2022    2,460,908    487,027    812,100
+2023    2,731,007    547,906    901,232
+2024    3,001,107    608,784    990,365
+
+TTM Revenue: 3,001,107
+TTM SDE:     608,784
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

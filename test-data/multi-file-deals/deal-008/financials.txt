@@ -1,0 +1,13 @@
+﻿Auto Repair Shop -- Financial Summary
+Tampa, FL
+
+Year    Revenue         SDE             COGS
+2022    2,560,672    471,606    845,022
+2023    2,841,722    530,556    937,768
+2024    3,122,771    589,507    1,030,514
+
+TTM Revenue: 3,122,771
+TTM SDE:     589,507
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

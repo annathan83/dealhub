@@ -2,7 +2,7 @@
  * One-time admin endpoint to rename existing Drive deal folders to the new
  * naming convention: {deal-id}_{sanitized-name}
  *
- * Protected by a secret key. Call once then delete this file.
+ * Protected by RENAME_SECRET env var. Call once then delete this file.
  * GET /api/admin/rename-folders?secret=RENAME_SECRET
  */
 import { NextResponse, type NextRequest } from "next/server";
@@ -12,7 +12,8 @@ import { getAuthorizedDriveClient, buildDealFolderName } from "@/lib/google/driv
 
 export async function GET(request: NextRequest) {
   const secret = request.nextUrl.searchParams.get("secret");
-  if (secret !== process.env.RENAME_SECRET && secret !== "dealhub-rename-2026") {
+  const expectedSecret = process.env.RENAME_SECRET;
+  if (!expectedSecret || secret !== expectedSecret) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

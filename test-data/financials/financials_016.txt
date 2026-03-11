@@ -1,0 +1,17 @@
+﻿Pool Service Route -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    958,979    232,480    342,242    384,257
+2023    1,167,746    248,704    350,869    568,173
+2024    1,332,415    275,392    485,337    571,686
+
+YoY Revenue Growth:
+  2022 to 2023: 21.8%
+  2023 to 2024: 14.1%
+
+YoY SDE Growth:
+  2022 to 2023: 7%
+  2023 to 2024: 10.7%
+
+TTM SDE: 275,392
+Location: Sarasota, FL

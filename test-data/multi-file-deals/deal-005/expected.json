@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 5,
+  "industry": "Plumbing Company",
+  "location": "Jacksonville, FL",
+  "broker_name": "Sandra Garcia",
+  "broker_firm": "Sunbelt Business Advisors",
+  "broker_phone": "(935) 697-4183",
+  "years_in_business": 10,
+  "employees": 31,
+  "listing": {
+    "asking_price": 1293883,
+    "revenue": 2358069,
+    "sde": 483492,
+    "multiple": 2.7
+  },
+  "email": {
+    "asking_price": 1261028,
+    "revenue": 2184628,
+    "sde": 468502
+  },
+  "financials": {
+    "revenue_ttm": 2398899,
+    "sde_ttm": 494455,
+    "revenue_2022": 1967097,
+    "revenue_2023": 2182998,
+    "sde_2022": 395564,
+    "sde_2023": 445010
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 7.4%. SDE in email differs by 3.1%."
+}

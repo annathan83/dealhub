@@ -133,6 +133,14 @@ const FACT_CATEGORIES: FactCategory[] = [
       "legal_risk_flag", "compliance_risk_flag", "licensing_dependency",
     ],
   },
+  {
+    key: "people",
+    label: "Broker & Contacts",
+    icon: "👤",
+    factKeys: [
+      "broker_name", "broker_contact", "owner_name",
+    ],
+  },
 ];
 
 const DERIVED_KEYS = new Set([
@@ -172,8 +180,26 @@ function isFilled(val: EntityFactValue | undefined): boolean {
   return !!val && val.status !== "missing" && val.status !== "unclear";
 }
 
+/**
+ * "Needs review" = AI fact that is unreviewed AND low confidence.
+ * High-confidence AI facts (review_status=confirmed) are auto-verified and
+ * do NOT need user action.
+ */
+function isNeedsReview(val: EntityFactValue | undefined): boolean {
+  return !!val &&
+    val.review_status === "unreviewed" &&
+    (val.value_source_type === "ai_extracted" || val.value_source_type === "ai_inferred");
+}
+
+/** @deprecated use isNeedsReview — kept for backward compat during transition */
 function isCandidate(val: EntityFactValue | undefined): boolean {
-  return !!val && (val.review_status === "unreviewed") &&
+  return isNeedsReview(val);
+}
+
+/** AI fact that was auto-confirmed (high confidence, no user action needed) */
+function isAiVerified(val: EntityFactValue | undefined): boolean {
+  return !!val &&
+    val.review_status === "confirmed" &&
     (val.value_source_type === "ai_extracted" || val.value_source_type === "ai_inferred");
 }
 
@@ -196,6 +222,13 @@ function sourceLabel(val: EntityFactValue | undefined, sourceName: string | null
 }
 
 // ─── Source badge ─────────────────────────────────────────────────────────────
+// Communicates the fact's verification state at a glance.
+//
+//   AI Verified   — green check  — auto-confirmed, high confidence
+//   Needs Review  — yellow clock — low confidence, user should check
+//   Manual        — neutral pen  — user-entered value
+//   Conflict      — amber warn   — multiple sources disagree
+//   AI Estimate   — blue spark   — inferred, no direct quote
 
 function SourceBadge({ val }: { val: EntityFactValue | undefined }) {
   if (!val || isMissing(val)) return null;
@@ -204,45 +237,162 @@ function SourceBadge({ val }: { val: EntityFactValue | undefined }) {
 
   if (status === "conflicting") {
     return (
-      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
-        ⚠ Conflict
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        </svg>
+        Conflict
       </span>
     );
   }
+
   if (st === "user_override") {
     return (
-      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full">
-        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full">
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
         </svg>
         Manual
       </span>
     );
   }
+
+  // AI extracted — distinguish verified vs needs-review
   if (st === "ai_extracted") {
+    if (isNeedsReview(val)) {
+      return (
+        <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 px-1.5 py-0.5 rounded-full">
+          <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <circle cx="12" cy="12" r="10" />
+            <path strokeLinecap="round" d="M12 6v6l4 2" />
+          </svg>
+          Needs Review
+        </span>
+      );
+    }
     return (
-      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">
-        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
         </svg>
-        Extracted
+        AI Verified
       </span>
     );
   }
+
   if (st === "ai_inferred") {
     return (
-      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
-        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <span data-testid="fact-source" className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full">
+        <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.353A3.75 3.75 0 0112 18.75a3.75 3.75 0 01-2.652-1.097l-.347-.353z" />
         </svg>
         AI Estimate
       </span>
     );
   }
+
   return (
-    <span data-testid="fact-source" className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-full">
+    <span data-testid="fact-source" className="inline-flex items-center text-[10px] font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-full">
       Filled
     </span>
+  );
+}
+
+// ─── Evidence source link + snippet modal ────────────────────────────────────
+// Shown below the fact value. Clicking opens a modal with the full snippet.
+
+function EvidenceSnippetModal({
+  sourceName,
+  snippet,
+  pageNumber,
+  confidence,
+  onClose,
+}: {
+  sourceName: string | null;
+  snippet: string | null;
+  pageNumber: number | null;
+  confidence: number | null;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between px-5 py-4 border-b border-emerald-100 bg-emerald-50">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="font-semibold text-emerald-800 text-sm truncate max-w-[200px]">
+                {sourceName ?? "Document"}
+              </p>
+            </div>
+            {pageNumber && (
+              <p className="text-[11px] text-emerald-600">Page {pageNumber}</p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-emerald-100 text-emerald-400 shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          {snippet ? (
+            <div className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-3">
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Source excerpt</p>
+              <p className="text-sm text-slate-700 leading-relaxed italic">
+                &ldquo;{snippet}&rdquo;
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 text-center py-4">No source excerpt available.</p>
+          )}
+          {confidence !== null && (
+            <p className="text-[11px] text-slate-400 text-center">
+              Extraction confidence: {Math.round(confidence * 100)}%
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EvidenceSourceLink({
+  evidence,
+  sourceName,
+  onClick,
+}: {
+  evidence: FactEvidence | null;
+  sourceName: string | null;
+  onClick: () => void;
+}) {
+  if (!evidence || (!sourceName && !evidence.snippet)) return null;
+  const label = sourceName ?? "Document";
+  const page = evidence.page_number;
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-[#1F7A63] transition-colors group/src"
+      title="View source excerpt"
+    >
+      <svg className="w-3 h-3 shrink-0 group-hover/src:text-[#1F7A63]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <span className="truncate max-w-[160px]">{label}{page ? ` p.${page}` : ""}</span>
+    </button>
   );
 }
 
@@ -638,6 +788,7 @@ function BasicFactCard({
   sourceName,
   onEdit,
   onAccept,
+  onViewEvidence,
 }: {
   fd: FactDefinition;
   meta: BasicFactMeta;
@@ -646,27 +797,25 @@ function BasicFactCard({
   sourceName: string | null;
   onEdit: () => void;
   onAccept?: () => void;
+  onViewEvidence?: () => void;
 }) {
   const filled = isFilled(val);
   const status = val?.status as FactValueStatus | undefined;
   const isConflict = filled && status === "conflicting";
-  const needsReview = filled && isCandidate(val);
+  const needsReview = filled && isNeedsReview(val);
+  const aiVerified = filled && isAiVerified(val);
 
   const cardStyle = !filled
     ? "bg-red-50/50 border-red-200 hover:border-red-400"
     : isConflict
       ? "bg-amber-50/50 border-amber-200 hover:border-amber-400"
       : needsReview
-        ? "bg-emerald-50/60 border-emerald-300 hover:border-emerald-400"
-        : val?.value_source_type === "ai_extracted"
-          ? "bg-emerald-50/40 border-emerald-200 hover:border-emerald-400"
+        ? "bg-yellow-50/60 border-yellow-200 hover:border-yellow-300"
+        : aiVerified
+          ? "bg-emerald-50/30 border-emerald-200 hover:border-emerald-300"
           : val?.value_source_type === "ai_inferred"
-            ? "bg-blue-50/50 border-blue-200 hover:border-blue-400"
+            ? "bg-blue-50/30 border-blue-200 hover:border-blue-300"
             : "bg-white border-slate-200 hover:border-[#1F7A63]/50";
-
-  const snippet = evidence?.extracted_value_raw ?? evidence?.snippet ?? null;
-  const snippetTruncated = snippet ? (snippet.length > 80 ? snippet.slice(0, 80) + "…" : snippet) : null;
-  const src = sourceLabel(val, sourceName);
 
   return (
     <div className={`w-full rounded-2xl border transition-all duration-150 ${cardStyle}`}>
@@ -683,31 +832,36 @@ function BasicFactCard({
         <div className={`text-2xl font-bold tabular-nums leading-tight mb-2 ${filled ? "text-slate-800" : "text-red-300"}`}>
           {filled ? formatValue(val!.value_raw, fd.data_type) : "—"}
         </div>
-        <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
           <SourceBadge val={val} />
-          {filled && src && <span className="text-[10px] text-slate-400 truncate max-w-[140px]">{src}</span>}
           {!filled && <span className="text-[10px] text-slate-400 group-hover:text-red-500 transition-colors">Tap to add →</span>}
         </div>
-        {filled && snippetTruncated && (
-          <div className="mt-1 px-2 py-1.5 bg-white/70 rounded-lg border border-slate-100">
-            <p className="text-[10px] text-slate-500 leading-relaxed italic">&ldquo;{snippetTruncated}&rdquo;</p>
+        {/* Evidence source link — shown for AI-sourced facts */}
+        {filled && evidence && (val?.value_source_type === "ai_extracted" || val?.value_source_type === "ai_inferred") && (
+          <div className="mt-2">
+            <EvidenceSourceLink
+              evidence={evidence}
+              sourceName={sourceName}
+              onClick={onViewEvidence ?? (() => {})}
+            />
           </div>
         )}
         {filled && val?.value_source_type === "ai_inferred" && val?.change_reason && (
-          <div className="mt-1 px-2 py-1.5 bg-blue-50/60 rounded-lg border border-blue-100">
+          <div className="mt-1.5 px-2 py-1.5 bg-blue-50/60 rounded-lg border border-blue-100">
             <p className="text-[10px] text-blue-600 leading-relaxed">{val.change_reason}</p>
           </div>
         )}
       </button>
+      {/* Only show Accept footer for low-confidence facts that need review */}
       {needsReview && onAccept && (
-        <div className="px-4 pb-3 flex items-center gap-2 border-t border-emerald-200/60 pt-2.5">
-          <span className="text-[10px] text-emerald-700 font-medium flex-1">AI extracted — confirm to lock in</span>
+        <div className="px-4 pb-3 flex items-center gap-2 border-t border-yellow-200/60 pt-2.5">
+          <span className="text-[10px] text-yellow-700 font-medium flex-1">Low confidence — verify before using in scoring</span>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onAccept(); }}
             className="px-3 py-1 rounded-lg bg-[#1F7A63] text-white text-[11px] font-semibold hover:bg-[#1a6654] transition-colors"
           >
-            Accept ✓
+            Confirm ✓
           </button>
         </div>
       )}
@@ -715,16 +869,18 @@ function BasicFactCard({
   );
 }
 
-// ─── Candidate fact review row ────────────────────────────────────────────────
-// Shown for newly extracted, unreviewed AI facts
+// ─── Needs-review row ─────────────────────────────────────────────────────────
+// Shown only for low-confidence AI facts that need user confirmation.
+// High-confidence AI facts are auto-verified and shown directly in BasicFactCard/FactRow.
 
-function CandidateFactRow({
+function NeedsReviewRow({
   fd,
   val,
   evidence,
   sourceName,
   onAccept,
   onEdit,
+  onViewEvidence,
 }: {
   fd: FactDefinition;
   val: EntityFactValue;
@@ -732,13 +888,13 @@ function CandidateFactRow({
   sourceName: string | null;
   onAccept: () => void;
   onEdit: () => void;
+  onViewEvidence: () => void;
 }) {
   const [accepting, startTransition] = useTransition();
-  const isExtracted = val.value_source_type === "ai_extracted";
   const snippet = evidence?.snippet ?? null;
 
   return (
-    <div className={`rounded-xl border px-4 py-3 ${isExtracted ? "border-emerald-200 bg-emerald-50/40" : "border-blue-200 bg-blue-50/40"}`}>
+    <div className="rounded-xl border border-yellow-200 bg-yellow-50/40 px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -748,7 +904,9 @@ function CandidateFactRow({
           <p className="text-lg font-bold text-slate-800 tabular-nums">
             {formatValue(val.value_raw, fd.data_type)}
           </p>
-          {sourceName && <p className="text-[10px] text-slate-400 mt-0.5 truncate">from {sourceName}</p>}
+          <div className="mt-1">
+            <EvidenceSourceLink evidence={evidence} sourceName={sourceName} onClick={onViewEvidence} />
+          </div>
           {snippet && (
             <p className="text-[10px] text-slate-400 italic mt-0.5 line-clamp-2">&ldquo;{snippet.slice(0, 120)}&rdquo;</p>
           )}
@@ -760,7 +918,7 @@ function CandidateFactRow({
             onClick={() => startTransition(onAccept)}
             className="px-3 py-1.5 rounded-lg bg-[#1F7A63] text-white text-xs font-semibold hover:bg-[#1a6654] disabled:opacity-50 transition-colors"
           >
-            {accepting ? "…" : "Accept"}
+            {accepting ? "…" : "Confirm"}
           </button>
           <button
             type="button"
@@ -776,6 +934,9 @@ function CandidateFactRow({
   );
 }
 
+/** @deprecated kept for any callers — use NeedsReviewRow */
+const CandidateFactRow = NeedsReviewRow;
+
 // ─── Standard fact row (for category sections) ────────────────────────────────
 
 function FactRow({
@@ -784,62 +945,50 @@ function FactRow({
   evidence,
   sourceName,
   onEdit,
+  onViewEvidence,
 }: {
   fd: FactDefinition;
   val: EntityFactValue | undefined;
   evidence: FactEvidence | null;
   sourceName: string | null;
   onEdit: () => void;
+  onViewEvidence?: () => void;
 }) {
   const filled = isFilled(val);
   const status = val?.status as FactValueStatus | undefined;
   const isConflict = filled && status === "conflicting";
-  const isCand = isCandidate(val);
-  const snippet = evidence?.extracted_value_raw ?? evidence?.snippet ?? null;
-  const snippetTruncated = snippet ? (snippet.length > 60 ? snippet.slice(0, 60) + "…" : snippet) : null;
-  const src = sourceLabel(val, sourceName);
+  const needsReview = isNeedsReview(val);
 
-  // Source indicator icon
-  const srcIcon = !filled ? null
-    : isConflict                                ? { icon: "⚠", cls: "text-amber-500" }
-    : val?.value_source_type === "user_override"? { icon: "✎", cls: "text-slate-500" }
-    : val?.value_source_type === "ai_extracted" ? { icon: "✓", cls: "text-emerald-500" }
-    : val?.value_source_type === "ai_inferred"  ? { icon: "~", cls: "text-blue-400" }
-    :                                             { icon: "·", cls: "text-slate-400" };
+  const dotColor = isConflict
+    ? "bg-amber-400"
+    : needsReview
+      ? "bg-yellow-400"
+      : filled
+        ? "bg-emerald-400"
+        : "bg-slate-200";
 
   return (
     <div
       className={`flex items-start gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 group cursor-pointer transition-colors ${
-        isCand ? "bg-blue-50/30 hover:bg-blue-50/60" : "hover:bg-slate-50"
+        needsReview ? "bg-yellow-50/30 hover:bg-yellow-50/60" : "hover:bg-slate-50"
       }`}
       onClick={onEdit}
       data-testid="fact-edit-button"
     >
-      <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
-        isConflict ? "bg-amber-400" : filled ? "bg-emerald-400" : "bg-slate-200"
-      }`} />
+      <div className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${dotColor}`} />
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm text-slate-600 truncate">{fd.label}</span>
-          {srcIcon && (
-            <span className={`text-[10px] font-medium shrink-0 ${srcIcon.cls}`}
-              title={
-                val?.value_source_type === "user_override" ? "Manually entered" :
-                val?.value_source_type === "ai_extracted"  ? "Extracted from document" :
-                val?.value_source_type === "ai_inferred"   ? "AI estimate" :
-                isConflict                                 ? "Conflict — needs review" : ""
-              }
-            >
-              {srcIcon.icon}
-            </span>
-          )}
-          {isCand && (
-            <span className="text-[9px] font-semibold text-blue-500 bg-blue-100 px-1 py-0.5 rounded shrink-0">NEW</span>
-          )}
+          <SourceBadge val={val} />
         </div>
-        {filled && src && <div className="text-[10px] text-slate-400 mt-0.5 truncate">{src}</div>}
-        {filled && snippetTruncated && <div className="text-[10px] text-slate-400 italic mt-0.5 truncate">&ldquo;{snippetTruncated}&rdquo;</div>}
+        {/* Evidence source link for AI-sourced facts */}
+        {filled && evidence && onViewEvidence &&
+          (val?.value_source_type === "ai_extracted" || val?.value_source_type === "ai_inferred") && (
+          <div className="mt-0.5">
+            <EvidenceSourceLink evidence={evidence} sourceName={sourceName} onClick={onViewEvidence} />
+          </div>
+        )}
       </div>
 
       <div className="text-right shrink-0">
@@ -909,6 +1058,7 @@ function CategorySection({
   evidenceMap,
   fileNameMap,
   onEdit,
+  onViewEvidence,
 }: {
   category: FactCategory;
   factDefs: FactDefinition[];
@@ -916,6 +1066,7 @@ function CategorySection({
   evidenceMap: Map<string, FactEvidence>;
   fileNameMap: Map<string, string>;
   onEdit: (fd: FactDefinition) => void;
+  onViewEvidence: (evidence: FactEvidence, sourceName: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -926,7 +1077,7 @@ function CategorySection({
   if (factsInCategory.length === 0) return null;
 
   const filledCount = factsInCategory.filter((fd) => isFilled(valueMap.get(fd.id))).length;
-  const candidateCount = factsInCategory.filter((fd) => isCandidate(valueMap.get(fd.id))).length;
+  const reviewCount = factsInCategory.filter((fd) => isNeedsReview(valueMap.get(fd.id))).length;
 
   return (
     <div className="mb-3">
@@ -937,9 +1088,9 @@ function CategorySection({
       >
         <span className="text-sm">{category.icon}</span>
         <span className="text-xs font-bold text-slate-500 uppercase tracking-widest flex-1">{category.label}</span>
-        {candidateCount > 0 && (
-          <span className="text-[9px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
-            {candidateCount} new
+        {reviewCount > 0 && (
+          <span className="text-[9px] font-bold text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded-full">
+            {reviewCount} review
           </span>
         )}
         <span className="text-[10px] text-slate-400 tabular-nums">
@@ -967,6 +1118,7 @@ function CategorySection({
                 evidence={evidence}
                 sourceName={sn}
                 onEdit={() => onEdit(fd)}
+                onViewEvidence={evidence ? () => onViewEvidence(evidence, sn) : undefined}
               />
             );
           })}
@@ -1254,6 +1406,10 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
   const [resolvingConflict, setResolvingConflict] = useState<FactDefinition | null>(null);
   const [localOverrides, setLocalOverrides] = useState<Map<string, EntityFactValue>>(new Map());
   const [showAllCategories, setShowAllCategories] = useState(false);
+  const [evidenceModal, setEvidenceModal] = useState<{
+    evidence: FactEvidence;
+    sourceName: string | null;
+  } | null>(null);
 
   const handleScoreUpdated = useCallback(() => {
     // Refresh after a short delay to pick up the rescoring result (runs async server-side)
@@ -1309,6 +1465,8 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
   // Stats
   const basicFilledCount = basicFacts.filter(({ fd }) => isFilled(valueMap.get(fd.id))).length;
   const totalFactsWithValues = effectiveValues.filter((v) => isFilled(v)).length;
+  const aiVerifiedCount = effectiveValues.filter((v) => isAiVerified(v)).length;
+  const needsReviewCount = effectiveValues.filter((v) => isNeedsReview(v)).length;
 
   // Edit modal context
   const editingMeta = editingFact ? (BASIC_FACTS.find((m) => m.key === editingFact.key) ?? null) : null;
@@ -1425,9 +1583,12 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
           <div>
             <p className="text-base font-bold text-slate-800 leading-tight">Facts</p>
             <p className="text-xs text-slate-400 mt-0.5">
-              {totalFactsWithValues} fact{totalFactsWithValues !== 1 ? "s" : ""} collected
-              {candidateFacts.length > 0 && (
-                <span className="ml-1.5 text-blue-500 font-medium">· {candidateFacts.length} awaiting review</span>
+              {totalFactsWithValues} fact{totalFactsWithValues !== 1 ? "s" : ""} identified
+              {aiVerifiedCount > 0 && (
+                <span className="ml-1.5 text-emerald-600 font-medium">· {aiVerifiedCount} verified automatically</span>
+              )}
+              {needsReviewCount > 0 && (
+                <span className="ml-1.5 text-yellow-600 font-medium">· {needsReviewCount} need{needsReviewCount === 1 ? "s" : ""} review</span>
               )}
             </p>
           </div>
@@ -1496,39 +1657,40 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
                   evidence={evidence}
                   sourceName={sn}
                   onEdit={() => setEditingFact(fd)}
-                  onAccept={val && isCandidate(val) ? () => acceptCandidate(fd, val) : undefined}
+                  onAccept={val && isNeedsReview(val) ? () => acceptCandidate(fd, val) : undefined}
+                  onViewEvidence={evidence ? () => setEvidenceModal({ evidence, sourceName: sn }) : undefined}
                 />
               );
             })}
           </div>
         </div>
 
-        {/* ── LAYER 2: Candidate Facts (awaiting review) ───────────────────── */}
+        {/* ── LAYER 2: Needs Review (low-confidence AI facts only) ─────────── */}
         {candidateFacts.length > 0 && (
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-3">
-              <p className="text-[11px] font-bold text-blue-500 uppercase tracking-widest shrink-0">Awaiting Review</p>
-              <div className="flex-1 h-px bg-blue-100" />
-              <span className="text-[10px] text-blue-400 tabular-nums shrink-0">{candidateFacts.length} new</span>
+              <p className="text-[11px] font-bold text-yellow-600 uppercase tracking-widest shrink-0">Needs Review</p>
+              <div className="flex-1 h-px bg-yellow-100" />
+              <span className="text-[10px] text-yellow-500 tabular-nums shrink-0">{candidateFacts.length} fact{candidateFacts.length !== 1 ? "s" : ""}</span>
               {candidateFacts.length > 1 && (
                 <button
                   type="button"
                   onClick={acceptAllCandidates}
                   className="text-[11px] font-semibold text-white bg-[#1F7A63] hover:bg-[#1a6654] px-2.5 py-1 rounded-lg transition-colors shrink-0"
                 >
-                  Accept all
+                  Confirm all
                 </button>
               )}
             </div>
             <p className="text-[11px] text-slate-400 mb-3">
-              AI extracted these facts from your documents. Review and accept to include in scoring.
+              These facts were extracted with low confidence. Confirm or edit before they count toward scoring.
             </p>
             <div className="flex flex-col gap-2">
               {candidateFacts.map(({ fd, val }) => {
                 const evidence = evidenceMap.get(fd.id) ?? null;
                 const sn = evidence?.file_id ? fileNameMap.get(evidence.file_id) ?? null : null;
                 return (
-                  <CandidateFactRow
+                  <NeedsReviewRow
                     key={fd.id}
                     fd={fd}
                     val={val}
@@ -1536,6 +1698,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
                     sourceName={sn}
                     onAccept={() => acceptCandidate(fd, val)}
                     onEdit={() => setEditingFact(fd)}
+                    onViewEvidence={() => evidence && setEvidenceModal({ evidence, sourceName: sn })}
                   />
                 );
               })}
@@ -1575,6 +1738,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
                   evidenceMap={evidenceMap}
                   fileNameMap={fileNameMap}
                   onEdit={setEditingFact}
+                  onViewEvidence={(ev, sn) => setEvidenceModal({ evidence: ev, sourceName: sn })}
                 />
               ))}
 
@@ -1606,6 +1770,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
                             evidence={evidence}
                             sourceName={sn}
                             onEdit={() => setEditingFact(fd)}
+                            onViewEvidence={evidence ? () => setEvidenceModal({ evidence, sourceName: sn }) : undefined}
                           />
                         );
                       })}
@@ -1652,6 +1817,17 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
           dealId={dealId}
           onClose={() => setResolvingConflict(null)}
           onResolved={handleSaved}
+        />
+      )}
+
+      {/* ── Evidence snippet modal ───────────────────────────────────────── */}
+      {evidenceModal && (
+        <EvidenceSnippetModal
+          sourceName={evidenceModal.sourceName}
+          snippet={evidenceModal.evidence.snippet ?? null}
+          pageNumber={evidenceModal.evidence.page_number ?? null}
+          confidence={evidenceModal.evidence.confidence ?? null}
+          onClose={() => setEvidenceModal(null)}
         />
       )}
     </div>

@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 11,
+  "industry": "E-Commerce Business",
+  "location": "Boca Raton, FL",
+  "broker_name": "James Hall",
+  "broker_firm": "Coastal Business Advisors",
+  "broker_phone": "747.697.5819",
+  "years_in_business": 6,
+  "employees": 7,
+  "listing": {
+    "asking_price": 1191249,
+    "revenue": 2491988,
+    "sde": 425541,
+    "multiple": 2.8
+  },
+  "email": {
+    "asking_price": 1216668,
+    "revenue": 2552709,
+    "sde": 440761
+  },
+  "financials": {
+    "revenue_ttm": 2418403,
+    "sde_ttm": 432756,
+    "revenue_2022": 1983090,
+    "revenue_2023": 2200747,
+    "sde_2022": 346205,
+    "sde_2023": 389480
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 2.4%. SDE in email differs by 3.6%."
+}

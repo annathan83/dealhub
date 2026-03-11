@@ -1,0 +1,16 @@
+﻿Recast P&L -- Pest Control Company
+Tampa FL
+
+                    FY2022          FY2023          FY2024
+Gross Revenue       1,958,402      2,309,499      2,759,722
+Less: COGS         (690,280)    (716,232)    (850,274)
+Gross Profit        1,268,122      1,593,267      1,909,448
+Less: Op Expenses  (1,024,778)    (1,330,589)    (1,608,867)
+Net Income          243,344      262,678      300,581
+Add: Owner Salary   146,006      157,607      180,349
+Add: Depreciation   36,502      39,402      45,087
+Add: One-Time Items 60,836      65,670      75,145
+                    --------        --------        --------
+Recast SDE          243,344      262,678      300,581
+
+Prepared by seller's accountant. Not audited.

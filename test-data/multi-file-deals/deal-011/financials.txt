@@ -1,0 +1,13 @@
+﻿E-Commerce Business -- Financial Summary
+Boca Raton, FL
+
+Year    Revenue         SDE             COGS
+2022    1,983,090    346,205    654,420
+2023    2,200,747    389,480    726,247
+2024    2,418,403    432,756    798,073
+
+TTM Revenue: 2,418,403
+TTM SDE:     432,756
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

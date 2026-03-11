@@ -1,0 +1,13 @@
+﻿Auto Repair Shop -- Financial Summary
+Orlando, FL
+
+Year    Revenue         SDE             COGS
+2022    2,678,571    296,293    883,928
+2023    2,972,560    333,329    980,945
+2024    3,266,550    370,366    1,077,962
+
+TTM Revenue: 3,266,550
+TTM SDE:     370,366
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

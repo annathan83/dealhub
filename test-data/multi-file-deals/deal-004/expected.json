@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 4,
+  "industry": "IT Managed Services",
+  "location": "Boca Raton, FL",
+  "broker_name": "David Harris",
+  "broker_firm": "Amerivest Business Brokers",
+  "broker_phone": "(412) 446-1401",
+  "years_in_business": 10,
+  "employees": 21,
+  "listing": {
+    "asking_price": 1113242,
+    "revenue": 3715505,
+    "sde": 471301,
+    "multiple": 2.4
+  },
+  "email": {
+    "asking_price": 1064483,
+    "revenue": 3811354,
+    "sde": 447923
+  },
+  "financials": {
+    "revenue_ttm": 3791211,
+    "sde_ttm": 471665,
+    "revenue_2022": 3108793,
+    "revenue_2023": 3450002,
+    "sde_2022": 377332,
+    "sde_2023": 424498
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 2.6%. SDE in email differs by 5%."
+}

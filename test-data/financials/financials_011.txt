@@ -1,0 +1,21 @@
+﻿LOGISTICS COMPANY -- FINANCIAL SUMMARY
+Jacksonville, FL
+Prepared for Buyer Review -- Confidential
+
+PROFIT AND LOSS STATEMENT (UNAUDITED)
+
+                          2021          2022          2023          2024
+                          ----          ----          ----          ----
+Revenue               881,432    994,605    1,206,178    1,436,996
+Cost of Goods Sold    325,598    360,723    475,377    515,185
+Gross Profit          555,834    633,882    730,801    921,811
+Operating Expenses    449,746    513,352    600,394    769,935
+SDE                   106,088    120,530    130,407    151,876
+
+SDE Margin            12%          12.1%          10.8%          10.6%
+
+NOTES:
+- Owner salary addback: included in SDE calculation
+- Depreciation addback: included
+- One-time expenses removed from 2022 and 2023
+- Figures are unaudited and subject to verification

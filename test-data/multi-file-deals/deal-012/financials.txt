@@ -1,0 +1,13 @@
+﻿IT Managed Services -- Financial Summary
+Boca Raton, FL
+
+Year    Revenue         SDE             COGS
+2022    1,498,945    243,002    494,652
+2023    1,663,464    273,377    548,943
+2024    1,827,982    303,752    603,234
+
+TTM Revenue: 1,827,982
+TTM SDE:     303,752
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

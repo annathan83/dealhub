@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 17,
+  "industry": "Electrical Contractor",
+  "location": "West Palm Beach, FL",
+  "broker_name": "David Davis",
+  "broker_firm": "Coastal Business Advisors",
+  "broker_phone": "799-950-2665",
+  "years_in_business": 12,
+  "employees": 9,
+  "listing": {
+    "asking_price": 2162238,
+    "revenue": 2987981,
+    "sde": 728030,
+    "multiple": 3
+  },
+  "email": {
+    "asking_price": 2198770,
+    "revenue": 2719660,
+    "sde": 750400
+  },
+  "financials": {
+    "revenue_ttm": 2954789,
+    "sde_ttm": 720962,
+    "revenue_2022": 2422927,
+    "revenue_2023": 2688858,
+    "sde_2022": 576770,
+    "sde_2023": 648866
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 9%. SDE in email differs by 3.1%."
+}

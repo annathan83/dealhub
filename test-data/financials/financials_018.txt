@@ -1,0 +1,17 @@
+﻿Auto Repair Shop -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    1,804,168    294,133    550,038    959,997
+2023    2,066,964    321,125    656,250    1,089,589
+2024    2,498,815    346,622    843,349    1,308,844
+
+YoY Revenue Growth:
+  2022 to 2023: 14.6%
+  2023 to 2024: 20.9%
+
+YoY SDE Growth:
+  2022 to 2023: 9.2%
+  2023 to 2024: 7.9%
+
+TTM SDE: 346,622
+Location: Fort Lauderdale, FL

@@ -1,0 +1,13 @@
+﻿Dental Practice -- Financial Summary
+Tampa, FL
+
+Year    Revenue         SDE             COGS
+2022    3,174,650    627,869    1,047,634
+2023    3,523,088    706,352    1,162,619
+2024    3,871,525    784,836    1,277,603
+
+TTM Revenue: 3,871,525
+TTM SDE:     784,836
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

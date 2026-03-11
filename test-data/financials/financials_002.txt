@@ -1,0 +1,16 @@
+﻿Recast P&L -- Auto Repair Shop
+Jacksonville FL
+
+                    FY2022          FY2023          FY2024
+Gross Revenue       1,445,969      1,613,880      1,942,424
+Less: COGS         (530,206)    (541,159)    (586,085)
+Gross Profit        915,763      1,072,721      1,356,339
+Less: Op Expenses  (768,958)    (901,140)    (1,154,613)
+Net Income          146,805      171,581      201,726
+Add: Owner Salary   88,083      102,949      121,036
+Add: Depreciation   22,021      25,737      30,259
+Add: One-Time Items 36,701      42,895      50,432
+                    --------        --------        --------
+Recast SDE          146,805      171,581      201,726
+
+Prepared by seller's accountant. Not audited.

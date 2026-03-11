@@ -30,6 +30,7 @@ import { extractFactsFromText } from "../facts/factExtractionService";
 import { reconcileFacts } from "../facts/factReconciliationService";
 import { runPostFactPipeline } from "../analysis/postFactOrchestrator";
 import { detectNda } from "../nda/ndaDetectionService";
+import { extractContactsFromFactValues, syncContactsFromExtraction } from "../contacts/dealContactService";
 import type { Entity } from "@/types/entity";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -104,7 +105,8 @@ async function runFactExtraction(
   text: string,
   dealId: string,
   fileTextId?: string | null,
-  fileName?: string | null
+  fileName?: string | null,
+  userId?: string | null
 ): Promise<void> {
   // Create a processing_run record for this fact extraction
   const run = await createProcessingRun({
@@ -164,6 +166,15 @@ async function runFactExtraction(
       facts_conflicted: reconcileResult.facts_conflicted,
       model: extractionResult.model_name,
     }, { runId });
+
+    // Sync broker/contact facts into deal_contacts (non-fatal, fire-and-forget)
+    if (userId) {
+      extractContactsFromFactValues(entity.id, entityFileId, fileName ?? "uploaded file")
+        .then((candidates) => syncContactsFromExtraction(dealId, userId, candidates))
+        .catch((err) => {
+          console.error("[entityFileService] contact sync failed (non-fatal):", err);
+        });
+    }
 
     // Run the full post-fact pipeline: score → SWOT → missing info (non-fatal, fire-and-forget)
     const factsFound = extractionResult.candidates.length;
@@ -264,7 +275,7 @@ export async function ingestFromDealUpload(
         markDeepAnalysisStale(entity.id).catch(() => {});
 
         // 6. Extract facts (critical subset, non-fatal)
-        await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId, fileTextRecord.id, params.originalFileName);
+        await runFactExtraction(entity, entityFile.id, params.extractedText, params.dealId, fileTextRecord.id, params.originalFileName, params.userId);
 
         // 7. NDA detection — runs after fact extraction (non-fatal)
         runNdaDetection({
@@ -444,7 +455,7 @@ export async function ingestFromDealEntry(
     markDeepAnalysisStale(entity.id).catch(() => {});
 
     // Extract facts from pasted text (critical subset, non-fatal)
-    await runFactExtraction(entity, entityFile.id, params.entryContent, params.dealId, fileTextRecord?.id ?? null, "note");
+    await runFactExtraction(entity, entityFile.id, params.entryContent, params.dealId, fileTextRecord?.id ?? null, "note", params.userId);
   } catch (err) {
     console.error("[entityFileService] ingestFromDealEntry failed (non-fatal):", err);
   }

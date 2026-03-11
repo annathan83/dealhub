@@ -1,0 +1,21 @@
+﻿ELECTRICAL CONTRACTOR -- FINANCIAL SUMMARY
+Jacksonville, FL
+Prepared for Buyer Review -- Confidential
+
+PROFIT AND LOSS STATEMENT (UNAUDITED)
+
+                          2021          2022          2023          2024
+                          ----          ----          ----          ----
+Revenue               1,295,939    1,492,547    1,808,011    2,127,138
+Cost of Goods Sold    425,497    483,740    650,368    788,763
+Gross Profit          870,442    1,008,807    1,157,643    1,338,375
+Operating Expenses    550,878    638,102    736,204    850,053
+SDE                   319,564    370,705    421,439    488,322
+
+SDE Margin            24.7%          24.8%          23.3%          23%
+
+NOTES:
+- Owner salary addback: included in SDE calculation
+- Depreciation addback: included
+- One-time expenses removed from 2022 and 2023
+- Figures are unaudited and subject to verification

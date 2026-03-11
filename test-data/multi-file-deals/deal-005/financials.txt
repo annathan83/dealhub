@@ -1,0 +1,13 @@
+﻿Plumbing Company -- Financial Summary
+Jacksonville, FL
+
+Year    Revenue         SDE             COGS
+2022    1,967,097    395,564    649,142
+2023    2,182,998    445,010    720,389
+2024    2,398,899    494,455    791,637
+
+TTM Revenue: 2,398,899
+TTM SDE:     494,455
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

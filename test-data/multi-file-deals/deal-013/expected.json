@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 13,
+  "industry": "Physical Therapy Clinic",
+  "location": "Jacksonville, FL",
+  "broker_name": "Patricia Walker",
+  "broker_firm": "Coastal Business Advisors",
+  "broker_phone": "(303) 708-1919",
+  "years_in_business": 8,
+  "employees": 28,
+  "listing": {
+    "asking_price": 377668,
+    "revenue": 1420475,
+    "sde": 178040,
+    "multiple": 2.1
+  },
+  "email": {
+    "asking_price": 374057,
+    "revenue": 1324581,
+    "sde": 169622
+  },
+  "financials": {
+    "revenue_ttm": 1428511,
+    "sde_ttm": 173981,
+    "revenue_2022": 1171379,
+    "revenue_2023": 1299945,
+    "sde_2022": 139185,
+    "sde_2023": 156583
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 6.8%. SDE in email differs by 4.7%."
+}

@@ -1,0 +1,17 @@
+﻿Plumbing Company -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    2,101,930    389,939    682,149    1,029,842
+2023    2,478,808    456,290    825,626    1,196,892
+2024    2,802,564    514,366    968,756    1,319,442
+
+YoY Revenue Growth:
+  2022 to 2023: 17.9%
+  2023 to 2024: 13.1%
+
+YoY SDE Growth:
+  2022 to 2023: 17%
+  2023 to 2024: 12.7%
+
+TTM SDE: 514,366
+Location: Sarasota, FL

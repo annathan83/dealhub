@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 15,
+  "industry": "HVAC Company",
+  "location": "Fort Lauderdale, FL",
+  "broker_name": "Daniel Wright",
+  "broker_firm": "Amerivest Business Brokers",
+  "broker_phone": "206.310.2414",
+  "years_in_business": 16,
+  "employees": 33,
+  "listing": {
+    "asking_price": 517726,
+    "revenue": 1464504,
+    "sde": 270607,
+    "multiple": 1.9
+  },
+  "email": {
+    "asking_price": 487078,
+    "revenue": 1521939,
+    "sde": 268102
+  },
+  "financials": {
+    "revenue_ttm": 1457674,
+    "sde_ttm": 276418,
+    "revenue_2022": 1195293,
+    "revenue_2023": 1326483,
+    "sde_2022": 221134,
+    "sde_2023": 248776
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 3.9%. SDE in email differs by 0.9%."
+}

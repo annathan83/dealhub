@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 20,
+  "industry": "Laundromat",
+  "location": "Jacksonville, FL",
+  "broker_name": "Margaret Anderson",
+  "broker_firm": "First Choice Business Brokers",
+  "broker_phone": "352.576.9661",
+  "years_in_business": 13,
+  "employees": 24,
+  "listing": {
+    "asking_price": 2069011,
+    "revenue": 3795643,
+    "sde": 762501,
+    "multiple": 2.7
+  },
+  "email": {
+    "asking_price": 1934163,
+    "revenue": 3685315,
+    "sde": 736243
+  },
+  "financials": {
+    "revenue_ttm": 3761111,
+    "sde_ttm": 778909,
+    "revenue_2022": 3084111,
+    "revenue_2023": 3422611,
+    "sde_2022": 623127,
+    "sde_2023": 701018
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 2.9%. SDE in email differs by 3.4%."
+}

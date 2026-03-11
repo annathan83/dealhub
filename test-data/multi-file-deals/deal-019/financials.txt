@@ -1,0 +1,13 @@
+﻿Pest Control Company -- Financial Summary
+Tampa, FL
+
+Year    Revenue         SDE             COGS
+2022    1,939,800    397,062    640,134
+2023    2,152,705    446,695    710,393
+2024    2,365,610    496,328    780,651
+
+TTM Revenue: 2,365,610
+TTM SDE:     496,328
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

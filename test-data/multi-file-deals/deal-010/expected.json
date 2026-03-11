@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 10,
+  "industry": "Medical Spa",
+  "location": "Sarasota, FL",
+  "broker_name": "Christopher Anderson",
+  "broker_firm": "Florida Business Exchange",
+  "broker_phone": "413.696.5105",
+  "years_in_business": 11,
+  "employees": 15,
+  "listing": {
+    "asking_price": 316486,
+    "revenue": 982072,
+    "sde": 144492,
+    "multiple": 2.2
+  },
+  "email": {
+    "asking_price": 319860,
+    "revenue": 1008144,
+    "sde": 146127
+  },
+  "financials": {
+    "revenue_ttm": 1002170,
+    "sde_ttm": 146999,
+    "revenue_2022": 821779,
+    "revenue_2023": 911975,
+    "sde_2022": 117599,
+    "sde_2023": 132299
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 2.7%. SDE in email differs by 1.1%."
+}

@@ -1,0 +1,21 @@
+﻿TUTORING CENTER -- FINANCIAL SUMMARY
+Naples, FL
+Prepared for Buyer Review -- Confidential
+
+PROFIT AND LOSS STATEMENT (UNAUDITED)
+
+                          2021          2022          2023          2024
+                          ----          ----          ----          ----
+Revenue               2,459,538    2,860,226    3,129,847    3,404,932
+Cost of Goods Sold    762,900    1,103,851    1,159,706    1,088,440
+Gross Profit          1,696,638    1,756,375    1,970,141    2,316,492
+Operating Expenses    1,107,591    1,100,151    1,253,357    1,474,997
+SDE                   589,047    656,224    716,784    841,495
+
+SDE Margin            23.9%          22.9%          22.9%          24.7%
+
+NOTES:
+- Owner salary addback: included in SDE calculation
+- Depreciation addback: included
+- One-time expenses removed from 2022 and 2023
+- Figures are unaudited and subject to verification

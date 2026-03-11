@@ -1,0 +1,13 @@
+﻿Electrical Contractor -- Financial Summary
+West Palm Beach, FL
+
+Year    Revenue         SDE             COGS
+2022    2,422,927    576,770    799,566
+2023    2,688,858    648,866    887,323
+2024    2,954,789    720,962    975,080
+
+TTM Revenue: 2,954,789
+TTM SDE:     720,962
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

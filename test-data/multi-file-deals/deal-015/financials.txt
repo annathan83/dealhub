@@ -1,0 +1,13 @@
+﻿HVAC Company -- Financial Summary
+Fort Lauderdale, FL
+
+Year    Revenue         SDE             COGS
+2022    1,195,293    221,134    394,447
+2023    1,326,483    248,776    437,739
+2024    1,457,674    276,418    481,032
+
+TTM Revenue: 1,457,674
+TTM SDE:     276,418
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

@@ -1,0 +1,13 @@
+﻿Dental Practice -- Financial Summary
+Orlando, FL
+
+Year    Revenue         SDE             COGS
+2022    3,107,982    431,046    1,025,634
+2023    3,449,102    484,927    1,138,204
+2024    3,790,222    538,808    1,250,773
+
+TTM Revenue: 3,790,222
+TTM SDE:     538,808
+
+Note: Figures are seller-prepared and unaudited.
+Buyer should verify during due diligence.

@@ -1,0 +1,17 @@
+﻿Commercial Cleaning -- 3-Year Financials
+
+Year    Revenue         SDE             COGS            Op Expenses
+2022    1,007,363    161,262    345,001    501,100
+2023    1,208,083    181,817    460,149    566,117
+2024    1,387,020    213,389    509,890    663,741
+
+YoY Revenue Growth:
+  2022 to 2023: 19.9%
+  2023 to 2024: 14.8%
+
+YoY SDE Growth:
+  2022 to 2023: 12.7%
+  2023 to 2024: 17.4%
+
+TTM SDE: 213,389
+Location: Jacksonville, FL

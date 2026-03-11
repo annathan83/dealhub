@@ -4,9 +4,11 @@ import Link from "next/link";
 import { Suspense } from "react";
 import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
+import type { BrokerInfo } from "@/components/DealsTable";
 import type { Deal } from "@/types";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
 import type { BuyerProfile } from "@/lib/kpi/buyerFit";
+import { getPrimaryContactsForDeals } from "@/lib/services/contacts/dealContactService";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -22,6 +24,8 @@ export default async function DashboardPage() {
       .from("deals")
       .select("*")
       .eq("user_id", user.id)
+      // Exclude intake-rejected deals — they are not real deals
+      .or("intake_status.is.null,intake_status.eq.promoted")
       .order("updated_at", { ascending: false }),
     supabase
       .from("google_oauth_tokens")
@@ -131,6 +135,26 @@ export default async function DashboardPage() {
         const fit = computeBuyerFit(buyerProfile, dealFacts);
         buyerFitMap[dealId] = fit.shortLabel;
       }
+    }
+  }
+
+  // Fetch primary contacts for all deals from deal_contacts (single efficient query)
+  const brokerMap: Record<string, BrokerInfo> = {};
+  if (dealList.length > 0) {
+    const primaryContacts = await getPrimaryContactsForDeals(
+      dealList.map((d) => d.id),
+      user.id
+    );
+    for (const [dealId, contact] of Object.entries(primaryContacts)) {
+      // Build a contact string that includes phone and/or email for search compatibility
+      const parts = [contact.phone, contact.email].filter(Boolean);
+      brokerMap[dealId] = {
+        name: contact.name,
+        contact: parts.join(" / ") || null,
+        phone: contact.phone ?? null,
+        email: contact.email ?? null,
+        brokerage: contact.brokerage ?? null,
+      };
     }
   }
 
@@ -287,7 +311,7 @@ export default async function DashboardPage() {
             <div className="w-5 h-5 rounded-full border-2 border-[#C6E4DC] border-t-[#1F7A63] animate-spin" />
           </div>
         }>
-          <DealsTable deals={dealList} scoreMap={scoreMap} fitMap={buyerFitMap} />
+          <DealsTable deals={dealList} scoreMap={scoreMap} fitMap={buyerFitMap} brokerMap={brokerMap} />
         </Suspense>
 
       </main>

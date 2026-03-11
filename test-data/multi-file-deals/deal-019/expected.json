@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 19,
+  "industry": "Pest Control Company",
+  "location": "Tampa, FL",
+  "broker_name": "Charles King",
+  "broker_firm": "Sunbelt Business Advisors",
+  "broker_phone": "285-329-6640",
+  "years_in_business": 16,
+  "employees": 38,
+  "listing": {
+    "asking_price": 911837,
+    "revenue": 2321256,
+    "sde": 491053,
+    "multiple": 1.9
+  },
+  "email": {
+    "asking_price": 875357,
+    "revenue": 2135597,
+    "sde": 464242
+  },
+  "financials": {
+    "revenue_ttm": 2365610,
+    "sde_ttm": 496328,
+    "revenue_2022": 1939800,
+    "revenue_2023": 2152705,
+    "sde_2022": 397062,
+    "sde_2023": 446695
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 8%. SDE in email differs by 5.5%."
+}

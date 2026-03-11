@@ -1,9 +1,9 @@
 /**
  * Debug endpoint for upload troubleshooting.
- * GET /api/debug/upload            — full prerequisite check
- * GET /api/debug/upload?dealId=X   — also checks entity + Drive folder for that deal
- * GET /api/debug/upload?testDrive=1 — also makes a live Drive API call to verify auth
- * Only works for authenticated users.
+ * Gated behind DEBUG_SECRET env var to prevent information disclosure in production.
+ * GET /api/debug/upload?secret=DEBUG_SECRET            — full prerequisite check
+ * GET /api/debug/upload?secret=...&dealId=X            — also checks entity + Drive folder
+ * GET /api/debug/upload?secret=...&testDrive=1         — also makes a live Drive API call
  */
 
 import { NextResponse, type NextRequest } from "next/server";
@@ -11,6 +11,16 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 export async function GET(request: NextRequest) {
+  // Require debug secret before doing anything else.
+  const debugSecret = process.env.DEBUG_SECRET;
+  if (!debugSecret) {
+    return NextResponse.json({ error: "Debug endpoints are disabled" }, { status: 403 });
+  }
+  const provided = request.nextUrl.searchParams.get("secret");
+  if (provided !== debugSecret) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,11 +39,10 @@ export async function GET(request: NextRequest) {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({
-      ok: false,
-      error: "Not authenticated",
-      auth_error: authError?.message,
-    });
+    return NextResponse.json(
+      { ok: false, error: "Not authenticated", auth_error: authError?.message },
+      { status: 401 }
+    );
   }
 
   // Check Google OAuth tokens

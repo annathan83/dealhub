@@ -6,6 +6,10 @@ import { seedManualFactsFromDeal } from "@/lib/services/entity/dealFactSeedServi
 import { seedExtractedFactsFromDeal } from "@/lib/services/entity/dealFactSeedService";
 import { runPostFactPipeline } from "@/lib/services/analysis/postFactOrchestrator";
 import { getEntityByLegacyDealId } from "@/lib/db/entities";
+import { scoreAndPersistKpis } from "@/lib/kpi/kpiScoringService";
+import { runAndApplyFactInference } from "@/lib/services/facts/factInferenceService";
+import { computeTriageRecommendation } from "@/lib/kpi/triageRecommendation";
+import type { TriageVerdict } from "@/lib/kpi/triageRecommendation";
 
 export const maxDuration = 60;
 
@@ -75,6 +79,7 @@ export async function POST(request: NextRequest) {
       deal_source_category: body.deal_source_category?.trim() || null,
       deal_source_detail: body.deal_source_detail?.trim() || null,
       status: "active",
+      intake_status: "pending",
       asking_price: body.asking_price?.trim() || null,
       sde: body.sde?.trim() || null,
       multiple: body.multiple?.trim() || null,
@@ -93,6 +98,11 @@ export async function POST(request: NextRequest) {
 
   // ── 2. Seed facts and trigger initial scoring ─────────────────────────────────
   // We await the seeding so scoring can read the facts immediately after.
+  let intakeVerdict: TriageVerdict | null = null;
+  let intakeFlags: string[] = [];
+  let intakeScore: number | null = null;
+  let intakeOpinion: string | null = null;
+
   try {
     // Seed manual fields (asking_price, sde, industry, location) as user_override facts
     await seedManualFactsFromDeal(dealId, user.id, {
@@ -111,14 +121,9 @@ export async function POST(request: NextRequest) {
       await seedExtractedFactsFromDeal(dealId, user.id, body.extracted_facts);
     }
 
-    // Immediately run the post-fact pipeline (scoring + inference).
-    // Scoring is deterministic and fast — we await it so the Analysis tab
-    // has a score ready when the user arrives.
-    // SWOT and missing info run fire-and-forget (they use AI and take longer).
     const entity = await getEntityByLegacyDealId(dealId, user.id);
     if (entity) {
       // Apply the user's default scoring config to this new deal entity (non-fatal).
-      // This seeds metadata_json.scoring_config so the first score uses the user's weights.
       try {
         const { data: userSettings } = await supabase
           .from("user_settings")
@@ -138,17 +143,58 @@ export async function POST(request: NextRequest) {
       }
 
       const industry = body.industry?.trim() || null;
-      await runPostFactPipeline({
-        entityId: entity.id,
-        entityTypeId: entity.entity_type_id,
-        entityTitle: entity.title,
-        industry,
+
+      // Step 1: Fact inference (synchronous — inferred facts feed into scoring)
+      await runAndApplyFactInference(entity.id, entity.entity_type_id).catch((err) => {
+        console.warn("[createDeal] Fact inference failed (non-fatal):", err);
+      });
+
+      // Step 2: KPI scoring — awaited so we can compute the intake triage verdict
+      // before returning to the client. SWOT and missing info run fire-and-forget.
+      const scorecard = await scoreAndPersistKpis(entity.id, entity.entity_type_id, {
         triggerType: "extraction",
         triggerReason: "Initial deal creation",
+      }).catch((err) => {
+        console.warn("[createDeal] KPI scoring failed (non-fatal):", err);
+        return null;
       });
+
+      // Compute triage verdict for intake assessment
+      if (scorecard) {
+        const rec = computeTriageRecommendation(scorecard);
+        intakeVerdict = rec.verdict;
+        intakeFlags = rec.flags;
+        intakeScore = scorecard.overall_score ?? null;
+        intakeOpinion = rec.opinion;
+      }
+
+      // Steps 3 + 4: SWOT and missing info — fire-and-forget (AI, takes longer)
+      const { generateSwotFromFacts } = await import("@/lib/services/analysis/swotAnalysisService");
+      const { detectMissingInfo } = await import("@/lib/services/analysis/missingInfoService");
+      generateSwotFromFacts(entity.id, entity.entity_type_id, entity.title).catch(() => {});
+      detectMissingInfo(entity.id, entity.entity_type_id, industry).catch(() => {});
     }
+
+    // If intake verdict is not PROBABLY_PASS, promote the deal immediately
+    if (intakeVerdict !== "PROBABLY_PASS") {
+      await supabase
+        .from("deals")
+        .update({ intake_status: "promoted" })
+        .eq("id", dealId)
+        .eq("user_id", user.id);
+    }
+    // If PROBABLY_PASS, leave intake_status = 'pending' — the client will call
+    // /api/deals/[id]/intake-reject with action='reject' or action='keep'
+
   } catch (err) {
     console.error("[createDeal] Post-creation pipeline failed (non-fatal):", err);
+    // On pipeline failure, promote the deal so it doesn't get stuck as pending
+    await supabase
+      .from("deals")
+      .update({ intake_status: "promoted" })
+      .eq("id", dealId)
+      .eq("user_id", user.id)
+      .catch(() => {});
   }
 
   // ── 3. Provision Drive folder + subfolders (non-fatal) ───────────────────────
@@ -166,7 +212,18 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json(
-    { id: dealId, name: deal.name, deal_number: deal.deal_number, driveFolderError },
+    {
+      id: dealId,
+      name: deal.name,
+      deal_number: deal.deal_number,
+      driveFolderError,
+      // Intake assessment result — client uses this to decide whether to show
+      // the rejection screen or navigate directly to the deal.
+      intake_verdict: intakeVerdict,
+      intake_flags: intakeFlags,
+      intake_score: intakeScore,
+      intake_opinion: intakeOpinion,
+    },
     { status: 201 }
   );
 }

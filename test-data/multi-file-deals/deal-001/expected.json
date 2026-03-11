@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 1,
+  "industry": "Dental Practice",
+  "location": "Tampa, FL",
+  "broker_name": "Barbara Rodriguez",
+  "broker_firm": "Murphy Business",
+  "broker_phone": "(787) 946-3682",
+  "years_in_business": 4,
+  "employees": 24,
+  "listing": {
+    "asking_price": 1660177,
+    "revenue": 3772954,
+    "sde": 769161,
+    "multiple": 2.2
+  },
+  "email": {
+    "asking_price": 1592938,
+    "revenue": 3786987,
+    "sde": 713564
+  },
+  "financials": {
+    "revenue_ttm": 3871525,
+    "sde_ttm": 784836,
+    "revenue_2022": 3174650,
+    "revenue_2023": 3523088,
+    "sde_2022": 627869,
+    "sde_2023": 706352
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 0.4%. SDE in email differs by 7.2%."
+}

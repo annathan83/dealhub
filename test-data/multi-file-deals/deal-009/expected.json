@@ -1,0 +1,35 @@
+﻿{
+  "deal_number": 9,
+  "industry": "Electrical Contractor",
+  "location": "West Palm Beach, FL",
+  "broker_name": "Nancy White",
+  "broker_firm": "Murphy Business",
+  "broker_phone": "293 847 9246",
+  "years_in_business": 9,
+  "employees": 25,
+  "listing": {
+    "asking_price": 457595,
+    "revenue": 1468106,
+    "sde": 298174,
+    "multiple": 1.5
+  },
+  "email": {
+    "asking_price": 428118,
+    "revenue": 1440518,
+    "sde": 295552
+  },
+  "financials": {
+    "revenue_ttm": 1504373,
+    "sde_ttm": 295018,
+    "revenue_2022": 1233586,
+    "revenue_2023": 1368979,
+    "sde_2022": 236014,
+    "sde_2023": 265516
+  },
+  "expected_conflicts": {
+    "revenue": true,
+    "sde": true,
+    "price": true
+  },
+  "notes": "Revenue in email differs from listing by 1.9%. SDE in email differs by 0.9%."
+}

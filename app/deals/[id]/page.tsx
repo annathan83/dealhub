@@ -7,6 +7,7 @@ import DealPageTabs from "@/components/DealPageTabs";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
+import { getDealContacts } from "@/lib/services/contacts/dealContactService";
 
 export default async function DealPage({
   params,
@@ -24,6 +25,12 @@ export default async function DealPage({
 
   const vm = await buildDealPageViewModel(id, user.id).catch(() => null);
   if (!vm) notFound();
+
+  // Guard: intake-rejected deals should not be accessible as normal deals.
+  // If a user navigates directly to the URL, redirect to dashboard.
+  if (vm.deal.intake_status === "rejected") {
+    redirect("/dashboard");
+  }
 
   const {
     deal,
@@ -71,6 +78,9 @@ export default async function DealPage({
     syncedFiles,
     entityData?.analysis_snapshots ?? []
   );
+
+  // Load structured contacts for the header contact card
+  const contacts = await getDealContacts(id, user.id);
 
   // Compute buyer fit label for the header
   let buyerFitLabel: string | null = null;
@@ -131,7 +141,12 @@ export default async function DealPage({
         </div>
 
         {/* ── Deal header (always visible) ─────────────────────────────── */}
-        <DealHeader deal={deal} kpiScorecard={kpiScorecard} buyerFitLabel={buyerFitLabel} />
+        <DealHeader
+          deal={deal}
+          kpiScorecard={kpiScorecard}
+          buyerFitLabel={buyerFitLabel}
+          contacts={contacts}
+        />
 
         {/* ── 3-tab workspace ──────────────────────────────────────────── */}
         <div className="mt-4">

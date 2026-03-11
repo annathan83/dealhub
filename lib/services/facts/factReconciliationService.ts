@@ -47,8 +47,13 @@ export type ReconciliationResult = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const CONFLICT_THRESHOLD = 0.15; // values differ by more than 15% → conflicting
+const CONFLICT_THRESHOLD = 0.15;         // values differ by more than 15% → conflicting
 const MIN_CONFIDENCE_FOR_SUPERSEDE = 0.7; // new evidence must be ≥ 0.7 to supersede
+/**
+ * AI facts at or above this confidence are automatically marked review_status=confirmed.
+ * Below this threshold they stay "unreviewed" and surface as "Needs Review" in the UI.
+ */
+const AUTO_CONFIRM_CONFIDENCE_THRESHOLD = 0.7;
 
 function valuesConflict(
   existing: string | null,
@@ -266,6 +271,13 @@ export async function reconcileFacts(
       // ai_inferred  = AI estimated from context without a direct evidence snippet
       const sourceType = candidate.snippet ? "ai_extracted" : "ai_inferred";
 
+      // Auto-confirm high-confidence AI facts so users are not prompted to review them.
+      // Conflicts and low-confidence facts stay "unreviewed" and surface in the UI.
+      const autoConfirmed =
+        newStatus !== "conflicting" &&
+        newConfidence >= AUTO_CONFIRM_CONFIDENCE_THRESHOLD;
+      const reviewStatusToSet = autoConfirmed ? "confirmed" : "unreviewed";
+
       // When conflicting, upsertEntityFactValue preserves the existing user_override value
       // automatically (it only updates status + current_evidence_id for user_override rows).
       // For non-user-override conflicts, keep the existing evidence value as current.
@@ -282,6 +294,7 @@ export async function reconcileFacts(
         confidence: newConfidence,
         current_evidence_id: newEvidenceId,
         value_source_type: sourceType,
+        review_status: reviewStatusToSet,
       });
 
       // 4. Promote the winning evidence row to is_primary=true, demote others.
