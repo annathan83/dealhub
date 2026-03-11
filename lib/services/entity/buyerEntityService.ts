@@ -149,7 +149,7 @@ export async function syncBuyerProfileFromFacts(
       return raw.split(",").map((s) => s.trim()).filter(Boolean);
     }
 
-    function parseEnum<T extends string>(key: string, allowed: T[]): T | null {
+    function parseEnum<T extends string>(key: string, allowed: readonly T[]): T | null {
       const raw = getRaw(key)?.toLowerCase().trim() ?? null;
       if (!raw) return null;
       return (allowed.includes(raw as T) ? raw : null) as T | null;
@@ -164,8 +164,8 @@ export async function syncBuyerProfileFromFacts(
       target_purchase_price_max:          parseNum("target_purchase_price_max"),
       preferred_locations:                parseArray("preferred_locations"),
       max_employees:                      parseNum("max_employees"),
-      manager_required:                   parseEnum("manager_required", ["yes", "no", "prefer"]),
-      owner_operator_ok:                  parseEnum("owner_operator_ok", ["yes", "no", "prefer"]),
+      manager_required:                   parseEnum("manager_required", ["yes", "no", "prefer"] as const),
+      owner_operator_ok:                  parseEnum("owner_operator_ok", ["yes", "no", "prefer"] as const),
       preferred_business_characteristics: getRaw("preferred_business_characteristics"),
       experience_background:              getRaw("experience_background"),
       acquisition_goals:                  getRaw("acquisition_goals"),
