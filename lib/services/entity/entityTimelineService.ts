@@ -97,8 +97,10 @@ function iconForEvent(event: EntityEvent, file?: EntityFile): TimelineIconType {
     case "initial_review_completed":
     case "deep_analysis_completed":
     case "deep_scan_completed":
-    case "analysis_refreshed":
       return "analysis";
+    case "analysis_refreshed":
+      // Show as "check" (score updated) when it carries a score, otherwise "analysis"
+      return event.metadata_json?.overall_score !== undefined ? "check" : "analysis";
     case "deep_analysis_started":
     case "deep_scan_started":
       return "processing";
@@ -175,8 +177,12 @@ function titleForEvent(event: EntityEvent, file?: EntityFile): string {
     case "deep_analysis_completed":
     case "deep_scan_completed":
       return "Deep analysis completed";
-    case "analysis_refreshed":
-      return "Analysis refreshed";
+    case "analysis_refreshed": {
+      const score = event.metadata_json?.overall_score as number | undefined;
+      return score !== null && score !== undefined
+        ? `Score updated — ${score.toFixed(1)}/10`
+        : "Analysis refreshed";
+    }
     case "entity_passed":
       return "Deal passed";
     case "entity_archived":
@@ -267,8 +273,20 @@ function summaryForEvent(event: EntityEvent, file?: EntityFile): string {
     case "deep_analysis_completed":
     case "deep_scan_completed":
       return `Deep analysis complete — executive summary, risks, and valuation support available.`;
-    case "analysis_refreshed":
+    case "analysis_refreshed": {
+      const score = event.metadata_json?.overall_score as number | undefined;
+      const conf = event.metadata_json?.confidence_score as number | undefined;
+      const facts = event.metadata_json?.facts_used as number | undefined;
+      const trigger = event.metadata_json?.trigger_reason as string | undefined;
+      if (score !== null && score !== undefined) {
+        const parts: string[] = [`Deal score: ${score.toFixed(1)}/10`];
+        if (conf !== undefined) parts.push(`confidence ${conf}%`);
+        if (facts !== undefined) parts.push(`${facts} facts used`);
+        if (trigger) parts.push(`triggered by: ${trigger}`);
+        return parts.join(" · ") + ".";
+      }
       return `Analysis refreshed after new information was added.`;
+    }
     case "entity_passed":
       return `Deal marked as passed.`;
     case "entity_archived":

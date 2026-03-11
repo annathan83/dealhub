@@ -20,6 +20,7 @@ import {
   createProcessingRun,
   updateProcessingRun,
 } from "@/lib/db/entities";
+import { logAnalysisRefreshed } from "@/lib/services/entity/entityEventService";
 import { extractFactInputs } from "./factRegistry";
 import { KPI_DEFINITIONS, type KpiFactInputs, type KpiScorecardResult, type KpiScore } from "./kpiConfig";
 import type { EntityFactValue } from "@/types/entity";
@@ -498,6 +499,17 @@ export async function scoreAndPersistKpis(
           confidence_score: confidence.confidence_score,
         },
       }).catch(() => {});
+    }
+
+    // Log analysis_refreshed event so the timeline shows score updates
+    if (scorecard.overall_score !== null) {
+      logAnalysisRefreshed(entityId, {
+        overall_score: scorecard.overall_score,
+        confidence_score: confidence.confidence_score,
+        facts_used: confidence.total_facts_used,
+        trigger_type: triggerType,
+        trigger_reason: options?.triggerReason ?? null,
+      }, { runId }).catch(() => {});
     }
 
     return scorecard;

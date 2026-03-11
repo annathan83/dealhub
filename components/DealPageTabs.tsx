@@ -179,11 +179,6 @@ function NewFactsBanner({
 // values that need user resolution. Each conflict row shows the fact name,
 // existing vs. new value, and Accept/Keep buttons.
 
-const CONFLICT_SCORING_KEYS = [
-  "asking_price", "sde_latest", "revenue_latest",
-  "ebitda_latest", "employees_ft", "lease_monthly_rent",
-];
-
 function ConflictAlertBanner({
   entityData,
   dealId,
@@ -195,8 +190,9 @@ function ConflictAlertBanner({
   const [, startTransition] = useTransition();
   const [resolving, setResolving] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [snoozed, setSnoozed] = useState(false);
 
-  if (!entityData) return null;
+  if (!entityData || snoozed) return null;
 
   const valueMap = new Map(entityData.fact_values.map((v) => [v.fact_definition_id, v]));
   const evidenceMap = new Map<string, typeof entityData.fact_evidence[0][]>();
@@ -206,29 +202,31 @@ function ConflictAlertBanner({
     evidenceMap.set(ev.fact_definition_id, list);
   }
 
-  // Find conflicting scoring facts
+  // Find ALL conflicting facts (not just scoring keys)
   const conflicts = entityData.fact_definitions
-    .filter((fd) => CONFLICT_SCORING_KEYS.includes(fd.key))
     .map((fd) => {
       const val = valueMap.get(fd.id);
       if (!val || val.status !== "conflicting") return null;
-      // Find the two evidence rows to show existing vs. new
-      const allEvidence = evidenceMap.get(fd.id) ?? [];
-      const primary = allEvidence.find((e) => e.is_primary) ?? allEvidence[0];
-      const secondary = allEvidence.find((e) => e.id !== primary?.id);
 
-      // For user_override vs CIM: the "existing" value is the user's manual entry,
-      // the "new" value is the CIM extraction (the only evidence row).
+      const allEvidence = evidenceMap.get(fd.id) ?? [];
+      // Sort by confidence descending so primary is the best evidence row
+      const sortedEvidence = [...allEvidence].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+      const primary = sortedEvidence[0];
+      const secondary = sortedEvidence[1];
+
+      // For user_override conflicts: the "current" value is what the user manually entered
+      // (stored in val.value_raw), and the "new" value is what AI extracted (in evidence row).
+      // For evidence-vs-evidence conflicts: current = best existing evidence, new = secondary.
       const isUserOverrideConflict = val.value_source_type === "user_override";
-      const existingDisplayValue = isUserOverrideConflict
-        ? (val.value_raw ?? "—")
-        : (primary?.extracted_value_raw ?? val.value_raw ?? "—");
+      const existingDisplayValue = val.value_raw ?? primary?.extracted_value_raw ?? "—";
       const newDisplayValue = isUserOverrideConflict
         ? (primary?.extracted_value_raw ?? "—")
         : (secondary?.extracted_value_raw ?? "—");
-      const snippet = primary?.snippet ?? secondary?.snippet ?? null;
+      const snippet = isUserOverrideConflict
+        ? (primary?.snippet ?? null)
+        : (secondary?.snippet ?? primary?.snippet ?? null);
 
-      return { fd, val, primary, secondary, existingDisplayValue, newDisplayValue, snippet };
+      return { fd, val, primary, secondary, existingDisplayValue, newDisplayValue, snippet, isUserOverrideConflict };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null)
     .filter((x) => !dismissed.has(x.fd.id));
@@ -262,6 +260,11 @@ function ConflictAlertBanner({
     }
   }
 
+  // Show first 3 conflicts inline; if more exist, show a count
+  const INLINE_LIMIT = 3;
+  const visibleConflicts = conflicts.slice(0, INLINE_LIMIT);
+  const hiddenCount = conflicts.length - visibleConflicts.length;
+
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-amber-200/60">
@@ -271,11 +274,21 @@ function ConflictAlertBanner({
         <p className="text-sm font-semibold text-amber-800">
           {conflicts.length} fact{conflicts.length !== 1 ? "s" : ""} need{conflicts.length === 1 ? "s" : ""} review
         </p>
-        <p className="text-xs text-amber-600 ml-auto">New evidence conflicts with existing values</p>
+        <div className="ml-auto flex items-center gap-2">
+          <p className="text-xs text-amber-600 hidden sm:block">New evidence conflicts with existing values</p>
+          <button
+            type="button"
+            onClick={() => setSnoozed(true)}
+            className="text-[11px] text-amber-500 hover:text-amber-700 font-medium transition-colors"
+            title="Dismiss for now — resolve later in the Facts tab"
+          >
+            Review later
+          </button>
+        </div>
       </div>
 
       <div className="divide-y divide-amber-100">
-        {conflicts.map(({ fd, existingDisplayValue, newDisplayValue, snippet }) => {
+        {visibleConflicts.map(({ fd, existingDisplayValue, newDisplayValue, snippet, isUserOverrideConflict }) => {
           const existingVal = existingDisplayValue;
           const newVal = newDisplayValue;
           const isResolving = resolving === fd.id;
@@ -284,9 +297,12 @@ function ConflictAlertBanner({
             <div key={fd.id} className="px-4 py-3">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-amber-800 mb-1">{fd.label}</p>
+                  <p className="text-xs font-semibold text-amber-800 mb-0.5">{fd.label}</p>
+                  {isUserOverrideConflict && (
+                    <p className="text-[10px] text-amber-600/70">Manual entry vs. document evidence</p>
+                  )}
                   {snippet && (
-                    <p className="text-[10px] text-amber-600/80 italic leading-relaxed line-clamp-1">
+                    <p className="text-[10px] text-amber-600/80 italic leading-relaxed line-clamp-1 mt-0.5">
                       &ldquo;{snippet.slice(0, 80)}{snippet.length > 80 ? "…" : ""}&rdquo;
                     </p>
                   )}
@@ -296,11 +312,15 @@ function ConflictAlertBanner({
               {/* Values side by side */}
               <div className="grid grid-cols-2 gap-2 mb-2.5">
                 <div className="bg-white rounded-lg border border-amber-200 px-2.5 py-2">
-                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Current</p>
+                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">
+                    {isUserOverrideConflict ? "Manual entry" : "Current"}
+                  </p>
                   <p className="text-sm font-bold text-slate-800 tabular-nums truncate">{existingVal}</p>
                 </div>
                 <div className="bg-blue-50 rounded-lg border border-blue-200 px-2.5 py-2">
-                  <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-0.5">New evidence</p>
+                  <p className="text-[9px] font-bold text-blue-400 uppercase tracking-wider mb-0.5">
+                    {isUserOverrideConflict ? "From document" : "New evidence"}
+                  </p>
                   <p className="text-sm font-bold text-blue-800 tabular-nums truncate">{newVal}</p>
                 </div>
               </div>
@@ -328,6 +348,15 @@ function ConflictAlertBanner({
           );
         })}
       </div>
+
+      {hiddenCount > 0 && (
+        <div className="px-4 py-2.5 border-t border-amber-100 bg-amber-50/60">
+          <p className="text-xs text-amber-600">
+            +{hiddenCount} more conflict{hiddenCount !== 1 ? "s" : ""} — go to{" "}
+            <span className="font-semibold">Facts tab</span> to resolve all.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

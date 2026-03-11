@@ -148,8 +148,9 @@ export async function reconcileFacts(
         null
       );
 
-      // 2b. Also check if there's a manually-entered (user_override) value with no evidence row.
-      //     This handles the case where the user entered values at deal creation.
+      // 2b. Also check if there's a manually-entered (user_override) value.
+      //     This handles the case where the user entered values at deal creation,
+      //     whether or not there is already an evidence row.
       const existingFactValue = currentFactByDefId.get(factDef.id);
       const isExistingUserOverride =
         existingFactValue?.value_source_type === "user_override" &&
@@ -162,9 +163,9 @@ export async function reconcileFacts(
       if (!bestExisting && !isExistingUserOverride) {
         // Rule 1: No existing evidence or manual entry — use this as confirmed
         newStatus = candidate.confidence >= 0.5 ? "confirmed" : "unclear";
-      } else if (isExistingUserOverride && !bestExisting) {
-        // Rule 1b: No existing evidence but there IS a manually-entered value.
-        // Check if the CIM value conflicts with what the user manually entered.
+      } else if (isExistingUserOverride) {
+        // Rule 1b: There IS a manually-entered value (with or without prior evidence).
+        // Check if the new AI value conflicts with what the user manually entered.
         const manualValue = existingFactValue!.value_raw!;
         const hasConflictWithManual = valuesConflict(
           manualValue,
@@ -173,7 +174,7 @@ export async function reconcileFacts(
         );
 
         if (hasConflictWithManual) {
-          // CIM value differs from manual entry — surface as conflict for user to resolve
+          // AI value differs from manual entry — surface as conflict for user to resolve
           newStatus = "conflicting";
           newConfidence = candidate.confidence;
           newEvidenceId = evidence.id;
@@ -188,7 +189,7 @@ export async function reconcileFacts(
             snippet: candidate.snippet ?? null,
           }, { fileId: input.fileId });
         } else {
-          // CIM confirms the manual value — update to document-backed
+          // AI confirms the manual value — upgrade to document-backed
           newStatus = "confirmed";
           newConfidence = candidate.confidence;
           newEvidenceId = evidence.id;
@@ -204,6 +205,7 @@ export async function reconcileFacts(
           }, { fileId: input.fileId });
         }
       } else {
+        // Rule 2/3/4: There is prior evidence — compare new evidence against the best existing one.
         const hasConflict = valuesConflict(
           bestExisting!.extracted_value_raw,
           candidate.extracted_value_raw,
