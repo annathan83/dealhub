@@ -39,42 +39,12 @@ function validateFile(file: File): string | null {
 
 type ActionVariant = "upload" | "note" | "photo" | "audio";
 
-const ACTION_STYLES: Record<
-  ActionVariant,
-  { bg: string; border: string; text: string; hoverBg: string; hoverBorder: string; shadow: string }
-> = {
-  upload: {
-    bg:          "bg-[#E8F2FF]",
-    border:      "border-[#3B82F6]",
-    text:        "text-[#2563EB]",
-    hoverBg:     "hover:bg-[#DCEBFF]",
-    hoverBorder: "hover:border-[#2563EB]",
-    shadow:      "hover:shadow-[0_2px_8px_rgba(37,99,235,0.18)]",
-  },
-  note: {
-    bg:          "bg-[#F3E8FF]",
-    border:      "border-[#8B5CF6]",
-    text:        "text-[#7C3AED]",
-    hoverBg:     "hover:bg-[#E9D5FF]",
-    hoverBorder: "hover:border-[#7C3AED]",
-    shadow:      "hover:shadow-[0_2px_8px_rgba(124,58,237,0.18)]",
-  },
-  photo: {
-    bg:          "bg-[#ECFDF5]",
-    border:      "border-[#10B981]",
-    text:        "text-[#059669]",
-    hoverBg:     "hover:bg-[#D1FAE5]",
-    hoverBorder: "hover:border-[#059669]",
-    shadow:      "hover:shadow-[0_2px_8px_rgba(5,150,105,0.18)]",
-  },
-  audio: {
-    bg:          "bg-[#FFF7ED]",
-    border:      "border-[#F97316]",
-    text:        "text-[#EA580C]",
-    hoverBg:     "hover:bg-[#FFE7D1]",
-    hoverBorder: "hover:border-[#EA580C]",
-    shadow:      "hover:shadow-[0_2px_8px_rgba(234,88,12,0.18)]",
-  },
+// Accent colors per variant — used for icon tint only; base button is unified white
+const ACTION_ICON_COLOR: Record<ActionVariant, string> = {
+  upload: "text-[#2563EB]",
+  note:   "text-[#7C3AED]",
+  photo:  "text-[#1F7A63]",
+  audio:  "text-[#EA580C]",
 };
 
 function ActionButton({
@@ -83,30 +53,34 @@ function ActionButton({
   onClick,
   disabled,
   variant,
+  testId,
 }: {
   label: string;
   iconPath: string;
   onClick: () => void;
   disabled?: boolean;
   variant: ActionVariant;
+  testId?: string;
 }) {
-  const s = ACTION_STYLES[variant];
+  const iconColor = ACTION_ICON_COLOR[variant];
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-testid={testId}
       className={[
-        "flex flex-col items-center justify-center gap-1.5 rounded-xl border px-3 py-3",
-        "text-xs font-semibold flex-1 min-w-0",
+        "flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-3",
+        "text-xs font-semibold text-slate-600 flex-1 min-w-0",
         "transition-all duration-150 ease-out",
-        "hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
+        "hover:bg-slate-50 hover:border-slate-300 hover:-translate-y-px",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1F7A63] focus-visible:ring-offset-1",
         "disabled:opacity-40 disabled:pointer-events-none",
-        s.bg, s.border, s.text, s.hoverBg, s.hoverBorder, s.shadow,
+        "shadow-sm",
       ].join(" ")}
     >
       <svg
-        className="w-5 h-5"
+        className={`w-5 h-5 ${iconColor}`}
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -172,12 +146,14 @@ function AddNotePanel({ dealId, onDone }: { dealId: string; onDone: () => void }
             disabled={loading}
             autoFocus
             className="w-full rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-3 text-sm text-[#1E1E1E] placeholder-[#6B7280] focus:border-[#1F7A63] focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-none disabled:opacity-60"
+            data-testid="note-content"
           />
           <div className="flex items-center gap-2">
             <button
               type="submit"
               disabled={loading || !content.trim()}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1F7A63] px-5 py-2 text-sm font-semibold text-white hover:bg-[#176B55] disabled:opacity-40 transition-colors"
+              data-testid="note-save"
             >
               {loading ? (
                 <>
@@ -310,6 +286,7 @@ export default function QuickAddBar({ dealId }: { dealId: string }) {
           onClick={() => uploadInputRef.current?.click()}
           disabled={!!uploading}
           variant="upload"
+          testId="upload-file-button"
         />
         <ActionButton
           label="Note"
@@ -317,6 +294,7 @@ export default function QuickAddBar({ dealId }: { dealId: string }) {
           onClick={() => setShowNote((v) => !v)}
           disabled={!!uploading}
           variant="note"
+          testId="add-note-button"
         />
         <ActionButton
           label="Photo"
@@ -324,6 +302,7 @@ export default function QuickAddBar({ dealId }: { dealId: string }) {
           onClick={() => (isMobile ? cameraInputRef.current?.click() : setShowWebcam(true))}
           disabled={!!uploading}
           variant="photo"
+          testId="quick-add-photo"
         />
         <ActionButton
           label="Audio"
@@ -331,6 +310,7 @@ export default function QuickAddBar({ dealId }: { dealId: string }) {
           onClick={() => setShowAudio(true)}
           disabled={!!uploading}
           variant="audio"
+          testId="quick-add-audio"
         />
       </div>
 

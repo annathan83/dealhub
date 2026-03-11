@@ -3,19 +3,19 @@ const steps = [
     number: "01",
     title: "Add the deal",
     description:
-      "Create a deal from a listing, broker email, or document. Give it a name and you have a workspace ready to fill.",
+      "Paste a listing or fill in the key numbers. AI extracts facts automatically so you start with a scored deal, not a blank page.",
   },
   {
     number: "02",
-    title: "Build the workspace",
+    title: "Build the evidence",
     description:
-      "Upload files, paste notes, add photos, and record audio. DealHub keeps the timeline and organizes the evidence automatically.",
+      "Upload the CIM, financials, photos, and notes. Every file is processed, facts are updated, and the timeline grows as you dig in.",
   },
   {
     number: "03",
-    title: "Turn information into decisions",
+    title: "Make the call",
     description:
-      "Review extracted facts, AI analysis, scoring, and risks — or export your organized deal package to any AI tool you prefer.",
+      "Review the score, triage verdict, risks, and strengths. Confirm the facts, ask the right broker questions, and decide with confidence.",
   },
 ];
 
@@ -32,7 +32,7 @@ export default function HowItWorks() {
           From first listing to final decision
         </h2>
         <p className="text-slate-500 text-center max-w-xl mx-auto mb-16 text-base leading-relaxed">
-          Three steps to go from scattered information to a structured, analyzable deal.
+          Three steps to go from a scattered inbox to a structured, scored, decision-ready deal.
         </p>
 
         <div className="relative">

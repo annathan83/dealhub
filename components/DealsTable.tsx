@@ -129,15 +129,14 @@ function ScoreBadge({ score }: { score: number | undefined }) {
     return <span className="text-[11px] text-[#6B7280]">—</span>;
   }
   const display = score % 1 === 0 ? score.toFixed(0) : score.toFixed(1);
-  // Flat solid badges: green / yellow / red
   const color =
-    score >= 8 ? "bg-[#1F7A63] text-white" :
-    score >= 5 ? "bg-[#EAB308] text-white" :
-                 "bg-[#DC2626] text-white";
+    score >= 7 ? "bg-emerald-500 text-white ring-1 ring-inset ring-emerald-600/20" :
+    score >= 5 ? "bg-amber-400 text-white ring-1 ring-inset ring-amber-500/20" :
+                 "bg-red-500 text-white ring-1 ring-inset ring-red-600/20";
   return (
-    <span className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${color}`}>
+    <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${color}`}>
       {display}
-      <span className="font-normal opacity-70">/10</span>
+      <span className="font-normal opacity-75">/10</span>
     </span>
   );
 }
@@ -158,10 +157,10 @@ function StatusBadge({ status }: { status: DealStatus }) {
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   return (
     <span className={`inline-flex flex-col gap-px ml-1 transition-opacity ${active ? "opacity-100" : "opacity-25"}`}>
-      <svg className={`w-2.5 h-2.5 ${active && dir === "asc" ? "text-indigo-600" : "text-slate-400"}`} viewBox="0 0 10 6" fill="currentColor">
+      <svg className={`w-2.5 h-2.5 ${active && dir === "asc" ? "text-[#1F7A63]" : "text-slate-400"}`} viewBox="0 0 10 6" fill="currentColor">
         <path d="M5 0L10 6H0L5 0Z" />
       </svg>
-      <svg className={`w-2.5 h-2.5 ${active && dir === "desc" ? "text-indigo-600" : "text-slate-400"}`} viewBox="0 0 10 6" fill="currentColor">
+      <svg className={`w-2.5 h-2.5 ${active && dir === "desc" ? "text-[#1F7A63]" : "text-slate-400"}`} viewBox="0 0 10 6" fill="currentColor">
         <path d="M5 6L0 0H10L5 6Z" />
       </svg>
     </span>
@@ -513,9 +512,9 @@ function FitBadge({ fit }: { fit: string | undefined }) {
 // ─── Desktop deal row ─────────────────────────────────────────────────────────
 
 function DealRow({
-  deal, index, score, fit, onClick,
+  deal, score, fit, onClick,
 }: {
-  deal: Deal; index: number; score: number | undefined; fit: string | undefined; onClick: () => void;
+  deal: Deal; score: number | undefined; fit: string | undefined; onClick: () => void;
 }) {
   const displayLocation = formatLocation(deal.city, deal.county, deal.state) || deal.location;
   const displayIndustry = deal.industry ?? deal.industry_category;
@@ -525,16 +524,20 @@ function DealRow({
   const ask      = formatFinancial(deal.asking_price);
   const multiple = formatMultiple(deal.multiple);
 
-  const rowBg = index % 2 === 1 ? "bg-[#F8FAF9]" : "bg-white";
+  const scoreBorder =
+    score === undefined ? "" :
+    score >= 7 ? "border-l-[3px] border-l-emerald-400" :
+    score >= 5 ? "border-l-[3px] border-l-amber-300" :
+                 "border-l-[3px] border-l-red-300";
 
   return (
     <tr
       onClick={onClick}
-      className={`cursor-pointer group hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB] last:border-0 ${rowBg}`}
+      className={`cursor-pointer group bg-white hover:bg-[#F3F4F6] transition-colors border-b border-[#E5E7EB] last:border-0 ${scoreBorder}`}
     >
       {/* Deal identity */}
       <td className="px-4 py-2.5 min-w-[180px]">
-        <span className="font-semibold text-[13px] text-[#1E1E1E] group-hover:text-[#1F7A63] transition-colors leading-snug">
+        <span className="font-bold text-[14px] text-[#1E1E1E] group-hover:text-[#1F7A63] transition-colors leading-snug">
           {deal.name}
         </span>
       </td>
@@ -875,11 +878,10 @@ export default function DealsTable({
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((deal, i) => (
+                    {filtered.map((deal) => (
                       <DealRow
                         key={deal.id}
                         deal={deal}
-                        index={i}
                         score={scoreMap[deal.id]}
                         fit={fitMap[deal.id]}
                         onClick={() => router.push(`/deals/${deal.id}`)}

@@ -127,11 +127,11 @@ function ScoreBadge({ score100 }: { score100: number | null }) {
   // Convert 0–100 to 1–10 display
   const display = Math.round(score100 / 10);
   const color =
-    display >= 8 ? "bg-[#059669] text-white" :
-    display >= 5 ? "bg-[#D97706] text-white" :
-                   "bg-[#DC2626] text-white";
+    display >= 7 ? "bg-emerald-500 text-white ring-1 ring-inset ring-emerald-600/20" :
+    display >= 5 ? "bg-amber-400 text-white ring-1 ring-inset ring-amber-500/20" :
+                   "bg-red-500 text-white ring-1 ring-inset ring-red-600/20";
   return (
-    <span className={`inline-flex items-baseline gap-0.5 rounded-md px-2.5 py-1 text-lg font-bold tabular-nums leading-tight ${color}`}>
+    <span className={`inline-flex items-baseline gap-0.5 rounded-full px-3 py-1 text-lg font-extrabold tabular-nums leading-tight ${color}`}>
       {display}
       <span className="text-[11px] font-normal opacity-80">/10</span>
     </span>
@@ -153,7 +153,7 @@ function MetricCell({
 }) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
-      <p className="text-[10px] font-semibold text-[#9CA3AF] uppercase tracking-widest leading-none">
+      <p className="text-[10px] font-bold text-[#9CA3AF] uppercase tracking-widest leading-none">
         {label}
       </p>
       <p
@@ -161,8 +161,8 @@ function MetricCell({
           empty
             ? "text-[#9CA3AF] text-xl font-semibold"
             : primary
-            ? "text-[#1E1E1E] text-xl font-bold"
-            : "text-[#374151] text-lg font-semibold"
+            ? "text-[#1E1E1E] text-2xl font-extrabold"
+            : "text-[#374151] text-xl font-bold"
         }`}
       >
         {value}
@@ -193,7 +193,7 @@ export default function DealHeader({
         {/* ── Top row: name + status + edit ───────────────────────────── */}
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-start justify-between gap-3">
-            <h1 className="text-lg font-bold text-[#1E1E1E] tracking-tight leading-snug flex-1 min-w-0">
+            <h1 className="text-xl font-extrabold text-[#1E1E1E] tracking-tight leading-snug flex-1 min-w-0">
               {deal.name}
             </h1>
             <button

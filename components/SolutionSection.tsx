@@ -10,13 +10,13 @@ const pillars = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
       </svg>
     ),
-    headline: "Your deal folder, organized",
+    headline: "Collect Evidence",
     description:
-      "Upload files, paste notes, add photos, and record audio. DealHub keeps everything in one place and builds a timeline of what happened — useful even if you never touch the AI features.",
+      "Drop in files, paste broker emails, add photos, and record audio. Everything lands in one deal workspace with an automatic timeline — so you always know what you have and when it arrived.",
     bullets: [
-      "Files, notes, photos, and audio in one place",
-      "Automatic activity timeline",
-      "Works as a standalone deal workspace",
+      "Capture files, notes, photos, and audio in one place",
+      "Automatic activity timeline built as you add evidence",
+      "Useful as a standalone deal workspace, even without AI",
     ],
   },
   {
@@ -30,13 +30,13 @@ const pillars = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
       </svg>
     ),
-    headline: "Structured deal knowledge",
+    headline: "Extract Facts",
     description:
-      "Key facts — revenue, SDE, employees, lease terms, customer concentration — are extracted from your documents and linked back to their source. No more hunting for where a number came from.",
+      "Revenue, SDE, employees, lease terms, customer concentration — AI pulls key numbers from your documents and links each fact back to its source. Review, confirm, or override before they go into scoring.",
     bullets: [
-      "Facts extracted from documents",
-      "Each fact linked to evidence",
-      "Editable with manual override",
+      "Key facts extracted automatically from uploaded documents",
+      "Every fact linked to its source evidence",
+      "Fully editable — review, confirm, or override any value",
     ],
   },
   {
@@ -50,13 +50,13 @@ const pillars = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     ),
-    headline: "AI interpretation, on your terms",
+    headline: "Analyze the Deal",
     description:
-      "Score the deal, review risks, strengths, and broker questions. Track how the score changes as new information arrives. Or skip our AI entirely and export your organized deal to ChatGPT, Claude, or any tool you prefer.",
+      "Get a deal score, a triage verdict, and a breakdown of risks and strengths — all grounded in the facts you've collected. Track how the score changes as new information arrives.",
     bullets: [
-      "Deal scorecard with score history",
-      "AI-generated risks and strengths",
-      "Export your deal for any AI tool",
+      "Deal scorecard with verdict and score history",
+      "AI-identified risks, strengths, and broker questions",
+      "Export your deal package to any AI tool you prefer",
     ],
   },
 ];
@@ -71,10 +71,10 @@ export default function SolutionSection() {
         </p>
 
         <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 text-center mb-4 tracking-tight">
-          Three layers. One workspace.
+          Three steps. One workspace.
         </h2>
         <p className="text-slate-500 text-center max-w-xl mx-auto mb-14 text-base leading-relaxed">
-          DealHub separates raw information, structured facts, and AI analysis so you always know what you have and where it came from.
+          Collect the evidence, extract the facts, and analyze the deal — all in one place, with a clear record of where every number came from.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

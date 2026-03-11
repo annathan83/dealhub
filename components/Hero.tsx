@@ -4,7 +4,7 @@ import Link from "next/link";
 
 function ProductMockup() {
   return (
-    <div className="w-full max-w-2xl mx-auto rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 overflow-hidden">
+    <div className="w-full max-w-3xl mx-auto rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 overflow-hidden">
 
       {/* Window chrome */}
       <div className="flex items-center gap-1.5 px-4 py-3 border-b border-slate-100 bg-slate-50">
@@ -33,8 +33,8 @@ function ProductMockup() {
       <div className="flex border-b border-slate-200 bg-white">
         {[
           { label: "Workspace", active: true },
-          { label: "Facts", badge: "3" },
           { label: "Analysis", badge: "72" },
+          { label: "Facts", badge: "3" },
         ].map((tab) => (
           <div
             key={tab.label}
@@ -48,7 +48,7 @@ function ProductMockup() {
             {tab.badge && (
               <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
                 tab.label === "Facts" ? "bg-amber-100 text-amber-700" : "bg-[#D1F0E8] text-[#1F7A63]"
-              }`}>
+              }`} >
                 {tab.badge}
               </span>
             )}
@@ -161,13 +161,13 @@ export default function Hero() {
 
             {/* Headline */}
             <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-5">
-              The workspace for{" "}
-              <span className="text-[#1F7A63]">acquisition deals</span>
+              The fastest way to{" "}
+              <span className="text-[#1F7A63]">analyze acquisition deals</span>
             </h1>
 
             {/* Subheadline */}
             <p className="text-lg text-slate-500 leading-relaxed mb-8">
-              Store files, organize evidence, track what happened, and analyze deals with our AI — or your own.
+              Turn broker emails, CIMs, notes, files, and call records into structured deal facts and clear analysis in one workspace.
             </p>
 
             {/* CTAs */}
@@ -175,6 +175,7 @@ export default function Hero() {
               <Link
                 href="/signup"
                 className="w-full sm:w-auto inline-flex items-center justify-center rounded-xl bg-[#1F7A63] px-7 py-3.5 text-base font-semibold text-white hover:bg-[#1a6854] transition-colors shadow-sm shadow-[#1F7A63]/20"
+                data-testid="landing-start-deal"
               >
                 Start a deal
               </Link>

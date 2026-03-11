@@ -69,8 +69,8 @@ type TabId = "workspace" | "facts" | "analysis";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "workspace", label: "Workspace" },
-  { id: "facts",     label: "Facts" },
   { id: "analysis",  label: "Analysis" },
+  { id: "facts",     label: "Facts" },
 ];
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
@@ -93,6 +93,7 @@ function TabBar({
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
+            data-testid={tab.id === "facts" ? "facts-tab-btn" : tab.id === "analysis" ? "analysis-tab-btn" : `tab-${tab.id}`}
             className={`relative flex-1 py-3 text-sm font-semibold transition-colors ${
               isActive
                 ? "text-[#1F7A63] border-b-2 border-[#1F7A63] -mb-px"
@@ -429,7 +430,7 @@ function TriageScoreHeader({
         <div>
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-1">Deal Score</p>
           <div className="flex items-baseline gap-1.5">
-            <span className={`text-5xl font-extrabold tabular-nums leading-none ${scoreColor}`}>
+            <span data-testid="overall-score" className={`text-5xl font-extrabold tabular-nums leading-none ${scoreColor}`}>
               {score !== null ? score.toFixed(1) : "—"}
             </span>
             <span className="text-lg text-slate-300 font-medium">/10</span>
@@ -1102,7 +1103,7 @@ function AnalysisTabContent({
     : null;
 
   return (
-    <div className="flex flex-col gap-4 py-4">
+    <div className="flex flex-col gap-4 py-4" data-testid="score-card">
 
       {/* A. Score header (score + confidence + facts used) */}
       <TriageScoreHeader scorecard={kpiScorecard} dealId={dealId} />
