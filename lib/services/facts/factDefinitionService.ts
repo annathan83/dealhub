@@ -131,6 +131,8 @@ export async function getFactDefinitionByKey(
     is_user_visible_initially: (data.is_user_visible_initially as boolean) ?? false,
     is_required_for_kpi: (data.is_required_for_kpi as boolean) ?? false,
     industry_key: (data.industry_key as string | null) ?? null,
+    is_derived: (data.is_derived as boolean) ?? false,
+    fact_group: (data.fact_group as FactDefinition["fact_group"]) ?? null,
     metadata_json: (data.metadata_json as Record<string, unknown>) ?? {},
     created_at: data.created_at as string,
   };
