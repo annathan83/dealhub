@@ -94,6 +94,16 @@ type ExtractionState =
   | { status: "done"; facts: ExtractedFact[]; missingRequired: string[] }
   | { status: "error"; message: string };
 
+const EXTRACTION_STEPS = ["reading", "extracting", "calculating", "scoring"] as const;
+type ExtractionStepId = (typeof EXTRACTION_STEPS)[number];
+type StepStatus = "waiting" | "active" | "done";
+const EXTRACTION_STEP_LABELS: Record<ExtractionStepId, string> = {
+  reading: "Reading document",
+  extracting: "Extracting key facts",
+  calculating: "Calculating metrics",
+  scoring: "Scoring deal",
+};
+
 type IntakeRejection = {
   dealId: string;
   verdict: string;
@@ -150,6 +160,12 @@ export default function CreateDealForm() {
   // Paste mode
   const [pasteText, setPasteText] = useState("");
   const [extraction, setExtraction] = useState<ExtractionState>({ status: "idle" });
+  const [stepStatus, setStepStatus] = useState<Record<ExtractionStepId, StepStatus>>({
+    reading: "waiting",
+    extracting: "waiting",
+    calculating: "waiting",
+    scoring: "waiting",
+  });
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [suggestedDealName, setSuggestedDealName] = useState<string | null>(null);
@@ -218,6 +234,11 @@ export default function CreateDealForm() {
     }
     setError(null);
     setExtraction({ status: "extracting" });
+    setStepStatus({ reading: "active", extracting: "waiting", calculating: "waiting", scoring: "waiting" });
+
+    const tExtracting = window.setTimeout(() => {
+      setStepStatus((s) => ({ ...s, reading: "done", extracting: "active" }));
+    }, 2500);
 
     try {
       const res = await fetch("/api/deals/pre-extract", {
@@ -235,31 +256,41 @@ export default function CreateDealForm() {
       };
 
       if (!res.ok || data.error) {
+        clearTimeout(tExtracting);
+        setStepStatus({ reading: "waiting", extracting: "waiting", calculating: "waiting", scoring: "waiting" });
         setExtraction({ status: "error", message: data.error ?? "Extraction failed." });
         return;
       }
 
-      const facts: ExtractedFact[] = (data.candidates ?? []).map((c) => ({
-        ...c,
-        accepted: c.confidence >= 0.5,
-      }));
-
-      setExtraction({
-        status: "done",
-        facts,
-        missingRequired: data.missing_required ?? [],
-      });
-
-      if (!name.trim()) {
-        const industry = facts.find((f) => f.fact_key === "industry");
-        const location = facts.find((f) => f.fact_key === "location");
-        if (industry && location) {
-          setName(`${industry.extracted_value_raw} — ${location.extracted_value_raw}`);
-        } else if (industry) {
-          setName(industry.extracted_value_raw);
-        }
-      }
+      clearTimeout(tExtracting);
+      setStepStatus((s) => ({ ...s, extracting: "done", calculating: "active" }));
+      window.setTimeout(() => {
+        setStepStatus((s) => ({ ...s, calculating: "done", scoring: "active" }));
+        window.setTimeout(() => {
+          const facts: ExtractedFact[] = (data.candidates ?? []).map((c) => ({
+            ...c,
+            accepted: c.confidence >= 0.5,
+          }));
+          setExtraction({
+            status: "done",
+            facts,
+            missingRequired: data.missing_required ?? [],
+          });
+          setStepStatus({ reading: "waiting", extracting: "waiting", calculating: "waiting", scoring: "waiting" });
+          if (!name.trim()) {
+            const industry = facts.find((f) => f.fact_key === "industry");
+            const location = facts.find((f) => f.fact_key === "location");
+            if (industry && location) {
+              setName(`${industry.extracted_value_raw} — ${location.extracted_value_raw}`);
+            } else if (industry) {
+              setName(industry.extracted_value_raw);
+            }
+          }
+        }, 500);
+      }, 500);
     } catch {
+      clearTimeout(tExtracting);
+      setStepStatus({ reading: "waiting", extracting: "waiting", calculating: "waiting", scoring: "waiting" });
       setExtraction({ status: "error", message: "Network error. Please try again." });
     }
   }
@@ -814,19 +845,44 @@ export default function CreateDealForm() {
             </>
           )}
 
-          {/* Step 2: Extracting spinner */}
+          {/* Step 2: Extracting — 4-step progress */}
           {extraction.status === "extracting" && (
-            <div className="flex flex-col items-center gap-3 py-10">
-              <div className="w-12 h-12 rounded-full bg-[#1F7A63]/10 flex items-center justify-center">
-                <svg className="w-6 h-6 text-[#1F7A63] animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
-                </svg>
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold text-slate-700">Extracting facts…</p>
-                <p className="text-xs text-slate-400 mt-0.5">Reading the listing and pulling out key numbers</p>
-              </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-medium text-slate-800 mb-4">✦ Analyzing your document...</p>
+              <ul className="space-y-2.5">
+                {EXTRACTION_STEPS.map((stepId) => {
+                  const status = stepStatus[stepId];
+                  const label = EXTRACTION_STEP_LABELS[stepId];
+                  return (
+                    <li key={stepId} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {status === "waiting" && (
+                          <span className="shrink-0 w-3 h-3 rounded-full border border-gray-300" aria-hidden />
+                        )}
+                        {status === "active" && (
+                          <span className="shrink-0 w-3 h-3 rounded-full bg-[#0F6E56] animate-pulse" aria-hidden />
+                        )}
+                        {status === "done" && (
+                          <svg className="w-3.5 h-3.5 shrink-0 text-[#0F6E56]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                        <span
+                          className={`text-sm truncate ${
+                            status === "active" ? "text-gray-900" : status === "done" ? "text-gray-500" : "text-gray-400"
+                          }`}
+                        >
+                          {label}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-400 shrink-0">
+                        {status === "done" ? "✓ done" : status === "active" ? "→ in progress" : "waiting"}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-xs text-gray-400 mt-4">This usually takes 10–20 seconds</p>
             </div>
           )}
 

@@ -33,6 +33,8 @@ type Props = {
   buyerFitLabel?: string | null;
   /** Per-deal custom scoring weights from entity.metadata_json.scoring_config */
   scoringConfig?: Record<string, number> | null;
+  /** When user clicks "View source" with a file_id, switch to Workspace tab and optionally highlight file */
+  onViewSourceInWorkspace?: (fileId: string) => void;
 };
 
 // ─── Basic Facts config ───────────────────────────────────────────────────────
@@ -298,6 +300,34 @@ function SourceBadge({ val }: { val: EntityFactValue | undefined }) {
   );
 }
 
+// ─── Confidence badge (AI-sourced facts only) ─────────────────────────────────
+// Uses confidence_score 0–1: >= 0.8 High, >= 0.5 Medium, < 0.5 Low; default Medium.
+
+function ConfidenceBadge({ val }: { val: EntityFactValue | undefined }) {
+  if (!val || isMissing(val)) return null;
+  if (val.value_source_type !== "ai_extracted" && val.value_source_type !== "ai_inferred") return null;
+  const score = val.confidence ?? 0.5;
+  const level = score >= 0.8 ? "High" : score >= 0.5 ? "Medium" : "Low";
+  const style =
+    level === "High"
+      ? "bg-green-50 text-green-700 border-green-200"
+      : level === "Medium"
+        ? "bg-yellow-50 text-yellow-700 border-yellow-200"
+        : "bg-red-50 text-red-600 border-red-200";
+  const tooltip = "Confidence reflects how clearly this value appeared in the source document.";
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded font-medium border ${style}`}
+      title={tooltip}
+    >
+      {level}
+      <svg className="w-3 h-3 shrink-0 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </span>
+  );
+}
+
 // ─── Evidence source link + snippet modal ────────────────────────────────────
 // Shown below the fact value. Clicking opens a modal with the full snippet.
 
@@ -393,6 +423,67 @@ function EvidenceSourceLink({
       </svg>
       <span className="truncate max-w-[160px]">{label}{page ? ` p.${page}` : ""}</span>
     </button>
+  );
+}
+
+// ─── Source quote block (evidence_text / source_quote) ─────────────────────────
+// Shows snippet with "View source" link; View source switches to Workspace tab + file or opens modal.
+// TODO: connect to Supabase — ensure facts/evidence has source_quote, source_document_id, confidence_score
+
+function SourceQuoteBlock({
+  evidence,
+  sourceName,
+  onViewSourceModal,
+  onViewInWorkspace,
+}: {
+  evidence: FactEvidence | null;
+  sourceName: string | null;
+  onViewSourceModal: () => void;
+  onViewInWorkspace?: (fileId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const quote = evidence?.snippet ?? null;
+  if (!quote || quote.trim() === "") return null;
+
+  const handleViewSource = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (evidence?.file_id && onViewInWorkspace) {
+      onViewInWorkspace(evidence.file_id);
+    } else {
+      onViewSourceModal();
+    }
+  };
+
+  return (
+    <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-start gap-1.5 text-xs text-gray-500 italic border-l-2 border-gray-200 pl-3 mt-2">
+        <svg className="w-3 h-3 shrink-0 text-gray-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <div className="min-w-0 flex-1">
+          <p className={expanded ? "" : "line-clamp-2"}>&ldquo;{quote}&rdquo;</p>
+          {quote.length > 120 && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              className="text-[10px] text-teal-600 underline mt-0.5"
+            >
+              {expanded ? "Show less" : "Show more"}
+            </button>
+          )}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleViewSource}
+        className="text-xs text-teal-600 underline cursor-pointer mt-1 inline-flex items-center gap-0.5"
+      >
+        View source
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </button>
+    </div>
   );
 }
 
@@ -789,6 +880,7 @@ function BasicFactCard({
   onEdit,
   onAccept,
   onViewEvidence,
+  onViewInWorkspace,
 }: {
   fd: FactDefinition;
   meta: BasicFactMeta;
@@ -798,6 +890,7 @@ function BasicFactCard({
   onEdit: () => void;
   onAccept?: () => void;
   onViewEvidence?: () => void;
+  onViewInWorkspace?: (fileId: string) => void;
 }) {
   const filled = isFilled(val);
   const status = val?.status as FactValueStatus | undefined;
@@ -834,16 +927,26 @@ function BasicFactCard({
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <SourceBadge val={val} />
+          <ConfidenceBadge val={val} />
           {!filled && <span className="text-[10px] text-slate-400 group-hover:text-red-500 transition-colors">Tap to add →</span>}
         </div>
-        {/* Evidence source link — shown for AI-sourced facts */}
+        {/* Evidence source link + quote — shown for AI-sourced facts */}
         {filled && evidence && (val?.value_source_type === "ai_extracted" || val?.value_source_type === "ai_inferred") && (
           <div className="mt-2">
-            <EvidenceSourceLink
-              evidence={evidence}
-              sourceName={sourceName}
-              onClick={onViewEvidence ?? (() => {})}
-            />
+            {evidence.snippet ? (
+              <SourceQuoteBlock
+                evidence={evidence}
+                sourceName={sourceName}
+                onViewSourceModal={onViewEvidence ?? (() => {})}
+                onViewInWorkspace={onViewInWorkspace}
+              />
+            ) : (
+              <EvidenceSourceLink
+                evidence={evidence}
+                sourceName={sourceName}
+                onClick={onViewEvidence ?? (() => {})}
+              />
+            )}
           </div>
         )}
         {filled && val?.value_source_type === "ai_inferred" && val?.change_reason && (
@@ -881,6 +984,7 @@ function NeedsReviewRow({
   onAccept,
   onEdit,
   onViewEvidence,
+  onViewInWorkspace,
 }: {
   fd: FactDefinition;
   val: EntityFactValue;
@@ -889,26 +993,33 @@ function NeedsReviewRow({
   onAccept: () => void;
   onEdit: () => void;
   onViewEvidence: () => void;
+  onViewInWorkspace?: (fileId: string) => void;
 }) {
   const [accepting, startTransition] = useTransition();
-  const snippet = evidence?.snippet ?? null;
 
   return (
     <div className="rounded-xl border border-yellow-200 bg-yellow-50/40 px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-xs font-semibold text-slate-600">{fd.label}</span>
             <SourceBadge val={val} />
+            <ConfidenceBadge val={val} />
           </div>
           <p className="text-lg font-bold text-slate-800 tabular-nums">
             {formatValue(val.value_raw, fd.data_type)}
           </p>
-          <div className="mt-1">
-            <EvidenceSourceLink evidence={evidence} sourceName={sourceName} onClick={onViewEvidence} />
-          </div>
-          {snippet && (
-            <p className="text-[10px] text-slate-400 italic mt-0.5 line-clamp-2">&ldquo;{snippet.slice(0, 120)}&rdquo;</p>
+          {evidence?.snippet ? (
+            <SourceQuoteBlock
+              evidence={evidence}
+              sourceName={sourceName}
+              onViewSourceModal={onViewEvidence}
+              onViewInWorkspace={onViewInWorkspace}
+            />
+          ) : (
+            <div className="mt-1">
+              <EvidenceSourceLink evidence={evidence} sourceName={sourceName} onClick={onViewEvidence} />
+            </div>
           )}
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
@@ -981,6 +1092,7 @@ function FactRow({
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-sm text-slate-600 truncate">{fd.label}</span>
           <SourceBadge val={val} />
+          <ConfidenceBadge val={val} />
         </div>
         {/* Evidence source link for AI-sourced facts */}
         {filled && evidence && onViewEvidence &&
@@ -1414,7 +1526,7 @@ function ScoringConfigSection({
 
 const MOBILE_BREAKPOINT = 768;
 
-export default function FactsTab({ factDefinitions, factValues, factEvidence, files, dealId, overallScore, buyerFitLabel, scoringConfig }: Props) {
+export default function FactsTab({ factDefinitions, factValues, factEvidence, files, dealId, overallScore, buyerFitLabel, scoringConfig, onViewSourceInWorkspace }: Props) {
   const router = useRouter();
   const [editingFact, setEditingFact] = useState<FactDefinition | null>(null);
   const [resolvingConflict, setResolvingConflict] = useState<FactDefinition | null>(null);
@@ -1685,6 +1797,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
                   onEdit={() => setEditingFact(fd)}
                   onAccept={val && isNeedsReview(val) ? () => acceptCandidate(fd, val) : undefined}
                   onViewEvidence={evidence ? () => setEvidenceModal({ evidence, sourceName: sn }) : undefined}
+                  onViewInWorkspace={onViewSourceInWorkspace}
                 />
               );
             })}
@@ -1725,6 +1838,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
                     onAccept={() => acceptCandidate(fd, val)}
                     onEdit={() => setEditingFact(fd)}
                     onViewEvidence={() => evidence && setEvidenceModal({ evidence, sourceName: sn })}
+                    onViewInWorkspace={onViewSourceInWorkspace}
                   />
                 );
               })}

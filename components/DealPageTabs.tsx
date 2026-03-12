@@ -1205,6 +1205,7 @@ export default function DealPageTabs({
   userDealCount,
 }: DealPageTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "workspace");
+  const [highlightFileId, setHighlightFileId] = useState<string | null>(null);
   const handleReviewFacts = () => setActiveTab("facts");
 
   // Refs for empty-state checklist: trigger Upload / Note from IntakeSection
@@ -1275,6 +1276,8 @@ export default function DealPageTabs({
             ndaFileConfidence={deal.nda_signed_confidence ?? null}
             onRequestUpload={() => uploadTriggerRef.current?.()}
             onRequestNote={() => noteOpenRef.current?.()}
+            highlightFileId={highlightFileId}
+            onHighlightConsumed={() => setHighlightFileId(null)}
           />
 
         </div>
@@ -1292,6 +1295,10 @@ export default function DealPageTabs({
               dealId={deal.id}
               overallScore={kpiScorecard?.overall_score ?? null}
               scoringConfig={(entityData.entity.metadata_json.scoring_config as Record<string, number> | undefined) ?? null}
+              onViewSourceInWorkspace={(fileId) => {
+                setHighlightFileId(fileId);
+                setActiveTab("workspace");
+              }}
               buyerFitLabel={buyerProfile && entityData
                 ? (() => {
                     const factDefs = entityData.fact_definitions;

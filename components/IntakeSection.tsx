@@ -7,7 +7,7 @@
  * moved to QuickAddBar which sits above the tab bar so they are always visible.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { EntityFile } from "@/types/entity";
 import FileDetailModal from "./FileDetailModal";
@@ -199,6 +199,10 @@ type Props = {
   onRequestUpload?: () => void;
   /** Called when user clicks Note in the empty-state checklist (opens note panel) */
   onRequestNote?: () => void;
+  /** When set (e.g. from Facts "View source"), open this file in the detail modal and clear after */
+  highlightFileId?: string | null;
+  /** Called after the highlighted file has been selected so parent can clear highlightFileId */
+  onHighlightConsumed?: () => void;
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -216,12 +220,28 @@ export default function IntakeSection({
   ndaFileConfidence = null,
   onRequestUpload,
   onRequestNote,
+  highlightFileId = null,
+  onHighlightConsumed,
 }: Props) {
   const router = useRouter();
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<EntityFile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+
+  // When parent asks to highlight a file (e.g. "View source" from Facts), select it and open modal
+  useEffect(() => {
+    if (!highlightFileId || !files.length) return;
+    const file = files.find((f) => f.id === highlightFileId);
+    if (file) {
+      setSelectedFile(file);
+      const sorted = [...files].sort(
+        (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+      );
+      if (sorted.indexOf(file) >= INITIAL_SHOW) setShowAll(true);
+      onHighlightConsumed?.();
+    }
+  }, [highlightFileId, files]);
 
   const totalFiles = files.length;
   const processedCount = files.filter(
