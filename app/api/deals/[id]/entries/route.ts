@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import { saveRawEntryToDrive } from "@/lib/google/drive";
 import { ingestFromDealEntry } from "@/lib/services/entity/entityFileService";
 import type { Deal } from "@/types";
+import { getDealDisplayName } from "@/types";
 
 // ─── AI title generation for pasted text ─────────────────────────────────────
 
@@ -111,12 +112,12 @@ export async function POST(
     .single();
 
   if (tokenRow) {
-    saveRawEntryToDrive({ userId: user.id, dealId, dealName: deal.name, rawContent: content })
+    saveRawEntryToDrive({ userId: user.id, dealId, dealName: getDealDisplayName(deal), rawContent: content })
       .catch((err) => console.error("Drive save failed (non-fatal):", err));
   }
 
   // ── 2. Generate AI title for the note (used as display name + .txt filename)
-  const noteTitle = await generateNoteTitle(content, deal.name).catch(() => fallbackTitle());
+  const noteTitle = await generateNoteTitle(content, getDealDisplayName(deal)).catch(() => fallbackTitle());
 
   // ── 3. Entity pipeline: text → triage facts → triage summary ─────────────
   // Deep analysis is user-triggered only — never runs automatically on intake.

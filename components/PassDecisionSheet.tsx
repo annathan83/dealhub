@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Deal, PassReason } from "@/types";
+import { getDealDisplayName } from "@/types";
 
 const PASS_REASONS: { value: PassReason; label: string }[] = [
   { value: "price_too_high",          label: "Price too high" },
@@ -112,7 +113,7 @@ export default function PassDecisionSheet({ deal, onClose }: Props) {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-900">Pass on this deal</h2>
-                  <p className="text-xs text-slate-400 truncate max-w-[200px]">{deal.name}</p>
+                  <p className="text-xs text-slate-400 truncate max-w-[200px]">{getDealDisplayName(deal)}</p>
                 </div>
               </div>
               <button

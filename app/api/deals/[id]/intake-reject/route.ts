@@ -24,6 +24,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { getDealDisplayName } from "@/types";
 
 export async function POST(
   request: NextRequest,
@@ -107,7 +108,7 @@ export async function POST(
       deal_id: dealId,
       user_id: user.id,
       source_type: "intake",
-      source_name: deal.name as string,
+      source_name: getDealDisplayName(deal),
       intake_created_at: deal.created_at as string,
       rejected_at: new Date().toISOString(),
       rejection_reason: body.rejection_reason ?? "PROBABLY_PASS",

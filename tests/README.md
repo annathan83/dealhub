@@ -1,5 +1,8 @@
 # Playwright Tests
 
+**Test plan:** See [TEST-PLAN.md](./TEST-PLAN.md).  
+**Reports:** Timestamped summaries in [test-reports/](../test-reports/).
+
 ## Running Tests
 
 ```bash
@@ -8,6 +11,9 @@ npx playwright test --project=smoke
 
 # E2E and scenario tests (requires auth)
 npx playwright test --project=chromium
+
+# Test-data E2E (listings, multi-file, NDA, broker, intake; uses test-data/)
+npx playwright test --project=test-data
 
 # Full suite
 npx playwright test

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Deal } from "@/types";
+import { getDealDisplayName } from "@/types";
+import { formatLocation } from "@/lib/config/dealMetadata";
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-blue-50 text-blue-700 border-blue-100",
@@ -36,7 +38,7 @@ export default function DealCard({ deal }: { deal: Deal }) {
       {/* Header row */}
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-base font-semibold text-slate-900 leading-snug">
-          {deal.name}
+          {getDealDisplayName(deal)}
         </h3>
         <span
           className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusStyle}`}
@@ -62,13 +64,13 @@ export default function DealCard({ deal }: { deal: Deal }) {
             {deal.industry}
           </span>
         )}
-        {deal.location && (
+        {(formatLocation(deal.city, deal.county, deal.state) || deal.location) && (
           <span className="inline-flex items-center gap-1 text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-full px-2.5 py-1">
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            {deal.location}
+            {formatLocation(deal.city, deal.county, deal.state) || deal.location}
           </span>
         )}
         <span className="inline-flex items-center gap-1 text-xs text-slate-400 ml-auto">

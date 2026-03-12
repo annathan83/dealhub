@@ -37,7 +37,11 @@ export type Deal = {
   id: string;
   user_id: string;
   deal_number: number;
+  /** @deprecated Use display_alias for UI. Kept for backward compat; may store alias or fallback. */
   name: string;
+  /** Privacy-safe display name. Use for all UI. Falls back to name then "Deal #N". */
+  display_alias: string | null;
+  /** @deprecated Do not store confidential or raw document content; raw content stays in Drive. */
   description: string | null;
   // Structured industry (two-level)
   industry_category: string | null;
@@ -68,6 +72,8 @@ export type Deal = {
   intake_status: IntakeStatus;
   created_at: string;
   updated_at: string;
+  /** Last activity timestamp for sorting/filters. */
+  last_activity_at: string | null;
   // ── NDA milestone (separate from lifecycle status) ────────────────────────
   nda_signed: boolean;
   nda_signed_at: string | null;
@@ -83,6 +89,19 @@ export function getNdaState(deal: Pick<Deal, "nda_signed" | "nda_signed_confiden
   // Low-confidence detection = review needed
   if (deal.nda_signed_confidence !== null && deal.nda_signed_confidence < 0.7) return "review";
   return "pending";
+}
+
+/**
+ * Privacy-safe display name for a deal. Use everywhere in UI instead of deal.name.
+ * Prefers display_alias, then name, then "Deal #N" (or "Deal" if deal_number missing).
+ */
+export function getDealDisplayName(deal: { display_alias?: string | null; name?: string | null; deal_number?: number }): string {
+  const alias = deal.display_alias?.trim();
+  if (alias) return alias;
+  const name = deal.name?.trim();
+  if (name) return name;
+  if (typeof deal.deal_number === "number") return `Deal #${deal.deal_number}`;
+  return "Deal";
 }
 
 // ─── Google Drive ─────────────────────────────────────────────────────────────

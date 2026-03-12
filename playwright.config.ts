@@ -53,7 +53,7 @@ export default defineConfig({
     // ── Chromium: all authenticated tests ──────────────────────────────────
     {
       name: 'chromium',
-      testIgnore: ['**/smoke/**', '**/*.setup.ts', '**/ux-screenshots.spec.ts', '**/hvac-golden.spec.ts'],
+      testIgnore: ['**/smoke/**', '**/*.setup.ts', '**/ux-screenshots.spec.ts', '**/hvac-golden.spec.ts', '**/test-data-*.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: path.join(__dirname, 'playwright/.auth/user.json'),
@@ -67,6 +67,19 @@ export default defineConfig({
       name: 'screenshots',
       testMatch: ['**/ux-screenshots.spec.ts'],
       timeout: 120000,
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: path.join(__dirname, 'playwright/.auth/user.json'),
+      },
+      dependencies: ['setup'],
+    },
+
+    // ── Test data: test-data/ E2E (listings, multi-file, NDA, broker, intake)
+    // npx playwright test --project=test-data
+    {
+      name: 'test-data',
+      testMatch: ['**/test-data-*.spec.ts'],
+      timeout: 90000,
       use: {
         ...devices['Desktop Chrome'],
         storageState: path.join(__dirname, 'playwright/.auth/user.json'),
@@ -117,6 +130,7 @@ export default defineConfig({
       command: 'npm run dev',
       url: `${BASE_URL}/signin`,
       reuseExistingServer: !isCI,
+      timeout: 120000,
     },
   }),
 });

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { saveTextNoteToDrive } from "@/lib/google/drive";
 import { logDealEdited } from "@/lib/services/entity/entityEventService";
 import type { Deal } from "@/types";
+import { getDealDisplayName } from "@/types";
 
 const VALID_STATUSES = ["active", "closed", "passed"];
 
@@ -24,6 +25,7 @@ function computeMultiple(asking_price: string | null, sde: string | null): strin
 
 const FIELD_LABELS: Record<string, string> = {
   name: "Deal Name",
+  display_alias: "Display name (alias)",
   description: "Description",
   industry_category: "Industry Category",
   industry: "Industry",
@@ -100,7 +102,7 @@ export async function PATCH(
 
   // ── Build update payload ──────────────────────────────────────────────────
   const editableFields = [
-    "name", "description",
+    "name", "description", "display_alias",
     "industry_category", "industry",
     "state", "county", "city", "location",
     "deal_source_category", "deal_source_detail",
@@ -131,6 +133,12 @@ export async function PATCH(
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
 
+  // ── Privacy: keep name in sync with display_alias when display_alias is set ──
+  if ("display_alias" in updates && updates.display_alias !== undefined) {
+    const alias = updates.display_alias?.trim();
+    if (alias) updates.name = alias;
+  }
+
   // ── Auto-compute multiple ─────────────────────────────────────────────────
   const effectivePrice = "asking_price" in updates ? updates.asking_price : deal.asking_price;
   const effectiveSde = "sde" in updates ? updates.sde : deal.sde;
@@ -145,10 +153,11 @@ export async function PATCH(
     }
   }
 
-  // ── Apply update ──────────────────────────────────────────────────────────
+  // ── Apply update (include last_activity_at for privacy-first deal model) ───
+  const updatePayload = { ...updates, last_activity_at: new Date().toISOString() };
   const { error: updateError } = await supabase
     .from("deals")
-    .update(updates)
+    .update(updatePayload)
     .eq("id", dealId)
     .eq("user_id", user.id);
 
@@ -171,7 +180,7 @@ export async function PATCH(
       ? `${FIELD_LABELS[changes[0].field] ?? changes[0].field} updated`
       : `${changes.length} fields updated`;
 
-  const dealName = (updates.name ?? deal.name) as string;
+  const dealName = getDealDisplayName({ ...deal, ...updates });
 
   // ── Log to entity_events (non-fatal) ─────────────────────────────────────
   const { data: entityRow } = await supabase

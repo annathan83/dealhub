@@ -1,15 +1,17 @@
 import { test as base, expect } from '@playwright/test';
 import { loadHvacCleanTestData, type HvacCleanExpected } from './helpers/hvacClean';
 import { hasAuthSession } from './helpers/requireAuth';
+import { loadListing, loadMultiFileDeal, type MultiFileDealExpected } from './helpers/testData';
 
 /**
  * Reusable fixtures for DealHub Playwright tests.
  *
  * - seededDeal: creates a minimal deal, tears it down after the test
  * - hvacCleanDeal: creates hvac-clean golden deal from testdata, tears it down after
+ * - dealFromListing: creates deal from test-data/listings/ (default listing_010), tears down after
+ * - dealFromMultiFile: creates deal from test-data/multi-file-deals/deal-001 listing, provides expected for assertions
  *
- * Both fixtures call requireAuth() so tests skip immediately with a clear message
- * when credentials are not configured, instead of timing out.
+ * All fixtures call requireAuth() when credentials are not configured.
  */
 
 type DealFixture = {
@@ -21,7 +23,23 @@ type HvacCleanDealFixture = DealFixture & {
   expected: HvacCleanExpected;
 };
 
-export const test = base.extend<{ seededDeal: DealFixture; hvacCleanDeal: HvacCleanDealFixture }>({
+type DealFromListingFixture = DealFixture & {
+  listingId: string;
+};
+
+type DealFromMultiFileFixture = DealFixture & {
+  expected: MultiFileDealExpected;
+  multiFileDealId: string;
+};
+
+export const test = base.extend<
+  {
+    seededDeal: DealFixture;
+    hvacCleanDeal: HvacCleanDealFixture;
+    dealFromListing: DealFromListingFixture;
+    dealFromMultiFile: DealFromMultiFileFixture;
+  }
+>({
   seededDeal: async ({ page, request }, use) => {
     base.skip(!hasAuthSession(), 'Skipped: no auth session. Set PLAYWRIGHT_TEST_EMAIL and PLAYWRIGHT_TEST_PASSWORD in .env.local.');
 
@@ -75,6 +93,62 @@ export const test = base.extend<{ seededDeal: DealFixture; hvacCleanDeal: HvacCl
     const dealId = match?.[1] ?? '';
 
     await use({ dealId, dealName: expected.dealName, expected });
+
+    if (dealId) {
+      await request.delete(`/api/deals/${dealId}`).catch(() => {
+        console.warn(`[fixture] Failed to delete deal ${dealId} during teardown`);
+      });
+    }
+  },
+
+  dealFromListing: async ({ page, request }, use) => {
+    base.skip(!hasAuthSession(), 'Skipped: no auth session. Set PLAYWRIGHT_TEST_EMAIL and PLAYWRIGHT_TEST_PASSWORD in .env.local.');
+
+    const { listingText, listingId } = loadListing('010');
+    const dealName = `E2E Listing ${listingId} ${Date.now()}`;
+
+    await page.goto('/deals/new');
+    await page.getByTestId('paste-listing').fill(listingText);
+    await page.getByTestId('extract-facts').click();
+
+    await expect(page.getByTestId('create-deal-submit')).toBeVisible({ timeout: 30000 });
+    await page.getByTestId('deal-name-input').fill(dealName);
+    await page.getByTestId('create-deal-submit').click();
+
+    await expect(page).toHaveURL(/\/deals\/[a-f0-9-]+/, { timeout: 90000 });
+    const url = page.url();
+    const match = url.match(/\/deals\/([a-f0-9-]+)/);
+    const dealId = match?.[1] ?? '';
+
+    await use({ dealId, dealName, listingId });
+
+    if (dealId) {
+      await request.delete(`/api/deals/${dealId}`).catch(() => {
+        console.warn(`[fixture] Failed to delete deal ${dealId} during teardown`);
+      });
+    }
+  },
+
+  dealFromMultiFile: async ({ page, request }, use) => {
+    base.skip(!hasAuthSession(), 'Skipped: no auth session. Set PLAYWRIGHT_TEST_EMAIL and PLAYWRIGHT_TEST_PASSWORD in .env.local.');
+
+    const { listingText, expected, dealId: multiFileDealId } = loadMultiFileDeal('001');
+    const dealName = `E2E MultiFile ${multiFileDealId} ${Date.now()}`;
+
+    await page.goto('/deals/new');
+    await page.getByTestId('paste-listing').fill(listingText);
+    await page.getByTestId('extract-facts').click();
+
+    await expect(page.getByTestId('create-deal-submit')).toBeVisible({ timeout: 30000 });
+    await page.getByTestId('deal-name-input').fill(dealName);
+    await page.getByTestId('create-deal-submit').click();
+
+    await expect(page).toHaveURL(/\/deals\/[a-f0-9-]+/, { timeout: 90000 });
+    const url = page.url();
+    const match = url.match(/\/deals\/([a-f0-9-]+)/);
+    const dealId = match?.[1] ?? '';
+
+    await use({ dealId, dealName, expected, multiFileDealId });
 
     if (dealId) {
       await request.delete(`/api/deals/${dealId}`).catch(() => {

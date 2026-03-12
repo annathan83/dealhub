@@ -6,7 +6,9 @@ import { getNdaState } from "@/types";
 import type { KpiScorecardResult } from "@/lib/kpi/kpiConfig";
 import EditDealModal from "./EditDealModal";
 import BrokerContactCard from "./BrokerContactCard";
+import { getDealDisplayName } from "@/types";
 import type { DealContact } from "@/lib/services/contacts/dealContactService";
+import { formatLocation } from "@/lib/config/dealMetadata";
 
 // ─── Fit badge (compact inline) ───────────────────────────────────────────────
 
@@ -366,7 +368,7 @@ export default function DealHeader({
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-xl font-extrabold text-[#1E1E1E] tracking-tight leading-snug flex-1 min-w-0">
-              {deal.name}
+              {getDealDisplayName(deal)}
             </h1>
             <button
               onClick={() => setEditOpen(true)}
@@ -418,13 +420,13 @@ export default function DealHeader({
                 {deal.industry}
               </span>
             )}
-            {deal.location && (
+            {(formatLocation(deal.city, deal.county, deal.state) || deal.location) && (
               <span className="inline-flex items-center gap-1 text-xs text-slate-400">
                 <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                {deal.location}
+                {formatLocation(deal.city, deal.county, deal.state) || deal.location}
               </span>
             )}
             <span className="text-xs text-slate-400">{formatDate(deal.created_at)}</span>

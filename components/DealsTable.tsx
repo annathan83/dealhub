@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import type { Deal, DealStatus, NdaState } from "@/types";
-import { getNdaState } from "@/types";
+import { getNdaState, getDealDisplayName } from "@/types";
 import { US_STATES, INDUSTRY_CATEGORIES, DEAL_SOURCE_CATEGORIES } from "@/lib/config/dealMetadata";
 import { formatLocation } from "@/lib/config/dealMetadata";
 import { formatPhoneDisplay, looksLikePhone, normalizePhoneForDial } from "@/lib/phoneUtils";
@@ -117,7 +117,7 @@ function BrokerPhoneButton({
       window.location.href = `tel:${dialString}`;
       return;
     }
-    navigator.clipboard.writeText(display ?? dialString).then(() => {
+    navigator.clipboard.writeText(display ?? dialString ?? "").then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -492,7 +492,7 @@ function DealCard({ deal, score, fit, broker }: { deal: Deal; score: number | un
         {/* Deal name + status */}
         <div className="flex items-start justify-between gap-3 mb-0.5">
           <p className="font-bold text-[#1E1E1E] text-[14px] leading-snug group-hover:text-[#1F7A63] transition-colors line-clamp-2 flex-1 min-w-0">
-            {deal.name}
+            {getDealDisplayName(deal)}
           </p>
           <div className="shrink-0 mt-0.5">
             <StatusBadge status={deal.status} />
@@ -655,7 +655,7 @@ function DealRow({
       {/* Deal identity */}
       <td className="px-4 py-2.5 min-w-[180px]">
         <span className="font-bold text-[14px] text-[#1E1E1E] group-hover:text-[#1F7A63] transition-colors leading-snug block">
-          {deal.name}
+          {getDealDisplayName(deal)}
         </span>
       </td>
 
@@ -827,8 +827,10 @@ export default function DealsTable({
       const brokerPhone = broker?.phone ?? broker?.contact ?? deal.broker_phone ?? "";
       const brokerPhoneDigits = brokerPhone.replace(/\D/g, "");
       const queryDigits = q.replace(/\D/g, "");
+      const displayName = getDealDisplayName(deal);
       const matchesSearch =
         !q ||
+        displayName.toLowerCase().includes(q) ||
         deal.name.toLowerCase().includes(q) ||
         displayIndustry.toLowerCase().includes(q) ||
         displayLocation.toLowerCase().includes(q) ||

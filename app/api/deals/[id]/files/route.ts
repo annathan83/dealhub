@@ -7,6 +7,7 @@ import { transcribeAudio, isAudioFile } from "@/lib/ai/transcribeAudio";
 import { extractTextFromBuffer } from "@/lib/files/extractText";
 import { ingestFromDealUpload } from "@/lib/services/entity/entityFileService";
 import type { Deal } from "@/types";
+import { getDealDisplayName } from "@/types";
 import type { AttachmentAnalysisResult } from "@/types";
 
 function formatAssessmentText(result: AttachmentAnalysisResult): string {
@@ -139,7 +140,7 @@ export async function POST(
           driveMeta = await uploadFileToDealFolder({
             userId: user.id,
             dealId,
-            dealName: deal.name,
+            dealName: getDealDisplayName(deal),
             fileBuffer: buffer,
             originalFileName: file.name,
             mimeType,
@@ -182,7 +183,7 @@ export async function POST(
       try {
         if (isImage && buffer.length <= MAX_IMAGE_ANALYSIS_BYTES) {
           const result = await analyzeImageAttachment({
-            dealName: deal.name,
+            dealName: getDealDisplayName(deal),
             driveFileName: driveMeta?.googleFileName ?? file.name,
             originalFileName: file.name,
             mimeType,
@@ -190,7 +191,7 @@ export async function POST(
           });
           analysis = { title: result.change_log_item.title, description: result.change_log_item.description, summary: result.summary };
           if (driveMeta) {
-            saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
+            saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: getDealDisplayName(deal), originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
               .catch((e) => console.error("Drive AI save failed:", e));
           }
 
@@ -199,7 +200,7 @@ export async function POST(
           if (transcript) {
             analysis = { title: "Recording added", description: transcript.slice(0, 200) + (transcript.length > 200 ? "…" : ""), summary: transcript };
             if (driveMeta) {
-              saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: `AI Transcript\n=============\n\n${transcript}` })
+              saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: getDealDisplayName(deal), originalFileBase: fileBase, assessmentText: `AI Transcript\n=============\n\n${transcript}` })
                 .catch((e) => console.error("Drive transcript save failed:", e));
             }
           } else {
@@ -220,11 +221,11 @@ export async function POST(
             : ext === "csv" ? "csv" : "text";
 
           const result = isScannedPdf
-            ? await analyzePdfAttachment({ dealName: deal.name, originalFileName: file.name, pdfBuffer: buffer })
-            : await analyzeAttachment({ dealName: deal.name, driveFileName: driveMeta?.googleFileName ?? file.name, originalFileName: file.name, mimeType, contentPreview });
+            ? await analyzePdfAttachment({ dealName: getDealDisplayName(deal), originalFileName: file.name, pdfBuffer: buffer })
+            : await analyzeAttachment({ dealName: getDealDisplayName(deal), driveFileName: driveMeta?.googleFileName ?? file.name, originalFileName: file.name, mimeType, contentPreview });
           analysis = { title: result.change_log_item.title, description: result.change_log_item.description, summary: result.summary };
           if (driveMeta) {
-            saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: deal.name, originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
+            saveAIAssessmentToDrive({ userId: user.id, dealId, dealName: getDealDisplayName(deal), originalFileBase: fileBase, assessmentText: formatAssessmentText(result) })
               .catch((e) => console.error("Drive AI save failed:", e));
           }
         }

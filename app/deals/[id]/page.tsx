@@ -8,6 +8,7 @@ import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
 import { getDealContacts } from "@/lib/services/contacts/dealContactService";
+import { getDealDisplayName } from "@/types";
 
 export default async function DealPage({
   params,
@@ -137,7 +138,7 @@ export default async function DealPage({
           <svg className="w-3 h-3 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
           </svg>
-          <span className="text-slate-600 font-medium truncate">{deal.name}</span>
+          <span className="text-slate-600 font-medium truncate">{getDealDisplayName(deal)}</span>
         </div>
 
         {/* ── Deal header (always visible) ─────────────────────────────── */}

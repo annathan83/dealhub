@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
 
   let body: {
     name?: string;
+    display_alias?: string | null;
     industry_category?: string | null;
     industry?: string | null;
     state?: string | null;
@@ -60,16 +61,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  if (!body.name?.trim()) {
-    return NextResponse.json({ error: "Deal name is required." }, { status: 422 });
+  const displayName = body.display_alias?.trim() || body.name?.trim();
+  if (!displayName) {
+    return NextResponse.json({ error: "Display name is required." }, { status: 422 });
   }
 
-  // ── 1. Insert the deal row ────────────────────────────────────────────────────
+  // ── 1. Insert the deal row (privacy-first: store display_alias; name = display name) ─
   const { data: deal, error: insertError } = await supabase
     .from("deals")
     .insert({
       user_id: user.id,
-      name: body.name.trim(),
+      name: displayName,
+      display_alias: body.display_alias?.trim() || displayName,
+      last_activity_at: new Date().toISOString(),
       industry_category: body.industry_category?.trim() || null,
       industry: body.industry?.trim() || null,
       state: body.state?.trim() || null,
@@ -188,13 +192,16 @@ export async function POST(request: NextRequest) {
 
   } catch (err) {
     console.error("[createDeal] Post-creation pipeline failed (non-fatal):", err);
-    // On pipeline failure, promote the deal so it doesn't get stuck as pending
-    await supabase
-      .from("deals")
-      .update({ intake_status: "promoted" })
-      .eq("id", dealId)
-      .eq("user_id", user.id)
-      .catch(() => {});
+    // On pipeline failure, promote the deal so it doesn't get stuck as pending (Supabase builder has no .catch())
+    try {
+      await supabase
+        .from("deals")
+        .update({ intake_status: "promoted" })
+        .eq("id", dealId)
+        .eq("user_id", user.id);
+    } catch (_promoteErr) {
+      // ignore
+    }
   }
 
   // ── 3. Provision Drive folder + subfolders (non-fatal) ───────────────────────
@@ -203,7 +210,7 @@ export async function POST(request: NextRequest) {
     await ensureDealSubfolders(
       user.id,
       dealId,
-      deal.name as string,
+      displayName,
       deal.deal_number as number
     );
   } catch (err) {
@@ -214,7 +221,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       id: dealId,
-      name: deal.name,
+      name: displayName,
       deal_number: deal.deal_number,
       driveFolderError,
       // Intake assessment result — client uses this to decide whether to show

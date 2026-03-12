@@ -9,6 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getAuthorizedDriveClient, buildDealFolderName } from "@/lib/google/drive";
+import { getDealDisplayName } from "@/types";
 
 export async function GET(request: NextRequest) {
   const secret = request.nextUrl.searchParams.get("secret");
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   // Fetch all deals belonging to this user that have a Drive folder
   const { data: deals, error } = await supabase
     .from("deals")
-    .select("id, name, deal_number, google_drive_folder_id")
+    .select("id, name, display_alias, deal_number, google_drive_folder_id")
     .eq("user_id", user.id)
     .not("google_drive_folder_id", "is", null);
 
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
   const results = [];
 
   for (const deal of deals ?? []) {
-    const newName = buildDealFolderName(deal.deal_number as number, deal.name as string);
+    const newName = buildDealFolderName(deal.deal_number as number, getDealDisplayName(deal));
     try {
       const { data: file } = await drive.files.get({
         fileId: deal.google_drive_folder_id as string,
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
       });
 
       if (file.name === newName) {
-        results.push({ deal: deal.name, status: "already_correct", name: newName });
+        results.push({ deal: getDealDisplayName(deal), status: "already_correct", name: newName });
         continue;
       }
 
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
 
       results.push({ deal: deal.name, status: "renamed", from: file.name, to: newName });
     } catch (err) {
-      results.push({ deal: deal.name, status: "error", error: (err as Error).message });
+      results.push({ deal: getDealDisplayName(deal), status: "error", error: (err as Error).message });
     }
   }
 

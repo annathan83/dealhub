@@ -18,7 +18,7 @@ setup('authenticate', async ({ page }) => {
     return;
   }
 
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.getByTestId('landing-signin').first().click();
   await page.getByLabel(/email/i).fill(email);
   await page.getByLabel(/password/i).fill(password);

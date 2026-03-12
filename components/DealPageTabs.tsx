@@ -11,6 +11,7 @@
 
 import { useState } from "react";
 import type { Deal, DealStatus } from "@/types";
+import { getDealDisplayName } from "@/types";
 import type {
   EntityPageData,
   EntityFile,
@@ -1200,7 +1201,7 @@ export default function DealPageTabs({
           {/* Activity timeline — shown first */}
           <TimelineSection
             items={timelineItems}
-            dealName={deal.name}
+            dealName={getDealDisplayName(deal)}
             dealCreatedAt={deal.created_at}
             files={syncedFiles}
             dealId={deal.id}
@@ -1209,7 +1210,7 @@ export default function DealPageTabs({
           {/* File workspace — below activity */}
           <IntakeSection
             dealId={deal.id}
-            dealName={deal.name}
+            dealName={getDealDisplayName(deal)}
             driveFolderId={deal.google_drive_folder_id ?? null}
             isDriveConnected={isDriveConnected}
             files={syncedFiles}

@@ -26,6 +26,7 @@ export default async function DashboardPage() {
       .eq("user_id", user.id)
       // Exclude intake-rejected deals — they are not real deals
       .or("intake_status.is.null,intake_status.eq.promoted")
+      .order("last_activity_at", { ascending: false, nullsFirst: false })
       .order("updated_at", { ascending: false }),
     supabase
       .from("google_oauth_tokens")

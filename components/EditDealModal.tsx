@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import type { Deal, DealStatus } from "@/types";
+import { getDealDisplayName } from "@/types";
 import DealMetadataFields, { type DealMetadataValues } from "@/components/DealMetadataFields";
 import { formatLocation } from "@/lib/config/dealMetadata";
 
@@ -25,6 +26,7 @@ type Props = {
 
 type FormState = {
   name: string;
+  display_alias: string;
   description: string;
   status: DealStatus;
   asking_price: string;
@@ -101,10 +103,14 @@ export default function EditDealModal({ deal, onClose }: Props) {
 
   const [form, setForm] = useState<FormState>({
     name: deal.name,
+    display_alias: deal.display_alias ?? deal.name ?? "",
     description: deal.description ?? "",
     status: deal.status,
     asking_price: deal.asking_price ?? "",
     sde: deal.sde ?? "",
+    broker_name: deal.broker_name ?? "",
+    broker_email: deal.broker_email ?? "",
+    broker_phone: deal.broker_phone ?? "",
   });
 
   const [metadata, setMetadata] = useState<DealMetadataValues>({
@@ -167,8 +173,9 @@ export default function EditDealModal({ deal, onClose }: Props) {
   }
 
   async function handleSave() {
-    if (!form.name.trim()) {
-      setError("Deal name is required.");
+    const displayName = form.display_alias.trim() || form.name.trim();
+    if (!displayName) {
+      setError("Display name is required.");
       return;
     }
     setError(null);
@@ -179,7 +186,8 @@ export default function EditDealModal({ deal, onClose }: Props) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name,
+          name: displayName,
+          display_alias: form.display_alias.trim() || null,
           description: form.description,
           status: form.status,
           asking_price: form.asking_price,
@@ -225,7 +233,7 @@ export default function EditDealModal({ deal, onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
           <div>
             <h2 className="text-base font-semibold text-slate-900">Edit Deal</h2>
-            <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[280px]">{deal.name}</p>
+            <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[280px]">{getDealDisplayName(deal)}</p>
           </div>
           <button
             onClick={onClose}
@@ -253,16 +261,16 @@ export default function EditDealModal({ deal, onClose }: Props) {
 
           {/* ── Section: Basic ─────────────────────────────── */}
           <div>
-            <SectionHeader title="Basic" description="Deal name and current pipeline status" />
+            <SectionHeader title="Basic" description="Display name (alias) and pipeline status. Use an alias; do not store real business name." />
             <div className="flex flex-col gap-4">
-              <Field label="Deal name">
+              <Field label="Display name (alias)">
                 <input
                   type="text"
-                  value={form.name}
-                  onChange={(e) => set("name", e.target.value)}
+                  value={form.display_alias}
+                  onChange={(e) => set("display_alias", e.target.value)}
                   disabled={loading}
                   className={INPUT}
-                  placeholder="e.g. Midwest HVAC Company"
+                  placeholder="e.g. Deal #42, Tampa HVAC"
                   autoFocus
                 />
               </Field>
