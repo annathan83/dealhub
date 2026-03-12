@@ -10,7 +10,7 @@
  *   3. All Facts by Category — grouped: Financials, Operations, Employees, etc.
  */
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type {
   FactDefinition,
@@ -1011,20 +1011,25 @@ function FactRow({
 function CalculatedMetricsSection({
   factDefs,
   factValues,
+  noHeader,
 }: {
   factDefs: FactDefinition[];
   factValues: EntityFactValue[];
+  /** When true, only render the metrics list (no section header). Used when parent provides a collapsible header. */
+  noHeader?: boolean;
 }) {
   const metrics = computeDerivedMetrics(factValues, factDefs);
   const items = Object.values(metrics);
 
   return (
-    <div className="mt-5">
-      <div className="flex items-center gap-3 mb-2">
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Calculated Metrics</p>
-        <div className="flex-1 h-px bg-slate-100" />
-        <span className="text-[10px] text-slate-300 shrink-0">auto-computed</span>
-      </div>
+    <div className={noHeader ? "" : "mt-5"}>
+      {!noHeader && (
+        <div className="flex items-center gap-3 mb-2">
+          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Calculated Metrics</p>
+          <div className="flex-1 h-px bg-slate-100" />
+          <span className="text-[10px] text-slate-300 shrink-0">auto-computed</span>
+        </div>
+      )}
       <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
         {items.map((m, i) => (
           <div key={m.key} className={`flex items-center gap-3 px-4 py-3 ${i < items.length - 1 ? "border-b border-slate-100" : ""}`}>
@@ -1140,12 +1145,15 @@ function ScoringConfigSection({
   dealId,
   initialConfig,
   onScoreUpdated,
+  defaultExpanded,
 }: {
   factDefinitions: FactDefinition[];
   factValues: EntityFactValue[];
   dealId: string;
   initialConfig: Record<string, number> | null;
   onScoreUpdated: () => void;
+  /** On mobile, pass false so section starts collapsed. */
+  defaultExpanded?: boolean;
 }) {
   // Build the list of facts that have values (filled facts only)
   const filledFacts = factDefinitions.filter((fd) => {
@@ -1183,7 +1191,11 @@ function ScoringConfigSection({
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded ?? true);
+
+  useEffect(() => {
+    if (defaultExpanded === false) setExpanded(false);
+  }, [defaultExpanded]);
 
   // Compute normalized weights (sum to 1.0)
   const selectedKeys = Array.from(selected);
@@ -1400,6 +1412,8 @@ function ScoringConfigSection({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+const MOBILE_BREAKPOINT = 768;
+
 export default function FactsTab({ factDefinitions, factValues, factEvidence, files, dealId, overallScore, buyerFitLabel, scoringConfig }: Props) {
   const router = useRouter();
   const [editingFact, setEditingFact] = useState<FactDefinition | null>(null);
@@ -1410,6 +1424,18 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
     evidence: FactEvidence;
     sourceName: string | null;
   } | null>(null);
+
+  // Mobile: collapsible sections (default collapsed on mobile, expanded on desktop)
+  const [isMobile, setIsMobile] = useState(false);
+  const [calculatedMetricsOpen, setCalculatedMetricsOpen] = useState(true);
+  useEffect(() => {
+    const m = typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT;
+    setIsMobile(m);
+    if (m) {
+      setCalculatedMetricsOpen(false);
+      setShowAllCategories(false);
+    }
+  }, []);
 
   const handleScoreUpdated = useCallback(() => {
     // Refresh after a short delay to pick up the rescoring result (runs async server-side)
@@ -1706,8 +1732,33 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
           </div>
         )}
 
-        {/* ── Calculated metrics ──────────────────────────────────────────── */}
-        <CalculatedMetricsSection factDefs={factDefinitions} factValues={effectiveValues} />
+        {/* ── Calculated metrics (collapsible on mobile) ─────────────────────── */}
+        {isMobile ? (
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={() => setCalculatedMetricsOpen((v) => !v)}
+              className="w-full flex items-center gap-3 py-2 group"
+            >
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Calculated Metrics</p>
+              <div className="flex-1 h-px bg-slate-100" />
+              <span className="text-[10px] text-slate-300 shrink-0">auto-computed</span>
+              <svg
+                className={`w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-all duration-200 ${calculatedMetricsOpen ? "rotate-90" : ""}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            <div
+              className={`overflow-hidden transition-all duration-200 ${calculatedMetricsOpen ? "max-h-[2000px]" : "max-h-0"}`}
+            >
+              <CalculatedMetricsSection factDefs={factDefinitions} factValues={effectiveValues} noHeader />
+            </div>
+          </div>
+        ) : (
+          <CalculatedMetricsSection factDefs={factDefinitions} factValues={effectiveValues} />
+        )}
 
         {/* ── LAYER 3: All Facts by Category ──────────────────────────────── */}
         <div className="mt-6">
@@ -1789,6 +1840,7 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
           dealId={dealId}
           initialConfig={scoringConfig ?? null}
           onScoreUpdated={handleScoreUpdated}
+          defaultExpanded={!isMobile}
         />
 
       </div>{/* end px-4 */}

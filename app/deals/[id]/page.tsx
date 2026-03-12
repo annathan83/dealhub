@@ -4,6 +4,7 @@ import Link from "next/link";
 import AppHeader from "@/components/AppHeader";
 import DealHeader from "@/components/DealHeader";
 import DealPageTabs from "@/components/DealPageTabs";
+import BuyerProfileNudgeBanner from "@/components/BuyerProfileNudgeBanner";
 import { buildDealPageViewModel } from "@/lib/db/dealViewModel";
 import { assembleTimeline } from "@/lib/services/entity/entityTimelineService";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
@@ -54,11 +55,18 @@ export default async function DealPage({
   // Check Drive connection status without triggering a live sync.
   // Files are already loaded from the DB in entityData.files — no need to
   // hit Google Drive on every page render (major latency source).
-  const { data: tokenRow } = await supabase
-    .from("google_oauth_tokens")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: tokenRow }, { count: userDealCount }] = await Promise.all([
+    supabase
+      .from("google_oauth_tokens")
+      .select("id")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("deals")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .then((r) => ({ count: r.count ?? 0 })),
+  ]);
 
   const isDriveConnected = !!tokenRow;
 
@@ -118,6 +126,23 @@ export default async function DealPage({
     buyerFitLabel = fit.label;
   }
 
+  // Buyer profile "completed" = has at least one meaningful criterion set (for first-deal nudge)
+  const buyerProfileCompleted = !!(buyerProfile && (
+    (buyerProfile.preferred_industries?.length ?? 0) > 0 ||
+    (buyerProfile.excluded_industries?.length ?? 0) > 0 ||
+    buyerProfile.target_sde_min != null ||
+    buyerProfile.target_sde_max != null ||
+    buyerProfile.target_purchase_price_min != null ||
+    buyerProfile.target_purchase_price_max != null ||
+    (buyerProfile.preferred_locations?.length ?? 0) > 0 ||
+    buyerProfile.max_employees != null ||
+    buyerProfile.manager_required != null ||
+    buyerProfile.owner_operator_ok != null ||
+    (buyerProfile.preferred_business_characteristics?.trim?.() ?? "") !== "" ||
+    (buyerProfile.experience_background?.trim?.() ?? "") !== "" ||
+    (buyerProfile.acquisition_goals?.trim?.() ?? "") !== ""
+  ));
+
   return (
     <div className="min-h-screen bg-[#F8FAF9]">
       <AppHeader />
@@ -140,6 +165,12 @@ export default async function DealPage({
           </svg>
           <span className="text-slate-600 font-medium truncate">{getDealDisplayName(deal)}</span>
         </div>
+
+        {/* ── First-deal nudge: set up buyer profile ─────────────────────── */}
+        <BuyerProfileNudgeBanner
+          userDealCount={userDealCount}
+          buyerProfileCompleted={buyerProfileCompleted}
+        />
 
         {/* ── Deal header (always visible) ─────────────────────────────── */}
         <DealHeader
@@ -171,6 +202,7 @@ export default async function DealPage({
             missingInfo={missingInfo}
             buyerProfile={buyerProfile}
             initialTab={tab === "analysis" ? "analysis" : tab === "facts" ? "facts" : undefined}
+            userDealCount={userDealCount}
           />
         </div>
 

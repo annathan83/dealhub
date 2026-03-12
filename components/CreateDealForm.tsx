@@ -26,6 +26,23 @@ const MIN_REQUIRED_LABELS: Record<MinRequiredKey, string> = {
   location:     "Location",
 };
 
+const US_STATE_ABBREVS = /\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/i;
+const DEAL_NAME_PREFIXES = /^(Listing:|Business:|For Sale:|BUSINESS FOR SALE|Property:)\s*/i;
+
+/** Extract a suggested deal name from pasted listing text (first 500 chars, first 2 lines). */
+function suggestDealNameFromPaste(text: string): string | null {
+  const head = text.slice(0, 500).trim();
+  if (!head) return null;
+  const lines = head.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const firstLine = lines[0] ?? "";
+  let name = firstLine.replace(DEAL_NAME_PREFIXES, "").trim();
+  if (!name) return null;
+  if (name.length > 60) name = name.slice(0, 57) + "...";
+  const stateMatch = head.match(US_STATE_ABBREVS);
+  const state = stateMatch ? stateMatch[1].toUpperCase() : null;
+  return state ? `${name} — ${state}` : name;
+}
+
 function validateFile(file: File): string | null {
   if (file.size > MAX_SIZE_BYTES) return `"${file.name}" exceeds 100 MB.`;
   const ext = "." + (file.name.split(".").pop() ?? "").toLowerCase();
@@ -135,6 +152,8 @@ export default function CreateDealForm() {
   const [extraction, setExtraction] = useState<ExtractionState>({ status: "idle" });
   const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [suggestedDealName, setSuggestedDealName] = useState<string | null>(null);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // Manual mode
@@ -678,11 +697,44 @@ export default function CreateDealForm() {
                   rows={6}
                   value={pasteText}
                   onChange={(e) => setPasteText(e.target.value)}
+                  onBlur={() => {
+                    if (pasteText.trim().length >= 20 && !suggestionDismissed) {
+                      const suggested = suggestDealNameFromPaste(pasteText);
+                      if (suggested) setSuggestedDealName(suggested);
+                    }
+                  }}
                   placeholder="Paste the full listing, broker email, or any description of the business here…"
                   disabled={loading}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-y disabled:opacity-60"
                   data-testid="paste-listing"
                 />
+                {suggestedDealName && !suggestionDismissed && (
+                  <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    <span className="shrink-0">💡</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium">Suggested name: </span>
+                      <span className="italic">&quot;{suggestedDealName}&quot;</span>
+                      {" · "}
+                      <button
+                        type="button"
+                        onClick={() => { setName(suggestedDealName); setSuggestedDealName(null); setSuggestionDismissed(true); }}
+                        className="underline text-[#1F7A63] hover:text-[#176B55] font-medium transition-colors"
+                      >
+                        Use this
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setSuggestionDismissed(true); setSuggestedDealName(null); }}
+                      className="shrink-0 p-0.5 rounded text-amber-600 hover:bg-amber-100 transition-colors"
+                      aria-label="Dismiss suggestion"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* File attachment area */}
@@ -799,6 +851,24 @@ export default function CreateDealForm() {
       {mode === "manual" && (
         <div className="flex flex-col gap-4">
 
+          {/* Deal Name — first field in manual mode */}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="deal-name" className="text-sm font-semibold text-slate-700">
+              Deal Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              id="deal-name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Midwest HVAC Company — Chicago, IL"
+              disabled={loading}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60"
+              data-testid="deal-name-input"
+            />
+          </div>
+
           {/* Core financials */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -903,8 +973,8 @@ export default function CreateDealForm() {
         </div>
       )}
 
-      {/* ── Deal Name ─────────────────────────────────────────────────────── */}
-      {showSubmit && (
+      {/* ── Deal Name (paste mode only; manual has it at top) ───────────────── */}
+      {showSubmit && mode === "paste" && (
         <div className="flex flex-col gap-1.5 mt-4">
           <label htmlFor="deal-name" className="text-sm font-semibold text-slate-700">
             Deal Name <span className="text-red-400">*</span>
@@ -915,7 +985,7 @@ export default function CreateDealForm() {
             required
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Midwest HVAC Company"
+            placeholder="e.g. Midwest HVAC Company — Chicago, IL"
             disabled={loading}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60"
             data-testid="deal-name-input"

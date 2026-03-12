@@ -66,14 +66,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Display name is required." }, { status: 422 });
   }
 
-  // ── 1. Insert the deal row (privacy-first: store display_alias; name = display name) ─
+  // ── 1. Insert the deal row (name = display name). Omit display_alias/last_activity_at so this works without migration 049. ─
   const { data: deal, error: insertError } = await supabase
     .from("deals")
     .insert({
       user_id: user.id,
       name: displayName,
-      display_alias: body.display_alias?.trim() || displayName,
-      last_activity_at: new Date().toISOString(),
       industry_category: body.industry_category?.trim() || null,
       industry: body.industry?.trim() || null,
       state: body.state?.trim() || null,

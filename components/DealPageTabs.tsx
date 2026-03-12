@@ -9,7 +9,7 @@
  *   Analysis  — AI scorecard + deep analysis narrative + score history
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Deal, DealStatus } from "@/types";
 import { getDealDisplayName } from "@/types";
 import type {
@@ -62,6 +62,8 @@ export type DealPageTabsProps = {
   buyerProfile: BuyerProfile | null;
   // Optional: open a specific tab on first render (e.g. after deal creation)
   initialTab?: TabId;
+  /** User's total deal count (for first-time score tooltip). */
+  userDealCount?: number;
 };
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
@@ -1076,11 +1078,14 @@ function MissingKeyFactsPanel({ scorecard }: { scorecard: KpiScorecardResult | n
 
 // ─── Analysis tab (V1 triage) ─────────────────────────────────────────────────
 
+const SCORE_TOOLTIP_STORAGE_KEY = "dealhub_score_tooltip_dismissed";
+
 function AnalysisTabContent({
   dealId,
   kpiScorecard,
   buyerProfile,
   entityData,
+  userDealCount,
 }: {
   dealId: string;
   dealStatus: DealStatus;
@@ -1094,7 +1099,29 @@ function AnalysisTabContent({
   swotAnalysis: SwotAnalysisContent | null;
   missingInfo: MissingInfoResult | null;
   buyerProfile: BuyerProfile | null;
+  userDealCount?: number;
 }) {
+  const [tooltipDismissed, setTooltipDismissed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setTooltipDismissed(!!localStorage.getItem(SCORE_TOOLTIP_STORAGE_KEY));
+  }, []);
+
+  const coveragePct = kpiScorecard?.coverage_pct ?? 0;
+  const kpisWithData = kpiScorecard?.kpis?.filter((k) => k.status !== "missing").length ?? 0;
+  const showScoreBanner =
+    !tooltipDismissed &&
+    (userDealCount ?? 0) < 3 &&
+    coveragePct < 50;
+
+  const dismissScoreTooltip = () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(SCORE_TOOLTIP_STORAGE_KEY, "true");
+      setTooltipDismissed(true);
+    }
+  };
+
   // Extract industry from facts for benchmark lookup
   const factDefs = entityData?.fact_definitions ?? [];
   const factValues = entityData?.fact_values ?? [];
@@ -1119,16 +1146,35 @@ function AnalysisTabContent({
         entityData={entityData}
       />
 
-      {/* D. KPI table — detailed breakdown */}
+      {/* D. Score confidence banner (first-time, low coverage) */}
+      {showScoreBanner && (
+        <div className="flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+          <span className="shrink-0 text-base" aria-hidden>ℹ️</span>
+          <div className="flex-1 min-w-0">
+            <p>
+              Your score is based on {kpisWithData} of 6 KPIs. Add more facts to increase accuracy and coverage.
+            </p>
+            <button
+              type="button"
+              onClick={dismissScoreTooltip}
+              className="mt-2 font-medium text-blue-700 hover:text-blue-900 underline"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* E. KPI table — detailed breakdown */}
       <KpiTable scorecard={kpiScorecard} industry={industryVal} />
 
-      {/* E. Strengths & Risks — derived from KPI scores */}
+      {/* F. Strengths & Risks — derived from KPI scores */}
       <StrengthsRisksPanel scorecard={kpiScorecard} />
 
-      {/* F. Missing key facts */}
+      {/* G. Missing key facts */}
       <MissingKeyFactsPanel scorecard={kpiScorecard} />
 
-      {/* G. Source provenance */}
+      {/* H. Source provenance */}
       <TriageSourceSummary scorecard={kpiScorecard} />
 
     </div>
@@ -1156,9 +1202,14 @@ export default function DealPageTabs({
   missingInfo,
   buyerProfile,
   initialTab,
+  userDealCount,
 }: DealPageTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>(initialTab ?? "workspace");
   const handleReviewFacts = () => setActiveTab("facts");
+
+  // Refs for empty-state checklist: trigger Upload / Note from IntakeSection
+  const uploadTriggerRef = useRef<(() => void) | null>(null);
+  const noteOpenRef = useRef<(() => void) | null>(null);
 
   // Badge: count of core scoring facts that are missing, unclear, or conflicting
   const CORE_SCORING_KEYS = ["asking_price", "sde_latest", "revenue_latest", "employees_ft", "years_in_business"];
@@ -1179,7 +1230,11 @@ export default function DealPageTabs({
 
       {/* ── Quick-add actions — always visible above the tab bar ────────── */}
       <div className="px-4 pt-4 pb-3">
-        <QuickAddBar dealId={deal.id} />
+        <QuickAddBar
+          dealId={deal.id}
+          registerUploadTrigger={(fn) => { uploadTriggerRef.current = fn; }}
+          registerNoteOpen={(fn) => { noteOpenRef.current = fn; }}
+        />
       </div>
 
       <TabBar
@@ -1218,6 +1273,8 @@ export default function DealPageTabs({
             newFilesAfterTriage={newFilesAfterTriage}
             ndaFileId={deal.nda_signed_file_id ?? null}
             ndaFileConfidence={deal.nda_signed_confidence ?? null}
+            onRequestUpload={() => uploadTriggerRef.current?.()}
+            onRequestNote={() => noteOpenRef.current?.()}
           />
 
         </div>
@@ -1298,6 +1355,7 @@ export default function DealPageTabs({
             swotAnalysis={swotAnalysis}
             missingInfo={missingInfo}
             buyerProfile={buyerProfile}
+            userDealCount={userDealCount}
           />
         </div>
       )}

@@ -183,11 +183,18 @@ function AddNotePanel({ dealId, onDone }: { dealId: string; onDone: () => void }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function QuickAddBar({ dealId }: { dealId: string }) {
+type QuickAddBarProps = {
+  dealId: string;
+  /** Register a trigger to open the file upload dialog (e.g. for empty-state checklist) */
+  registerUploadTrigger?: (trigger: () => void) => void;
+  /** Register a trigger to open the note panel */
+  registerNoteOpen?: (open: () => void) => void;
+};
+
+export default function QuickAddBar({ dealId, registerUploadTrigger, registerNoteOpen }: QuickAddBarProps) {
   const router = useRouter();
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-
   const [showNote, setShowNote] = useState(false);
   const [showWebcam, setShowWebcam] = useState(false);
   const [showAudio, setShowAudio] = useState(false);
@@ -198,6 +205,14 @@ export default function QuickAddBar({ dealId }: { dealId: string }) {
   useEffect(() => {
     setIsMobile(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
   }, []);
+
+  // Expose triggers for empty-state checklist (e.g. IntakeSection)
+  useEffect(() => {
+    registerUploadTrigger?.(() => uploadInputRef.current?.click());
+  }, [registerUploadTrigger]);
+  useEffect(() => {
+    registerNoteOpen?.(() => setShowNote(true));
+  }, [registerNoteOpen]);
 
   async function uploadFiles(
     fileList: FileList | File[] | null,

@@ -195,6 +195,10 @@ type Props = {
   ndaFileId?: string | null;
   /** Confidence score for the NDA detection (to distinguish signed vs review) */
   ndaFileConfidence?: number | null;
+  /** Called when user clicks Upload in the empty-state checklist (opens file picker) */
+  onRequestUpload?: () => void;
+  /** Called when user clicks Note in the empty-state checklist (opens note panel) */
+  onRequestNote?: () => void;
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -210,6 +214,8 @@ export default function IntakeSection({
   newFilesAfterTriage = false,
   ndaFileId = null,
   ndaFileConfidence = null,
+  onRequestUpload,
+  onRequestNote,
 }: Props) {
   const router = useRouter();
   const [isDragOver, setIsDragOver] = useState(false);
@@ -362,20 +368,52 @@ export default function IntakeSection({
             )}
           </>
         ) : (
-          <div className={`px-6 py-10 text-center ${isDragOver ? "bg-[#F0FAF7]" : ""}`}>
-            <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-            </div>
-            <p className="text-sm font-semibold text-slate-700 mb-1.5">
-              {isDragOver ? "Drop to upload" : "No files yet"}
-            </p>
-            <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-              {isDragOver
-                ? "Release to add files to this deal."
-                : "Upload a CIM, financials, photos, or paste notes to start building your deal workspace."}
-            </p>
+          <div className={`px-6 py-10 ${isDragOver ? "bg-[#F0FAF7]" : ""}`}>
+            {isDragOver ? (
+              <div className="text-center">
+                <p className="text-sm font-semibold text-slate-700 mb-1.5">Drop to upload</p>
+                <p className="text-xs text-slate-400">Release to add files to this deal.</p>
+              </div>
+            ) : (
+              <div className="max-w-sm mx-auto">
+                <p className="text-sm font-semibold text-slate-800 mb-4">Get the most out of this deal</p>
+                <ul className="space-y-4">
+                  <li className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-slate-700">① Upload a document</span>
+                      <button
+                        type="button"
+                        onClick={() => onRequestUpload?.()}
+                        className="shrink-0 rounded-lg bg-[#1F7A63] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#176B55] transition-colors"
+                      >
+                        Upload
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">CIM, financials, or broker email</p>
+                  </li>
+                  <li className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-slate-700">② Add a quick note</span>
+                      <button
+                        type="button"
+                        onClick={() => onRequestNote?.()}
+                        className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        Note
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500">Paste key details or follow-ups</p>
+                  </li>
+                  <li className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-slate-700">③ Capture photo or audio</span>
+                      <span className="text-xs text-slate-400 shrink-0">Photo · Audio</span>
+                    </div>
+                    <p className="text-xs text-slate-500">Use the buttons above to capture</p>
+                  </li>
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
