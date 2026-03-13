@@ -30,11 +30,17 @@ export type DerivedMetric = {
   inputs: string[];
 };
 
+/** Owner dependence for scoring: Absentee = best, Full-time = worst */
+export type OwnerDependenceLevel = "Absentee" | "Semi-absentee" | "Part-time" | "Full-time";
+
 export type DerivedMetricsResult = {
   purchase_multiple: DerivedMetric;
   sde_margin: DerivedMetric;
   revenue_per_employee: DerivedMetric;
   sde_per_employee: DerivedMetric;
+  rent_ratio: DerivedMetric;
+  business_age: DerivedMetric;
+  owner_dependence: DerivedMetric & { valueLabel: OwnerDependenceLevel | null };
 };
 
 // ─── Formatting helpers ───────────────────────────────────────────────────────
@@ -81,6 +87,10 @@ export function computeDerivedMetrics(
   const empTotal = vals["employees_total"] as number | undefined;
   const empFt = (vals["employees_ft"] as number | undefined) ?? 0;
   const empPt = (vals["employees_pt"] as number | undefined) ?? 0;
+  const monthlyRent = vals["lease_monthly_rent"] as number | undefined;
+  const yearsInBusiness = vals["years_in_business"] as number | undefined;
+  const ownerHoursRaw = vals["owner_hours_per_week"];
+  const ownerDependenceRaw = vals["owner_dependence_level"] as string | undefined;
   // Prefer employees_total if present; otherwise sum ft + pt (pt counts as 0.5 FTE)
   const totalEmp = empTotal ?? (empFt + empPt * 0.5);
 
@@ -132,10 +142,67 @@ export function computeDerivedMetrics(
     inputs: [sde === vals["sde_latest"] ? "sde_latest" : "ebitda_latest", "employees_ft", "employees_pt"],
   };
 
+  // ── Rent Ratio ────────────────────────────────────────────────────────────
+  const annualRent = monthlyRent != null ? monthlyRent * 12 : null;
+  const rentRatioVal = (annualRent != null && revenue != null && revenue > 0) ? annualRent / revenue : null;
+  const rentRatio: DerivedMetric = {
+    key: "rent_ratio",
+    label: "Rent Ratio",
+    value: rentRatioVal,
+    formatted: rentRatioVal != null ? fmtPct(rentRatioVal) : "—",
+    description: "(Monthly Rent × 12) ÷ Revenue",
+    available: !!(annualRent != null && revenue != null && revenue > 0),
+    inputs: ["lease_monthly_rent", "revenue_latest"],
+  };
+
+  // ── Business Age (years) ────────────────────────────────────────────────────
+  const businessAgeVal = yearsInBusiness ?? null;
+  const businessAge: DerivedMetric = {
+    key: "business_age",
+    label: "Business Age",
+    value: businessAgeVal,
+    formatted: businessAgeVal != null ? `${businessAgeVal} yr` : "—",
+    description: "Years in business",
+    available: yearsInBusiness != null,
+    inputs: ["years_in_business"],
+  };
+
+  // ── Owner Dependence (from owner involvement) ──────────────────────────────
+  function mapToOwnerDependence(): OwnerDependenceLevel | null {
+    if (ownerDependenceRaw != null && typeof ownerDependenceRaw === "string") {
+      const lower = String(ownerDependenceRaw).toLowerCase();
+      if (lower.includes("absentee") && !lower.includes("semi")) return "Absentee";
+      if (lower.includes("semi") || lower.includes("semi-absentee")) return "Semi-absentee";
+      if (lower.includes("part") || lower.includes("part-time")) return "Part-time";
+      if (lower.includes("full") || lower.includes("operational")) return "Full-time";
+      return "Full-time"; // default
+    }
+    const hours = ownerHoursRaw != null ? Number(ownerHoursRaw) : NaN;
+    if (!Number.isFinite(hours)) return null;
+    if (hours < 5) return "Absentee";
+    if (hours < 20) return "Semi-absentee";
+    if (hours < 40) return "Part-time";
+    return "Full-time";
+  }
+  const ownerDepLabel = mapToOwnerDependence();
+  const ownerDependence: DerivedMetric & { valueLabel: OwnerDependenceLevel | null } = {
+    key: "owner_dependence",
+    label: "Owner Dependence",
+    value: ownerDepLabel !== null ? 1 : null, // placeholder for threshold; UI uses valueLabel
+    formatted: ownerDepLabel ?? "—",
+    description: "From Owner Involvement",
+    available: ownerDepLabel !== null,
+    inputs: ["owner_hours_per_week", "owner_dependence_level"],
+    valueLabel: ownerDepLabel,
+  };
+
   return {
     purchase_multiple: purchaseMultiple,
     sde_margin: sdeMargin,
     revenue_per_employee: revenuePerEmployee,
     sde_per_employee: sdePerEmployee,
+    rent_ratio: rentRatio,
+    business_age: businessAge,
+    owner_dependence: ownerDependence,
   };
 }

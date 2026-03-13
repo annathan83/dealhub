@@ -3,8 +3,8 @@
 /**
  * FactsViewSpec — Facts view per cursor-prompt-facts-view spec
  *
- * Three sections: Deal Context (compact), Core Facts (4 inputs + 3 calculated),
- * Other Extracted Facts (collapsible). No verified/AI/manual badges; source link = trust.
+ * Three sections: Deal Context (2: Industry, Location), Core Facts (7 inputs),
+ * 6 scored metrics, Other Extracted Facts (collapsible). No verified/AI/manual badges.
  * Score badge 0–10 with Strong / Partial / Weak Fit.
  */
 
@@ -47,8 +47,18 @@ type Props = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEAL_CONTEXT_KEYS = ["industry", "location", "owner_hours_per_week", "owner_dependence_level"];
-const CORE_INPUT_KEYS = ["asking_price", "revenue_latest", "sde_latest", "employees_ft"];
+/** Deal Context: 2 only — Industry, Location (not scored) */
+const DEAL_CONTEXT_KEYS = ["industry", "location"];
+/** Core Facts: 7 inputs that feed the 6 scored metrics */
+const CORE_INPUT_KEYS = [
+  "asking_price",
+  "revenue_latest",
+  "sde_latest",
+  "employees_ft",
+  "lease_monthly_rent",
+  "years_in_business",
+  "owner_hours_per_week",
+];
 
 function formatValue(raw: string | null, dataType: string): string {
   if (!raw) return "—";
@@ -71,14 +81,26 @@ function formatValue(raw: string | null, dataType: string): string {
 function formatOwnerInvolvement(raw: string | null): string {
   if (!raw) return "—";
   const lower = raw.toLowerCase();
-  if (lower.includes("absentee") || lower.includes("absent")) return "Absentee";
+  if (lower.includes("absentee") && !lower.includes("semi")) return "Absentee";
+  if (lower.includes("semi") || lower.includes("semi-absentee")) return "Semi-absentee";
   if (lower.includes("part") || lower.includes("part-time")) return "Part-time";
-  if (lower.includes("full") || lower.includes("operational")) return "Full-time, operational";
+  if (lower.includes("full") || lower.includes("operational")) return "Full-time";
   const n = parseFloat(raw.replace(/[^0-9.-]/g, ""));
   if (!isNaN(n)) {
-    if (n >= 40) return "Full-time, operational";
-    if (n >= 10) return "Part-time";
+    if (n >= 40) return "Full-time";
+    if (n >= 20) return "Part-time";
+    if (n >= 5) return "Semi-absentee";
     return "Absentee";
+  }
+  return raw;
+}
+
+function formatYearEstablished(raw: string | null, _dataType: string): string {
+  if (!raw) return "—";
+  const n = parseFloat(raw.replace(/[^0-9]/g, ""));
+  if (!isNaN(n) && n > 0) {
+    if (n >= 1900 && n <= 2100) return String(Math.round(n));
+    return String(new Date().getFullYear() - Math.round(n));
   }
   return raw;
 }
@@ -229,7 +251,18 @@ function FactRow({
 
 type MetricThreshold = "green" | "amber" | "red" | "neutral";
 
-function getMetricColor(value: number | null, key: string): MetricThreshold {
+function getMetricColor(
+  value: number | null,
+  key: string,
+  valueLabel?: string | null
+): MetricThreshold {
+  if (key === "owner_dependence") {
+    if (!valueLabel) return "neutral";
+    if (valueLabel === "Absentee") return "green";
+    if (valueLabel === "Semi-absentee" || valueLabel === "Part-time") return "amber";
+    if (valueLabel === "Full-time") return "red";
+    return "neutral";
+  }
   if (value === null) return "neutral";
   if (key === "purchase_multiple") {
     if (value <= 3) return "green";
@@ -246,6 +279,16 @@ function getMetricColor(value: number | null, key: string): MetricThreshold {
     if (value >= 40_000) return "amber";
     return "red";
   }
+  if (key === "rent_ratio") {
+    if (value <= 0.05) return "green";
+    if (value <= 0.15) return "amber";
+    return "red";
+  }
+  if (key === "business_age") {
+    if (value >= 10) return "green";
+    if (value >= 5) return "amber";
+    return "red";
+  }
   return "neutral";
 }
 
@@ -255,14 +298,16 @@ function CalculatedMetricRow({
   formatted,
   value,
   metricKey,
+  valueLabel,
 }: {
   label: string;
   formula: string;
   formatted: string;
   value: number | null;
   metricKey: string;
+  valueLabel?: string | null;
 }) {
-  const threshold = getMetricColor(value, metricKey);
+  const threshold = getMetricColor(value, metricKey, valueLabel);
   const valueColor =
     threshold === "green"
       ? "text-[#16a34a]"
@@ -309,12 +354,10 @@ export default function FactsViewSpec({
     return m;
   }, [factEvidence]);
 
+  /** Deal Context: 2 only — Industry, Location */
   const dealContextFacts = useMemo(() => {
     const industry = defMap.get("industry");
     const location = defMap.get("location");
-    const ownerHours = defMap.get("owner_hours_per_week");
-    const ownerDependence = defMap.get("owner_dependence_level");
-    const ownerFd = ownerDependence ?? ownerHours;
     const result: SpecFact[] = [];
     if (industry) {
       const spec = buildSpecFact(industry, valueMap.get(industry.id), evidenceMap.get(industry.id) ?? null, fileMap, formatValue);
@@ -324,19 +367,30 @@ export default function FactsViewSpec({
       const spec = buildSpecFact(location, valueMap.get(location.id), evidenceMap.get(location.id) ?? null, fileMap, formatValue);
       result.push({ ...spec, label: "Location" });
     }
-    if (ownerFd) {
-      const spec = buildSpecFact(ownerFd, valueMap.get(ownerFd.id), evidenceMap.get(ownerFd.id) ?? null, fileMap, formatValue);
-      result.push({ ...spec, label: "Owner Involvement" });
-    }
     return result;
   }, [defMap, valueMap, evidenceMap, fileMap]);
 
+  /** Core: 7 rows — map years_in_business to "Year Established", owner to "Owner Involvement" */
   const coreInputFacts = useMemo(() => {
-    return CORE_INPUT_KEYS.map((key) => defMap.get(key)).filter(
-      (fd): fd is FactDefinition => !!fd
-    ).map((fd) =>
-      buildSpecFact(fd, valueMap.get(fd.id), evidenceMap.get(fd.id) ?? null, fileMap, formatValue)
-    );
+    const keys: { key: string; label: string }[] = [
+      { key: "asking_price", label: "Asking Price" },
+      { key: "revenue_latest", label: "Revenue" },
+      { key: "sde_latest", label: "SDE" },
+      { key: "employees_ft", label: "Employees (FT)" },
+      { key: "lease_monthly_rent", label: "Monthly Rent" },
+      { key: "years_in_business", label: "Year Established" },
+      { key: "owner_hours_per_week", label: "Owner Involvement" },
+    ];
+    const ownerDependenceDef = defMap.get("owner_dependence_level");
+    return keys
+      .map(({ key, label }) => {
+        const fd = defMap.get(key) ?? (key === "owner_hours_per_week" ? ownerDependenceDef : null);
+        if (!fd) return null;
+        const formatter = key === "years_in_business" ? formatYearEstablished : key === "owner_hours_per_week" ? formatOwnerInvolvement : formatValue;
+        const spec = buildSpecFact(fd, valueMap.get(fd.id), evidenceMap.get(fd.id) ?? null, fileMap, formatter);
+        return { ...spec, label };
+      })
+      .filter((f): f is SpecFact => f != null);
   }, [defMap, valueMap, evidenceMap, fileMap]);
 
   const derived = useMemo(
@@ -348,10 +402,14 @@ export default function FactsViewSpec({
     const coreAndContextKeys = new Set([
       ...DEAL_CONTEXT_KEYS,
       ...CORE_INPUT_KEYS,
+      "owner_dependence_level",
       "purchase_multiple",
       "sde_margin",
       "sde_per_employee",
       "revenue_per_employee",
+      "rent_ratio",
+      "business_age",
+      "owner_dependence",
     ]);
     return factDefinitions
       .filter((fd) => !coreAndContextKeys.has(fd.key) && !fd.is_derived)
@@ -391,7 +449,7 @@ export default function FactsViewSpec({
       {/* Core Facts */}
       <div className="px-4 py-3">
         <p className="text-[9px] uppercase text-[#94a3b8] tracking-[0.06em] mb-2">
-          Core facts · {coreSourcedCount}/{coreTotal} sourced
+          Core facts · {coreSourcedCount}/7 sourced
         </p>
         <div className="space-y-0">
           {coreInputFacts.map((f) => (
@@ -403,7 +461,7 @@ export default function FactsViewSpec({
         <div className="space-y-1">
           <CalculatedMetricRow
             label="Purchase Multiple"
-            formula="Ask ÷ SDE"
+            formula="Price ÷ SDE"
             formatted={derived.purchase_multiple.formatted}
             value={derived.purchase_multiple.value}
             metricKey="purchase_multiple"
@@ -417,10 +475,32 @@ export default function FactsViewSpec({
           />
           <CalculatedMetricRow
             label="SDE / Employee"
-            formula="SDE ÷ Employees (FT)"
+            formula="SDE ÷ FT"
             formatted={derived.sde_per_employee.formatted}
             value={derived.sde_per_employee.value}
             metricKey="sde_per_employee"
+          />
+          <CalculatedMetricRow
+            label="Rent Ratio"
+            formula="(Rent × 12) ÷ Revenue"
+            formatted={derived.rent_ratio.formatted}
+            value={derived.rent_ratio.value}
+            metricKey="rent_ratio"
+          />
+          <CalculatedMetricRow
+            label="Business Age"
+            formula="Years in business"
+            formatted={derived.business_age.formatted}
+            value={derived.business_age.value}
+            metricKey="business_age"
+          />
+          <CalculatedMetricRow
+            label="Owner Dependence"
+            formula="From Owner Involvement"
+            formatted={derived.owner_dependence.formatted}
+            value={derived.owner_dependence.value}
+            metricKey="owner_dependence"
+            valueLabel={derived.owner_dependence.valueLabel}
           />
         </div>
       </div>

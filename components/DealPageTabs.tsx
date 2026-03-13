@@ -29,6 +29,7 @@ import IntakeSection from "./IntakeSection";
 import TimelineSection from "./TimelineSection";
 import FactsTab from "./entity/FactsTab";
 import FactsViewSpec from "./entity/FactsViewSpec";
+import AnalysisViewSpec from "./entity/AnalysisViewSpec";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { computeTriageRecommendation } from "@/lib/kpi/triageRecommendation";
@@ -1312,20 +1313,10 @@ export default function DealPageTabs({
       {/* ── ANALYSIS TAB ────────────────────────────────────────────────── */}
       {activeTab === "analysis" && (
         <div className="px-4">
-          <AnalysisTabContent
-            dealId={deal.id}
-            dealStatus={deal.status}
+          <AnalysisViewSpec
             kpiScorecard={kpiScorecard}
-            scoreHistory={scoreHistory}
-            deepAnalysis={deepAnalysis}
-            deepAnalysisStale={deepAnalysisStale}
-            deepAnalysisRunAt={deepAnalysisRunAt}
-            latestSourceAt={latestSourceAt}
             entityData={entityData}
-            swotAnalysis={swotAnalysis}
-            missingInfo={missingInfo}
             buyerProfile={buyerProfile}
-            userDealCount={userDealCount}
           />
         </div>
       )}

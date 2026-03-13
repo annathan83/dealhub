@@ -46,6 +46,12 @@ export type DealFacts = {
 
 export type FitVerdict = "GOOD_FIT" | "FIT" | "PARTIAL_FIT" | "NOT_A_GOOD_FIT";
 
+export type BuyerFitCriterion = {
+  name: string;
+  matched: boolean;
+  context: string;
+};
+
 export type BuyerFitResult = {
   verdict: FitVerdict;
   label: string;             // "Good Fit" | "Fit" | "Partial Fit" | "Not a Good Fit"
@@ -54,9 +60,11 @@ export type BuyerFitResult = {
   bgColor: string;
   borderColor: string;
   bullets: string[];         // 2–5 short explanation bullets
-  match_count: number;       // number of criteria that matched
-  mismatch_count: number;    // number of criteria that didn't match
-  checked_count: number;     // total criteria checked (only where profile has data)
+  /** Per-criterion results for Analysis tab (only configured criteria) */
+  criteria: BuyerFitCriterion[];
+  match_count: number;
+  mismatch_count: number;
+  checked_count: number;
 };
 
 // ─── Main function ────────────────────────────────────────────────────────────
@@ -68,25 +76,25 @@ export function computeBuyerFit(
   const matches: string[] = [];
   const mismatches: string[] = [];
   const neutral: string[] = [];
+  const criteria: BuyerFitCriterion[] = [];
 
   // ── Industry fit ─────────────────────────────────────────────────────────────
   if (deal.industry) {
     const dealIndustry = deal.industry.toLowerCase();
-
-    // Check excluded first
     const excluded = profile.excluded_industries ?? [];
     const isExcluded = excluded.some((e) => dealIndustry.includes(e.toLowerCase()) || e.toLowerCase().includes(dealIndustry));
     if (isExcluded) {
-      mismatches.push(`Industry (${deal.industry}) is in your excluded list`);
+      const msg = `Industry (${deal.industry}) is in your excluded list`;
+      mismatches.push(msg);
+      criteria.push({ name: "Industry", matched: false, context: msg });
     } else {
       const preferred = profile.preferred_industries ?? [];
       if (preferred.length > 0) {
         const isMatch = preferred.some((p) => dealIndustry.includes(p.toLowerCase()) || p.toLowerCase().includes(dealIndustry));
-        if (isMatch) {
-          matches.push(`Industry matches your preferences (${deal.industry})`);
-        } else {
-          neutral.push(`Industry (${deal.industry}) is not in your preferred list`);
-        }
+        const msg = isMatch ? `Industry matches your preferences (${deal.industry})` : `Industry (${deal.industry}) is not in your preferred list`;
+        if (isMatch) matches.push(msg);
+        else neutral.push(msg);
+        criteria.push({ name: "Industry", matched: isMatch, context: msg });
       }
     }
   }
@@ -98,25 +106,24 @@ export function computeBuyerFit(
     const sdeFormatted = formatCurrency(deal.sde);
 
     if (sdeMin != null && sdeMax != null) {
-      if (deal.sde >= sdeMin && deal.sde <= sdeMax) {
-        matches.push(`SDE of ${sdeFormatted} is within your target range`);
-      } else if (deal.sde < sdeMin) {
-        mismatches.push(`SDE of ${sdeFormatted} is below your minimum target (${formatCurrency(sdeMin)})`);
-      } else {
-        neutral.push(`SDE of ${sdeFormatted} exceeds your stated maximum (${formatCurrency(sdeMax)})`);
-      }
+      const inRange = deal.sde >= sdeMin && deal.sde <= sdeMax;
+      const msg = inRange ? `SDE of ${sdeFormatted} is within your target range` : deal.sde < sdeMin ? `SDE of ${sdeFormatted} is below your minimum target (${formatCurrency(sdeMin)})` : `SDE of ${sdeFormatted} exceeds your stated maximum (${formatCurrency(sdeMax)})`;
+      if (inRange) matches.push(msg);
+      else if (deal.sde < sdeMin) mismatches.push(msg);
+      else neutral.push(msg);
+      criteria.push({ name: "SDE range", matched: inRange, context: msg });
     } else if (sdeMin != null) {
-      if (deal.sde >= sdeMin) {
-        matches.push(`SDE of ${sdeFormatted} meets your minimum target`);
-      } else {
-        mismatches.push(`SDE of ${sdeFormatted} is below your minimum target (${formatCurrency(sdeMin)})`);
-      }
+      const ok = deal.sde >= sdeMin;
+      const msg = ok ? `SDE of ${sdeFormatted} meets your minimum target` : `SDE of ${sdeFormatted} is below your minimum target (${formatCurrency(sdeMin)})`;
+      if (ok) matches.push(msg);
+      else mismatches.push(msg);
+      criteria.push({ name: "SDE range", matched: ok, context: msg });
     } else if (sdeMax != null) {
-      if (deal.sde <= sdeMax) {
-        matches.push(`SDE of ${sdeFormatted} is within your budget range`);
-      } else {
-        neutral.push(`SDE of ${sdeFormatted} is above your stated maximum`);
-      }
+      const ok = deal.sde <= sdeMax;
+      const msg = ok ? `SDE of ${sdeFormatted} is within your budget range` : `SDE of ${sdeFormatted} is above your stated maximum`;
+      if (ok) matches.push(msg);
+      else neutral.push(msg);
+      criteria.push({ name: "SDE range", matched: ok, context: msg });
     }
   }
 
@@ -125,13 +132,14 @@ export function computeBuyerFit(
     const priceMin = profile.target_purchase_price_min;
     const priceMax = profile.target_purchase_price_max;
     const priceFormatted = formatCurrency(deal.asking_price);
-
-    if (priceMax != null && deal.asking_price > priceMax) {
-      mismatches.push(`Asking price of ${priceFormatted} exceeds your preferred maximum (${formatCurrency(priceMax)})`);
-    } else if (priceMin != null && deal.asking_price < priceMin) {
-      neutral.push(`Asking price of ${priceFormatted} is below your stated minimum`);
-    } else if (priceMax != null) {
-      matches.push(`Asking price of ${priceFormatted} is within your preferred range`);
+    if (priceMax != null || priceMin != null) {
+      const overMax = priceMax != null && deal.asking_price > priceMax;
+      const underMin = priceMin != null && deal.asking_price < priceMin;
+      const msg = overMax ? `Asking price of ${priceFormatted} exceeds your preferred maximum (${formatCurrency(priceMax!)})` : underMin ? `Asking price of ${priceFormatted} is below your stated minimum` : `Asking price of ${priceFormatted} is within your preferred range`;
+      if (overMax) mismatches.push(msg);
+      else if (underMin) neutral.push(msg);
+      else matches.push(msg);
+      criteria.push({ name: "Price range", matched: !overMax && !underMin, context: msg });
     }
   }
 
@@ -141,33 +149,33 @@ export function computeBuyerFit(
     if (preferred.length > 0) {
       const dealLoc = deal.location.toLowerCase();
       const isMatch = preferred.some((l) => dealLoc.includes(l.toLowerCase()) || l.toLowerCase().includes(dealLoc));
-      if (isMatch) {
-        matches.push(`Location (${deal.location}) matches your preferences`);
-      } else {
-        neutral.push(`Location (${deal.location}) is outside your preferred areas`);
-      }
+      const msg = isMatch ? `Location (${deal.location}) matches your preferences` : `Location (${deal.location}) is outside your preferred areas`;
+      if (isMatch) matches.push(msg);
+      else neutral.push(msg);
+      criteria.push({ name: "Location", matched: isMatch, context: msg });
     }
   }
 
   // ── Employee count fit ────────────────────────────────────────────────────────
   if (deal.total_employees != null && profile.max_employees != null) {
-    if (deal.total_employees <= profile.max_employees) {
-      matches.push(`Employee count (${deal.total_employees}) is within your comfort range`);
-    } else {
-      mismatches.push(`Employee count (${deal.total_employees}) may exceed your preferred maximum (${profile.max_employees})`);
-    }
+    const ok = deal.total_employees <= profile.max_employees;
+    const msg = ok ? `Employee count (${deal.total_employees}) is within your comfort range` : `Employee count (${deal.total_employees}) may exceed your preferred maximum (${profile.max_employees})`;
+    if (ok) matches.push(msg);
+    else mismatches.push(msg);
+    criteria.push({ name: "Max employees", matched: ok, context: msg });
   }
 
   // ── Manager required fit ──────────────────────────────────────────────────────
   if (profile.manager_required && profile.manager_required !== "no") {
     if (deal.manager_in_place === true) {
-      matches.push("Manager in place — aligns with your preference");
+      const msg = "Manager in place — aligns with your preference";
+      matches.push(msg);
+      criteria.push({ name: "Manager in place", matched: true, context: msg });
     } else if (deal.manager_in_place === false) {
-      if (profile.manager_required === "yes") {
-        mismatches.push("No manager in place, which conflicts with your profile");
-      } else {
-        neutral.push("No manager in place — you prefer one but it's not required");
-      }
+      const msg = profile.manager_required === "yes" ? "No manager in place, which conflicts with your profile" : "No manager in place — you prefer one but it's not required";
+      if (profile.manager_required === "yes") mismatches.push(msg);
+      else neutral.push(msg);
+      criteria.push({ name: "Manager in place", matched: false, context: msg });
     }
   }
 
@@ -175,9 +183,13 @@ export function computeBuyerFit(
   if (profile.owner_operator_ok && deal.owner_hours_per_week != null) {
     const isHeavyOwnerOp = deal.owner_hours_per_week >= 40;
     if (isHeavyOwnerOp && profile.owner_operator_ok === "no") {
-      mismatches.push(`Owner works ${deal.owner_hours_per_week}h/week — you prefer not to be an owner-operator`);
+      const msg = `Owner works ${deal.owner_hours_per_week}h/week — you prefer not to be an owner-operator`;
+      mismatches.push(msg);
+      criteria.push({ name: "Owner involvement", matched: false, context: msg });
     } else if (isHeavyOwnerOp && profile.owner_operator_ok === "yes") {
-      matches.push(`Owner-operator model aligns with your preference`);
+      const msg = "Owner-operator model aligns with your preference";
+      matches.push(msg);
+      criteria.push({ name: "Owner involvement", matched: true, context: msg });
     }
   }
 
@@ -247,6 +259,7 @@ export function computeBuyerFit(
     verdict,
     ...styling[verdict],
     bullets,
+    criteria,
     match_count: matches.length,
     mismatch_count: mismatches.length,
     checked_count: checkedCount,

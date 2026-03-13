@@ -24,8 +24,8 @@ export default async function DashboardPage() {
       .from("deals")
       .select("*")
       .eq("user_id", user.id)
-      // Exclude intake-rejected deals — they are not real deals
-      .or("intake_status.is.null,intake_status.eq.promoted")
+      // Exclude only intake-rejected deals; show promoted, pending, and legacy (null)
+      .or("intake_status.is.null,intake_status.eq.promoted,intake_status.eq.pending")
       .order("last_activity_at", { ascending: false, nullsFirst: false })
       .order("updated_at", { ascending: false }),
     supabase
