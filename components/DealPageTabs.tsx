@@ -28,6 +28,7 @@ import QuickAddBar from "./QuickAddBar";
 import IntakeSection from "./IntakeSection";
 import TimelineSection from "./TimelineSection";
 import FactsTab from "./entity/FactsTab";
+import FactsViewSpec from "./entity/FactsViewSpec";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { computeTriageRecommendation } from "@/lib/kpi/triageRecommendation";
@@ -1287,55 +1288,17 @@ export default function DealPageTabs({
       {activeTab === "facts" && (
         <div className="px-0 py-0">
           {entityData ? (
-            <FactsTab
+            <FactsViewSpec
               factDefinitions={entityData.fact_definitions}
               factValues={entityData.fact_values}
               factEvidence={entityData.fact_evidence}
               files={entityData.files}
               dealId={deal.id}
               overallScore={kpiScorecard?.overall_score ?? null}
-              scoringConfig={(entityData.entity.metadata_json.scoring_config as Record<string, number> | undefined) ?? null}
               onViewSourceInWorkspace={(fileId) => {
                 setHighlightFileId(fileId);
                 setActiveTab("workspace");
               }}
-              buyerFitLabel={buyerProfile && entityData
-                ? (() => {
-                    const factDefs = entityData.fact_definitions;
-                    const factVals = entityData.fact_values;
-                    const defMap = new Map(factDefs.map((d) => [d.id, d.key]));
-                    const getVal = (key: string) => {
-                      const fd = factDefs.find((d) => d.key === key);
-                      if (!fd) return null;
-                      return factVals.find((v) => v.fact_definition_id === fd.id)?.value_raw ?? null;
-                    };
-                    const parseNum = (key: string) => {
-                      const raw = getVal(key);
-                      if (!raw) return null;
-                      const n = parseFloat(raw.replace(/[^0-9.-]/g, ""));
-                      return isNaN(n) ? null : n;
-                    };
-                    const parseBool = (key: string) => {
-                      const raw = getVal(key);
-                      if (!raw) return null;
-                      return raw.toLowerCase() === "true" || raw.toLowerCase() === "yes";
-                    };
-                    const ft = parseNum("employees_ft") ?? 0;
-                    const pt = parseNum("employees_pt") ?? 0;
-                    const dealFacts = {
-                      industry: getVal("industry"),
-                      location: getVal("location"),
-                      sde: parseNum("sde_latest") ?? parseNum("ebitda_latest"),
-                      asking_price: parseNum("asking_price"),
-                      total_employees: (ft + Math.round(pt * 0.5)) || null,
-                      manager_in_place: parseBool("manager_in_place"),
-                      owner_hours_per_week: parseNum("owner_hours_per_week"),
-                    };
-                    void defMap; // suppress unused warning
-                    const fit = computeBuyerFit(buyerProfile, dealFacts);
-                    return fit.label ?? null;
-                  })()
-                : null}
             />
           ) : (
             <div className="py-16 text-center">
