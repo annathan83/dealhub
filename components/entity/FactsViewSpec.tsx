@@ -14,6 +14,7 @@ import type {
   EntityFactValue,
   FactEvidence,
   EntityFileWithText,
+  EntityPageData,
 } from "@/types/entity";
 import { computeDerivedMetrics } from "@/lib/kpi/derivedMetricsService";
 
@@ -31,6 +32,15 @@ export type SpecFact = {
   label: string;
   value: string | null;
   source: FactSource | null;
+};
+
+/** One input fact that feeds a metric — for source links below metric rows */
+export type MetricSourceRef = {
+  label: string;
+  value: string | null;
+  documentId: string | null;
+  documentName: string | null;
+  page: number | null;
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -105,6 +115,11 @@ function formatYearEstablished(raw: string | null, _dataType: string): string {
   return raw;
 }
 
+/** Reference-style source display: strip extension, replace underscores with spaces */
+function formatSourceDisplayName(documentName: string): string {
+  return documentName.replace(/\.[^.]+$/, "").replace(/_/g, " ");
+}
+
 // ─── Build spec facts from entity data ─────────────────────────────────────────
 
 function buildSpecFact(
@@ -169,27 +184,27 @@ function DealContextBlock({
 }) {
   if (facts.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2 border-b border-slate-200">
-      {facts.map((f) => (
-        <div key={f.id} className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[9px] uppercase text-[#94a3b8] tracking-[0.06em] shrink-0">{f.label}</span>
-          <span className="text-sm text-slate-800 truncate">{f.value ?? "Not found"}</span>
-          {f.source && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onViewSource?.(f.source!.documentId);
-              }}
-              className="shrink-0 text-[#3b82f6] p-0.5 rounded hover:bg-blue-50"
-              aria-label={`View source for ${f.label}`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+    <div className="flex gap-0 mb-3 rounded-lg overflow-hidden border border-slate-200">
+      {facts.map((f, i) => (
+        <button
+          key={f.id}
+          type="button"
+          onClick={f.source && onViewSource ? () => onViewSource(f.source!.documentId) : undefined}
+          className={`flex-1 px-2.5 py-2 bg-[#f8fafc] text-left min-w-0 ${i < facts.length - 1 ? "border-r border-slate-200" : ""} ${f.source && onViewSource ? "cursor-pointer hover:bg-slate-100/80" : "cursor-default"}`}
+          title={f.source ? `View in ${f.source.documentName}${f.source.page != null ? ` (p.${f.source.page})` : ""}` : undefined}
+        >
+          <div className="flex items-center justify-between gap-1 mb-0.5">
+            <span className="text-[8px] font-medium uppercase text-[#94a3b8] tracking-wider">{f.label}</span>
+            {f.source && (
+              <svg className="w-2.5 h-2.5 shrink-0 text-[#3b82f6]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-            </button>
-          )}
-        </div>
+            )}
+          </div>
+          <div className={`text-[11px] font-semibold truncate ${f.value ? "text-slate-800" : "text-slate-400 italic"}`}>
+            {f.value ?? "Not found"}
+          </div>
+        </button>
       ))}
     </div>
   );
@@ -236,8 +251,9 @@ function FactRow({
             <svg className="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span className="truncate">{fact.source!.documentName}</span>
-            {fact.source!.page != null && <span className="shrink-0">p.{fact.source!.page}</span>}
+            <span className="truncate" title={fact.source ? `View in ${fact.source.documentName}${fact.source.page != null ? ` (p.${fact.source.page})` : ""}` : undefined}>
+              {fact.source ? formatSourceDisplayName(fact.source.documentName) + (fact.source.page != null ? ` p.${fact.source.page}` : "") : ""}
+            </span>
           </span>
         ) : (
           <span className="text-[9px] text-slate-300">—</span>
@@ -299,6 +315,8 @@ function CalculatedMetricRow({
   value,
   metricKey,
   valueLabel,
+  sources,
+  onViewSource,
 }: {
   label: string;
   formula: string;
@@ -306,6 +324,8 @@ function CalculatedMetricRow({
   value: number | null;
   metricKey: string;
   valueLabel?: string | null;
+  sources?: MetricSourceRef[];
+  onViewSource?: (documentId: string) => void;
 }) {
   const threshold = getMetricColor(value, metricKey, valueLabel);
   const valueColor =
@@ -318,12 +338,37 @@ function CalculatedMetricRow({
           : "text-[#cbd5e1]";
 
   return (
-    <div className="flex items-center justify-between gap-2 py-2 px-3 bg-[#f8fafc] rounded-sm">
-      <div className="min-w-0">
-        <span className="text-[11px] font-semibold text-slate-700">{label}</span>
-        <span className="text-[9px] text-slate-400 font-mono ml-2">{formula}</span>
+    <div className="mb-0.5">
+      <div className="flex items-center justify-between gap-2 py-1.5 px-3 pt-2 bg-[#f8fafc] rounded-t">
+        <div className="min-w-0">
+          <span className="text-[11px] font-semibold text-slate-700">{label}</span>
+          <span className="text-[9px] text-slate-400 font-mono ml-2">{formula}</span>
+        </div>
+        <span className={`text-[11px] font-bold font-mono shrink-0 ${valueColor}`}>{formatted}</span>
       </div>
-      <span className={`text-[11px] font-bold font-mono shrink-0 ${valueColor}`}>{formatted}</span>
+      {sources && sources.length > 0 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-0.5 px-3 pb-1.5 pt-0.5 bg-[#f8fafc] rounded-b">
+          {sources.map((s, i) => {
+            const hasSource = s.documentId && onViewSource;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={hasSource ? () => onViewSource(s.documentId!) : undefined}
+                className={`inline-flex items-center gap-1 text-[8px] ${hasSource ? "text-[#3b82f6] hover:underline cursor-pointer" : "text-slate-400 cursor-default"}`}
+                title={hasSource ? `${s.label}: ${s.value ?? "—"} — ${s.documentName ?? ""}${s.page != null ? ` p.${s.page}` : ""}` : `${s.label}: missing`}
+              >
+                {hasSource ? (
+                  <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                ) : null}
+                <span>{s.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -370,7 +415,7 @@ export default function FactsViewSpec({
     return result;
   }, [defMap, valueMap, evidenceMap, fileMap]);
 
-  /** Core: 7 rows — map years_in_business to "Year Established", owner to "Owner Involvement" */
+  /** Core: 7 rows — map years_in_business to "Year Established", owner to "Owner Involvement". factKey for metric sources. */
   const coreInputFacts = useMemo(() => {
     const keys: { key: string; label: string }[] = [
       { key: "asking_price", label: "Asking Price" },
@@ -388,15 +433,55 @@ export default function FactsViewSpec({
         if (!fd) return null;
         const formatter = key === "years_in_business" ? formatYearEstablished : key === "owner_hours_per_week" ? formatOwnerInvolvement : formatValue;
         const spec = buildSpecFact(fd, valueMap.get(fd.id), evidenceMap.get(fd.id) ?? null, fileMap, formatter);
-        return { ...spec, label };
+        return { ...spec, label, factKey: key };
       })
-      .filter((f): f is SpecFact => f != null);
+      .filter((f): f is SpecFact & { factKey: string } => f != null);
   }, [defMap, valueMap, evidenceMap, fileMap]);
+
+  /** By fact key — for building metric source refs */
+  const coreInputFactsByKey = useMemo(
+    () => new Map(coreInputFacts.map((f) => [f.factKey, f])),
+    [coreInputFacts]
+  );
 
   const derived = useMemo(
     () => computeDerivedMetrics(factValues, factDefinitions),
     [factValues, factDefinitions]
   );
+
+  /** Source refs per metric for evidence chain (spec: "small source references below each metric row") */
+  const metricSources = useMemo((): Record<string, MetricSourceRef[]> => {
+    const out: Record<string, MetricSourceRef[]> = {};
+    const metricKeys = [
+      "purchase_multiple",
+      "sde_margin",
+      "sde_per_employee",
+      "rent_ratio",
+      "business_age",
+      "owner_dependence",
+    ] as const;
+    for (const mk of metricKeys) {
+      const meta = derived[mk];
+      if (!meta?.inputs?.length) {
+        out[mk] = [];
+        continue;
+      }
+      const refs: MetricSourceRef[] = [];
+      for (const inputKey of meta.inputs) {
+        const fact = coreInputFactsByKey.get(inputKey) ?? (inputKey === "ebitda_latest" ? coreInputFactsByKey.get("sde_latest") : undefined);
+        if (!fact) continue;
+        refs.push({
+          label: fact.label,
+          value: fact.value,
+          documentId: fact.source?.documentId ?? null,
+          documentName: fact.source?.documentName ?? null,
+          page: fact.source?.page ?? null,
+        });
+      }
+      out[mk] = refs;
+    }
+    return out;
+  }, [derived, coreInputFactsByKey]);
 
   const otherFacts = useMemo(() => {
     const coreAndContextKeys = new Set([
@@ -406,7 +491,6 @@ export default function FactsViewSpec({
       "purchase_multiple",
       "sde_margin",
       "sde_per_employee",
-      "revenue_per_employee",
       "rent_ratio",
       "business_age",
       "owner_dependence",
@@ -458,13 +542,15 @@ export default function FactsViewSpec({
         </div>
 
         <p className="text-[9px] uppercase text-[#94a3b8] tracking-[0.06em] mt-4 mb-2">Metrics</p>
-        <div className="space-y-1">
+        <div className="space-y-0">
           <CalculatedMetricRow
             label="Purchase Multiple"
-            formula="Price ÷ SDE"
+            formula="Asking Price ÷ SDE"
             formatted={derived.purchase_multiple.formatted}
             value={derived.purchase_multiple.value}
             metricKey="purchase_multiple"
+            sources={metricSources.purchase_multiple}
+            onViewSource={onViewSourceInWorkspace}
           />
           <CalculatedMetricRow
             label="SDE Margin"
@@ -472,35 +558,45 @@ export default function FactsViewSpec({
             formatted={derived.sde_margin.formatted}
             value={derived.sde_margin.value}
             metricKey="sde_margin"
+            sources={metricSources.sde_margin}
+            onViewSource={onViewSourceInWorkspace}
           />
           <CalculatedMetricRow
             label="SDE / Employee"
-            formula="SDE ÷ FT"
+            formula="SDE ÷ Employees (FT)"
             formatted={derived.sde_per_employee.formatted}
             value={derived.sde_per_employee.value}
             metricKey="sde_per_employee"
+            sources={metricSources.sde_per_employee}
+            onViewSource={onViewSourceInWorkspace}
           />
           <CalculatedMetricRow
             label="Rent Ratio"
-            formula="(Rent × 12) ÷ Revenue"
+            formula="(Monthly Rent × 12) ÷ Revenue"
             formatted={derived.rent_ratio.formatted}
             value={derived.rent_ratio.value}
             metricKey="rent_ratio"
+            sources={metricSources.rent_ratio}
+            onViewSource={onViewSourceInWorkspace}
           />
           <CalculatedMetricRow
             label="Business Age"
-            formula="Years in business"
+            formula="Current Year − Year Established"
             formatted={derived.business_age.formatted}
             value={derived.business_age.value}
             metricKey="business_age"
+            sources={metricSources.business_age}
+            onViewSource={onViewSourceInWorkspace}
           />
           <CalculatedMetricRow
             label="Owner Dependence"
-            formula="From Owner Involvement"
+            formula="Mapped from Owner Involvement"
             formatted={derived.owner_dependence.formatted}
             value={derived.owner_dependence.value}
             metricKey="owner_dependence"
             valueLabel={derived.owner_dependence.valueLabel}
+            sources={metricSources.owner_dependence}
+            onViewSource={onViewSourceInWorkspace}
           />
         </div>
       </div>
@@ -535,4 +631,67 @@ export default function FactsViewSpec({
       )}
     </div>
   );
+}
+
+// ─── Shared helper for Analysis tab (metric source links) ────────────────────
+
+/**
+ * Build metric → source refs from entity page data.
+ * Used by AnalysisViewSpec to show source links below each metric row.
+ */
+export function buildMetricSourcesFromEntityData(entityData: EntityPageData | null): Record<string, MetricSourceRef[]> {
+  if (!entityData) return {};
+  const { fact_definitions: factDefinitions, fact_values: factValues, fact_evidence: factEvidence, files } = entityData;
+  const fileMap = new Map(files.map((f) => [f.id, f]));
+  const defMap = new Map(factDefinitions.map((d) => [d.key, d]));
+  const valueMap = new Map(factValues.map((v) => [v.fact_definition_id, v]));
+  const evidenceMap = new Map<string, FactEvidence>();
+  for (const e of factEvidence) {
+    if (!e.is_superseded) {
+      const cur = evidenceMap.get(e.fact_definition_id);
+      if (!cur || (e.confidence ?? 0) > (cur.confidence ?? 0)) evidenceMap.set(e.fact_definition_id, e);
+    }
+  }
+  const coreKeys: { key: string; label: string }[] = [
+    { key: "asking_price", label: "Asking Price" },
+    { key: "revenue_latest", label: "Revenue" },
+    { key: "sde_latest", label: "SDE" },
+    { key: "employees_ft", label: "Employees (FT)" },
+    { key: "lease_monthly_rent", label: "Monthly Rent" },
+    { key: "years_in_business", label: "Year Established" },
+    { key: "owner_hours_per_week", label: "Owner Involvement" },
+  ];
+  const ownerDependenceDef = defMap.get("owner_dependence_level");
+  const coreInputFactsByKey = new Map<string, SpecFact & { factKey: string }>();
+  for (const { key, label } of coreKeys) {
+    const fd = defMap.get(key) ?? (key === "owner_hours_per_week" ? ownerDependenceDef : null);
+    if (!fd) continue;
+    const formatter = key === "years_in_business" ? formatYearEstablished : key === "owner_hours_per_week" ? formatOwnerInvolvement : formatValue;
+    const spec = buildSpecFact(fd, valueMap.get(fd.id), evidenceMap.get(fd.id) ?? null, fileMap, formatter);
+    coreInputFactsByKey.set(key, { ...spec, label, factKey: key });
+  }
+  const derived = computeDerivedMetrics(factValues, factDefinitions);
+  const metricKeys = ["purchase_multiple", "sde_margin", "sde_per_employee", "rent_ratio", "business_age", "owner_dependence"] as const;
+  const out: Record<string, MetricSourceRef[]> = {};
+  for (const mk of metricKeys) {
+    const meta = derived[mk];
+    if (!meta?.inputs?.length) {
+      out[mk] = [];
+      continue;
+    }
+    const refs: MetricSourceRef[] = [];
+    for (const inputKey of meta.inputs) {
+      const fact = coreInputFactsByKey.get(inputKey) ?? (inputKey === "ebitda_latest" ? coreInputFactsByKey.get("sde_latest") : undefined);
+      if (!fact) continue;
+      refs.push({
+        label: fact.label,
+        value: fact.value,
+        documentId: fact.source?.documentId ?? null,
+        documentName: fact.source?.documentName ?? null,
+        page: fact.source?.page ?? null,
+      });
+    }
+    out[mk] = refs;
+  }
+  return out;
 }

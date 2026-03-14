@@ -167,30 +167,7 @@ const INFERENCE_RULES: InferenceRule[] = [
     };
   },
 
-  // ── 5. Revenue per Employee ──────────────────────────────────────────────────
-  (facts) => {
-    const revenue = getNumeric(facts, "revenue_latest");
-    // Prefer employees_total if available; otherwise sum ft + pt
-    const totalDirect = getNumeric(facts, "employees_total");
-    const ftEmployees = getNumeric(facts, "employees_ft") ?? 0;
-    const ptEmployees = getNumeric(facts, "employees_pt") ?? 0;
-    const totalEmployees = totalDirect ?? (ftEmployees + ptEmployees * 0.5); // PT counts as 0.5 FTE
-    if (!revenue || totalEmployees <= 0) return null;
-
-    if (facts.get("revenue_per_employee")?.value_raw) {
-      return { skip: "revenue_per_employee already has a value" };
-    }
-
-    const rpe = revenue / totalEmployees;
-    return {
-      fact_key: "revenue_per_employee",
-      value_raw: String(Math.round(rpe)),
-      confidence: 0.85,
-      rationale: `Calculated from revenue (${formatCurrency(revenue)}) ÷ ${totalEmployees} FTE = ${formatCurrency(rpe)} per employee`,
-    };
-  },
-
-  // ── 6. Capacity + Enrollment → Utilization Rate ─────────────────────────────
+  // ── 5. Capacity + Enrollment → Utilization Rate ─────────────────────────────
   (facts) => {
     // Support both 'capacity' (new canonical key) and legacy 'student_capacity'
     const capacity = getNumeric(facts, "capacity") ?? getNumeric(facts, "student_capacity");

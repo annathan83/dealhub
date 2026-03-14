@@ -8,8 +8,10 @@ import { runPostFactPipeline } from "@/lib/services/analysis/postFactOrchestrato
 import { getEntityByLegacyDealId } from "@/lib/db/entities";
 import { scoreAndPersistKpis } from "@/lib/kpi/kpiScoringService";
 import { runAndApplyFactInference } from "@/lib/services/facts/factInferenceService";
-import { computeTriageRecommendation } from "@/lib/kpi/triageRecommendation";
-import type { TriageVerdict } from "@/lib/kpi/triageRecommendation";
+import {
+  extractContactsFromFactValues,
+  syncContactsFromExtraction,
+} from "@/lib/services/contacts/dealContactService";
 
 export const maxDuration = 60;
 
@@ -53,6 +55,8 @@ export async function POST(request: NextRequest) {
       confidence: number;
       snippet?: string | null;
     }> | null;
+    // Optional manual facts from "Add more details" (manual entry form)
+    manual_facts?: Record<string, string> | null;
   };
 
   try {
@@ -81,7 +85,7 @@ export async function POST(request: NextRequest) {
       deal_source_category: body.deal_source_category?.trim() || null,
       deal_source_detail: body.deal_source_detail?.trim() || null,
       status: "active",
-      intake_status: "pending",
+      intake_status: "promoted",
       asking_price: body.asking_price?.trim() || null,
       sde: body.sde?.trim() || null,
       multiple: body.multiple?.trim() || null,
@@ -99,14 +103,9 @@ export async function POST(request: NextRequest) {
   const dealId = deal.id as string;
 
   // ── 2. Seed facts and trigger initial scoring ─────────────────────────────────
-  // We await the seeding so scoring can read the facts immediately after.
-  let intakeVerdict: TriageVerdict | null = null;
-  let intakeFlags: string[] = [];
-  let intakeScore: number | null = null;
-  let intakeOpinion: string | null = null;
-
+  // Deal is always created as promoted; no intake verdict / rejection flow.
   try {
-    // Seed manual fields (asking_price, sde, industry, location) as user_override facts
+    // Seed manual fields (asking_price, sde, industry, location + optional manual_facts) as user_override facts
     await seedManualFactsFromDeal(dealId, user.id, {
       asking_price: body.asking_price,
       sde: body.sde,
@@ -115,6 +114,7 @@ export async function POST(request: NextRequest) {
       state: body.state,
       county: body.county,
       city: body.city,
+      manual_facts: body.manual_facts ?? undefined,
     });
 
     // If pre-extracted facts were provided (from paste-and-extract flow), seed those too.
@@ -125,6 +125,19 @@ export async function POST(request: NextRequest) {
 
     const entity = await getEntityByLegacyDealId(dealId, user.id);
     if (entity) {
+      // Sync broker/contact from pasted extracted facts into deal_contacts and deal row
+      if (body.extracted_facts && body.extracted_facts.length > 0) {
+        extractContactsFromFactValues(entity.id, null, "Pasted listing")
+          .then((candidates) => {
+            if (candidates.length > 0) {
+              return syncContactsFromExtraction(dealId, user.id, candidates);
+            }
+          })
+          .catch((err) => {
+            console.warn("[createDeal] Contact sync from paste failed (non-fatal):", err);
+          });
+      }
+
       // Apply the user's default scoring config to this new deal entity (non-fatal).
       try {
         const { data: userSettings } = await supabase
@@ -151,24 +164,13 @@ export async function POST(request: NextRequest) {
         console.warn("[createDeal] Fact inference failed (non-fatal):", err);
       });
 
-      // Step 2: KPI scoring — awaited so we can compute the intake triage verdict
-      // before returning to the client. SWOT and missing info run fire-and-forget.
-      const scorecard = await scoreAndPersistKpis(entity.id, entity.entity_type_id, {
+      // Step 2: KPI scoring. SWOT and missing info run fire-and-forget.
+      await scoreAndPersistKpis(entity.id, entity.entity_type_id, {
         triggerType: "extraction",
         triggerReason: "Initial deal creation",
       }).catch((err) => {
         console.warn("[createDeal] KPI scoring failed (non-fatal):", err);
-        return null;
       });
-
-      // Compute triage verdict for intake assessment
-      if (scorecard) {
-        const rec = computeTriageRecommendation(scorecard);
-        intakeVerdict = rec.verdict;
-        intakeFlags = rec.flags;
-        intakeScore = scorecard.overall_score ?? null;
-        intakeOpinion = rec.opinion;
-      }
 
       // Steps 3 + 4: SWOT and missing info — fire-and-forget (AI, takes longer)
       const { generateSwotFromFacts } = await import("@/lib/services/analysis/swotAnalysisService");
@@ -176,17 +178,6 @@ export async function POST(request: NextRequest) {
       generateSwotFromFacts(entity.id, entity.entity_type_id, entity.title).catch(() => {});
       detectMissingInfo(entity.id, entity.entity_type_id, industry).catch(() => {});
     }
-
-    // If intake verdict is not PROBABLY_PASS, promote the deal immediately
-    if (intakeVerdict !== "PROBABLY_PASS") {
-      await supabase
-        .from("deals")
-        .update({ intake_status: "promoted" })
-        .eq("id", dealId)
-        .eq("user_id", user.id);
-    }
-    // If PROBABLY_PASS, leave intake_status = 'pending' — the client will call
-    // /api/deals/[id]/intake-reject with action='reject' or action='keep'
 
   } catch (err) {
     console.error("[createDeal] Post-creation pipeline failed (non-fatal):", err);
@@ -222,12 +213,6 @@ export async function POST(request: NextRequest) {
       name: displayName,
       deal_number: deal.deal_number,
       driveFolderError,
-      // Intake assessment result — client uses this to decide whether to show
-      // the rejection screen or navigate directly to the deal.
-      intake_verdict: intakeVerdict,
-      intake_flags: intakeFlags,
-      intake_score: intakeScore,
-      intake_opinion: intakeOpinion,
     },
     { status: 201 }
   );

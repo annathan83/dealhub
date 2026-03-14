@@ -396,6 +396,7 @@ export const ENTITY_EVENT_TYPES = [
   "nda_status_updated",
   "deal_edited",
   "entry_added",
+  "ai_summary_generated",
 ] as const;
 
 export type EntityEventType = (typeof ENTITY_EVENT_TYPES)[number];

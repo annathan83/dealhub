@@ -9,13 +9,11 @@ export default async function BuyerProfilePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/signin");
 
-  const { data } = await supabase
+  const { data: profile } = await supabase
     .from("buyer_profiles")
     .select("*")
     .eq("user_id", user.id)
     .single();
-
-  const profile = data as BuyerProfile | null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -30,8 +28,7 @@ export default async function BuyerProfilePage() {
             Tell us what you&apos;re looking for. This powers the Buyer Fit analysis on every deal.
           </p>
         </div>
-
-        <BuyerProfileForm initialProfile={profile} />
+        <BuyerProfileForm initialProfile={(profile as BuyerProfile) ?? null} />
       </main>
     </div>
   );

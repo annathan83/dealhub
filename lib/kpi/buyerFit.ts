@@ -50,6 +50,8 @@ export type BuyerFitCriterion = {
   name: string;
   matched: boolean;
   context: string;
+  /** When true, the deal fact is missing so the criterion could not be evaluated (show — in UI). */
+  unavailable?: boolean;
 };
 
 export type BuyerFitResult = {
@@ -79,6 +81,7 @@ export function computeBuyerFit(
   const criteria: BuyerFitCriterion[] = [];
 
   // ── Industry fit ─────────────────────────────────────────────────────────────
+  const hasIndustryPref = (profile.preferred_industries?.length ?? 0) > 0 || (profile.excluded_industries?.length ?? 0) > 0;
   if (deal.industry) {
     const dealIndustry = deal.industry.toLowerCase();
     const excluded = profile.excluded_industries ?? [];
@@ -87,19 +90,20 @@ export function computeBuyerFit(
       const msg = `Industry (${deal.industry}) is in your excluded list`;
       mismatches.push(msg);
       criteria.push({ name: "Industry", matched: false, context: msg });
-    } else {
-      const preferred = profile.preferred_industries ?? [];
-      if (preferred.length > 0) {
-        const isMatch = preferred.some((p) => dealIndustry.includes(p.toLowerCase()) || p.toLowerCase().includes(dealIndustry));
-        const msg = isMatch ? `Industry matches your preferences (${deal.industry})` : `Industry (${deal.industry}) is not in your preferred list`;
-        if (isMatch) matches.push(msg);
-        else neutral.push(msg);
-        criteria.push({ name: "Industry", matched: isMatch, context: msg });
-      }
+    } else if (profile.preferred_industries?.length) {
+      const preferred = profile.preferred_industries;
+      const isMatch = preferred.some((p) => dealIndustry.includes(p.toLowerCase()) || p.toLowerCase().includes(dealIndustry));
+      const msg = isMatch ? `Industry matches your preferences (${deal.industry})` : `Industry (${deal.industry}) is not in your preferred list`;
+      if (isMatch) matches.push(msg);
+      else neutral.push(msg);
+      criteria.push({ name: "Industry", matched: isMatch, context: msg });
     }
+  } else if (hasIndustryPref) {
+    criteria.push({ name: "Industry", matched: false, context: "Industry not available", unavailable: true });
   }
 
   // ── SDE range fit ─────────────────────────────────────────────────────────────
+  const hasSdePref = profile.target_sde_min != null || profile.target_sde_max != null;
   if (deal.sde != null) {
     const sdeMin = profile.target_sde_min;
     const sdeMax = profile.target_sde_max;
@@ -125,9 +129,12 @@ export function computeBuyerFit(
       else neutral.push(msg);
       criteria.push({ name: "SDE range", matched: ok, context: msg });
     }
+  } else if (hasSdePref) {
+    criteria.push({ name: "SDE range", matched: false, context: "SDE not available", unavailable: true });
   }
 
   // ── Purchase price fit ────────────────────────────────────────────────────────
+  const hasPricePref = profile.target_purchase_price_min != null || profile.target_purchase_price_max != null;
   if (deal.asking_price != null) {
     const priceMin = profile.target_purchase_price_min;
     const priceMax = profile.target_purchase_price_max;
@@ -141,9 +148,12 @@ export function computeBuyerFit(
       else matches.push(msg);
       criteria.push({ name: "Price range", matched: !overMax && !underMin, context: msg });
     }
+  } else if (hasPricePref) {
+    criteria.push({ name: "Price range", matched: false, context: "Asking price not available", unavailable: true });
   }
 
   // ── Location fit ──────────────────────────────────────────────────────────────
+  const hasLocationPref = (profile.preferred_locations?.length ?? 0) > 0;
   if (deal.location) {
     const preferred = profile.preferred_locations ?? [];
     if (preferred.length > 0) {
@@ -154,6 +164,8 @@ export function computeBuyerFit(
       else neutral.push(msg);
       criteria.push({ name: "Location", matched: isMatch, context: msg });
     }
+  } else if (hasLocationPref) {
+    criteria.push({ name: "Location", matched: false, context: "Location not available", unavailable: true });
   }
 
   // ── Employee count fit ────────────────────────────────────────────────────────
@@ -163,6 +175,8 @@ export function computeBuyerFit(
     if (ok) matches.push(msg);
     else mismatches.push(msg);
     criteria.push({ name: "Max employees", matched: ok, context: msg });
+  } else if (profile.max_employees != null && deal.total_employees == null) {
+    criteria.push({ name: "Max employees", matched: false, context: "Employee count not available", unavailable: true });
   }
 
   // ── Manager required fit ──────────────────────────────────────────────────────
@@ -176,20 +190,26 @@ export function computeBuyerFit(
       if (profile.manager_required === "yes") mismatches.push(msg);
       else neutral.push(msg);
       criteria.push({ name: "Manager in place", matched: false, context: msg });
+    } else {
+      criteria.push({ name: "Manager in place", matched: false, context: "Manager-in-place not available", unavailable: true });
     }
   }
 
   // ── Owner operator fit ────────────────────────────────────────────────────────
-  if (profile.owner_operator_ok && deal.owner_hours_per_week != null) {
-    const isHeavyOwnerOp = deal.owner_hours_per_week >= 40;
-    if (isHeavyOwnerOp && profile.owner_operator_ok === "no") {
-      const msg = `Owner works ${deal.owner_hours_per_week}h/week — you prefer not to be an owner-operator`;
-      mismatches.push(msg);
-      criteria.push({ name: "Owner involvement", matched: false, context: msg });
-    } else if (isHeavyOwnerOp && profile.owner_operator_ok === "yes") {
-      const msg = "Owner-operator model aligns with your preference";
-      matches.push(msg);
-      criteria.push({ name: "Owner involvement", matched: true, context: msg });
+  if (profile.owner_operator_ok) {
+    if (deal.owner_hours_per_week != null) {
+      const isHeavyOwnerOp = deal.owner_hours_per_week >= 40;
+      if (isHeavyOwnerOp && profile.owner_operator_ok === "no") {
+        const msg = `Owner works ${deal.owner_hours_per_week}h/week — you prefer not to be an owner-operator`;
+        mismatches.push(msg);
+        criteria.push({ name: "Owner involvement", matched: false, context: msg });
+      } else if (isHeavyOwnerOp && profile.owner_operator_ok === "yes") {
+        const msg = "Owner-operator model aligns with your preference";
+        matches.push(msg);
+        criteria.push({ name: "Owner involvement", matched: true, context: msg });
+      }
+    } else {
+      criteria.push({ name: "Owner involvement", matched: false, context: "Owner involvement not available", unavailable: true });
     }
   }
 

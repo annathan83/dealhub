@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import DealMetadataFields, { type DealMetadataValues } from "@/components/DealMetadataFields";
+import { type DealMetadataValues } from "@/components/DealMetadataFields";
 import { formatLocation } from "@/lib/config/dealMetadata";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -88,10 +88,27 @@ type ExtractedFact = {
   accepted: boolean;
 };
 
+type PreviewData = {
+  suggestedName: string;
+  context: { industry: string | null; location: string | null };
+  coreFacts: Array<{ label: string; value: string | null }>;
+  metrics: Array<{ label: string; formula: string; value: string | null; score: number | null; status: string }>;
+  dealScore: number | null;
+  dealScoreLabel: "Strong" | "Partial" | "Weak" | null;
+  metricsAvailable: number;
+  buyerFit: {
+    label: string;
+    matchCount: number;
+    totalCriteria: number;
+    summary: string;
+  } | null;
+  otherFacts: Array<{ label: string; value: string | null }>;
+};
+
 type ExtractionState =
   | { status: "idle" }
   | { status: "extracting" }
-  | { status: "done"; facts: ExtractedFact[]; missingRequired: string[] }
+  | { status: "done"; facts: ExtractedFact[]; missingRequired: string[]; preview: PreviewData }
   | { status: "error"; message: string };
 
 const EXTRACTION_STEPS = ["reading", "extracting", "calculating", "scoring"] as const;
@@ -102,18 +119,6 @@ const EXTRACTION_STEP_LABELS: Record<ExtractionStepId, string> = {
   extracting: "Extracting key facts",
   calculating: "Calculating metrics",
   scoring: "Scoring deal",
-};
-
-type IntakeRejection = {
-  dealId: string;
-  verdict: string;
-  flags: string[];
-  score: number | null;
-  opinion: string | null;
-  industry: string | null;
-  location: string | null;
-  price: string | null;
-  sde: string | null;
 };
 
 // ─── File icon helper ─────────────────────────────────────────────────────────
@@ -154,8 +159,6 @@ export default function CreateDealForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("Creating…");
-  const [intakeRejection, setIntakeRejection] = useState<IntakeRejection | null>(null);
-  const [keepingAnyway, setKeepingAnyway] = useState(false);
 
   // Paste mode
   const [pasteText, setPasteText] = useState("");
@@ -175,6 +178,7 @@ export default function CreateDealForm() {
   // Manual mode
   const [askingPrice, setAskingPrice] = useState("");
   const [sde, setSde] = useState("");
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [metadata, setMetadata] = useState<DealMetadataValues>({
     deal_source_category: "",
     deal_source_detail: "",
@@ -184,6 +188,12 @@ export default function CreateDealForm() {
     county: "",
     city: "",
   });
+  const [manualLocation, setManualLocation] = useState("");
+  const [manualRevenue, setManualRevenue] = useState("");
+  const [manualEmployeesFt, setManualEmployeesFt] = useState("");
+  const [manualMonthlyRent, setManualMonthlyRent] = useState("");
+  const [manualYearEst, setManualYearEst] = useState("");
+  const [manualOwnerInvolvement, setManualOwnerInvolvement] = useState("");
   const [manualNotes, setManualNotes] = useState("");
   const [manualFiles, setManualFiles] = useState<StagedFile[]>([]);
 
@@ -252,6 +262,15 @@ export default function CreateDealForm() {
           confidence: number; snippet: string | null; required: boolean;
         }>;
         missing_required?: string[];
+        suggestedName?: string;
+        context?: { industry: string | null; location: string | null };
+        coreFacts?: Array<{ label: string; value: string | null }>;
+        metrics?: Array<{ label: string; formula: string; value: string | null; score: number | null; status: string }>;
+        dealScore?: number | null;
+        dealScoreLabel?: "Strong" | "Partial" | "Weak" | null;
+        metricsAvailable?: number;
+        buyerFit?: PreviewData["buyerFit"];
+        otherFacts?: Array<{ label: string; value: string | null }>;
         error?: string;
       };
 
@@ -271,21 +290,25 @@ export default function CreateDealForm() {
             ...c,
             accepted: c.confidence >= 0.5,
           }));
+          const preview: PreviewData = {
+            suggestedName: data.suggestedName ?? "",
+            context: data.context ?? { industry: null, location: null },
+            coreFacts: data.coreFacts ?? [],
+            metrics: data.metrics ?? [],
+            dealScore: data.dealScore ?? null,
+            dealScoreLabel: data.dealScoreLabel ?? null,
+            metricsAvailable: data.metricsAvailable ?? 0,
+            buyerFit: data.buyerFit ?? null,
+            otherFacts: data.otherFacts ?? [],
+          };
           setExtraction({
             status: "done",
             facts,
             missingRequired: data.missing_required ?? [],
+            preview,
           });
           setStepStatus({ reading: "waiting", extracting: "waiting", calculating: "waiting", scoring: "waiting" });
-          if (!name.trim()) {
-            const industry = facts.find((f) => f.fact_key === "industry");
-            const location = facts.find((f) => f.fact_key === "location");
-            if (industry && location) {
-              setName(`${industry.extracted_value_raw} — ${location.extracted_value_raw}`);
-            } else if (industry) {
-              setName(industry.extracted_value_raw);
-            }
-          }
+          if (!name.trim()) setName(preview.suggestedName || "");
         }, 500);
       }, 500);
     } catch {
@@ -323,9 +346,6 @@ export default function CreateDealForm() {
       const missing: MinRequiredKey[] = [];
       if (!askingPrice.trim()) missing.push("asking_price");
       if (!sde.trim()) missing.push("sde_latest");
-      if (!metadata.industry.trim()) missing.push("industry");
-      const loc = formatLocation(metadata.city, metadata.county, metadata.state);
-      if (!loc) missing.push("location");
       return missing;
     }
 
@@ -343,7 +363,75 @@ export default function CreateDealForm() {
   const missingRequired = getMissingRequired();
   const canSubmit = missingRequired.length === 0 && name.trim().length > 0;
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Create from preview (no deal exists yet) ───────────────────────────────
+  async function handleCreateFromPreview() {
+    if (extraction.status !== "done" || !name.trim()) return;
+    setError(null);
+    setLoading(true);
+    setLoadingLabel("Creating deal…");
+    const extractedFacts = extraction.facts
+      .filter((f) => f.accepted)
+      .map((f) => ({
+        fact_key: f.fact_key,
+        value_raw: f.userValue ?? f.extracted_value_raw,
+        confidence: f.confidence,
+        snippet: f.snippet ?? undefined,
+      }));
+    try {
+      const res = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          industry_category: null,
+          industry: extraction.facts.find((f) => f.fact_key === "industry")?.userValue ?? extraction.facts.find((f) => f.fact_key === "industry")?.extracted_value_raw ?? null,
+          state: null,
+          county: null,
+          city: null,
+          location: extraction.facts.find((f) => f.fact_key === "location")?.userValue ?? extraction.facts.find((f) => f.fact_key === "location")?.extracted_value_raw ?? null,
+          deal_source_category: null,
+          deal_source_detail: null,
+          asking_price: extraction.facts.find((f) => f.fact_key === "asking_price")?.userValue ?? extraction.facts.find((f) => f.fact_key === "asking_price")?.extracted_value_raw ?? null,
+          sde: extraction.facts.find((f) => f.fact_key === "sde_latest")?.userValue ?? extraction.facts.find((f) => f.fact_key === "sde_latest")?.extracted_value_raw ?? null,
+          multiple: null,
+          extracted_facts: extractedFacts,
+        }),
+      });
+      const data = await res.json() as { id?: string; error?: string };
+      if (!res.ok || !data.id) {
+        setError(data.error ?? "Failed to create deal.");
+        setLoading(false);
+        return;
+      }
+      setLoadingLabel("Uploading files…");
+      const filesToUpload = stagedFiles;
+      if (filesToUpload.length > 0) {
+        const BATCH = 3;
+        for (let i = 0; i < filesToUpload.length; i += BATCH) {
+          const batch = filesToUpload.slice(i, i + BATCH);
+          const form = new FormData();
+          for (const sf of batch) form.append("files", sf.file);
+          form.append("captureSource", "file");
+          try {
+            await fetch(`/api/deals/${data.id}/files`, { method: "POST", body: form });
+          } catch (err) {
+            console.warn("[createDeal] File upload batch error:", err);
+          }
+        }
+      }
+      router.push(`/deals/${data.id}?tab=workspace`);
+    } catch {
+      setError("Network error. Please try again.");
+      setLoading(false);
+    }
+  }
+
+  function handleDiscardPreview() {
+    setExtraction({ status: "idle" });
+    setName("");
+  }
+
+  // ── Submit (manual mode only; paste mode uses preview → Create Deal) ──────
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -388,10 +476,23 @@ export default function CreateDealForm() {
       askingPriceVal = askingPrice.trim() || null;
       sdeVal = sde.trim() || null;
       industryVal = metadata.industry.trim() || null;
-      locationVal = formatLocation(metadata.city, metadata.county, metadata.state) || null;
+      locationVal = manualLocation.trim() || formatLocation(metadata.city, metadata.county, metadata.state) || null;
     }
 
     const multiple = askingPriceVal && sdeVal ? computeMultiple(askingPriceVal, sdeVal) : null;
+
+    // Optional manual facts from "Add more details" (manual mode only)
+    const manualFacts: Record<string, string> = {};
+    if (mode === "manual") {
+      if (manualRevenue.trim()) manualFacts.revenue_latest = manualRevenue.trim();
+      if (manualEmployeesFt.trim()) manualFacts.employees_ft = manualEmployeesFt.trim();
+      if (manualMonthlyRent.trim()) manualFacts.lease_monthly_rent = manualMonthlyRent.trim();
+      if (manualYearEst.trim()) manualFacts.years_in_business = manualYearEst.trim();
+      if (manualOwnerInvolvement) {
+        const hoursMap: Record<string, string> = { absentee: "0", semi_absentee: "20", part_time: "30", full_time: "50" };
+        manualFacts.owner_hours_per_week = hoursMap[manualOwnerInvolvement] ?? manualOwnerInvolvement;
+      }
+    }
 
     setLoadingLabel("Creating deal & running initial score…");
     let dealId: string;
@@ -401,11 +502,11 @@ export default function CreateDealForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          industry_category: mode === "manual" ? (metadata.industry_category || null) : null,
+          industry_category: mode === "manual" ? null : (metadata.industry_category || null),
           industry: industryVal,
-          state: mode === "manual" ? (metadata.state || null) : null,
-          county: mode === "manual" ? (metadata.county || null) : null,
-          city: mode === "manual" ? (metadata.city || null) : null,
+          state: mode === "manual" ? null : (metadata.state || null),
+          county: mode === "manual" ? null : (metadata.county || null),
+          city: mode === "manual" ? null : (metadata.city || null),
           location: locationVal,
           deal_source_category: mode === "manual" ? (metadata.deal_source_category || null) : null,
           deal_source_detail: mode === "manual" ? (metadata.deal_source_detail || null) : null,
@@ -413,76 +514,16 @@ export default function CreateDealForm() {
           sde: sdeVal,
           multiple: multiple || null,
           extracted_facts: extractedFacts,
+          manual_facts: mode === "manual" && Object.keys(manualFacts).length > 0 ? manualFacts : undefined,
         }),
       });
-      const data = await res.json() as {
-        id?: string;
-        error?: string;
-        intake_verdict?: string | null;
-        intake_flags?: string[];
-        intake_score?: number | null;
-        intake_opinion?: string | null;
-      };
+      const data = await res.json() as { id?: string; error?: string };
       if (!res.ok || !data.id) {
         setError(data.error ?? "Failed to create deal. Please try again.");
         setLoading(false);
         return;
       }
       dealId = data.id;
-
-      // ── Intake rejection check ─────────────────────────────────────────────
-      // If the initial assessment verdict is PROBABLY_PASS, show the rejection
-      // screen instead of navigating to the deal. The user can dismiss or keep.
-      if (data.intake_verdict === "PROBABLY_PASS") {
-        // Upload files and notes first so they're available if user keeps the deal
-        const filesToUploadEarly = mode === "paste" ? stagedFiles : manualFiles;
-        if (filesToUploadEarly.length > 0) {
-          setLoadingLabel(`Uploading ${filesToUploadEarly.length} file${filesToUploadEarly.length > 1 ? "s" : ""}…`);
-          const BATCH = 3;
-          for (let i = 0; i < filesToUploadEarly.length; i += BATCH) {
-            const batch = filesToUploadEarly.slice(i, i + BATCH);
-            const form = new FormData();
-            for (const sf of batch) form.append("files", sf.file);
-            form.append("captureSource", "file");
-            try {
-              await fetch(`/api/deals/${dealId}/files`, { method: "POST", body: form });
-            } catch (err) {
-              console.warn("[createDeal] File upload batch error:", err);
-            }
-          }
-        }
-
-        // Fire-and-forget: record the rejection in the audit log and clean up Drive
-        fetch(`/api/deals/${dealId}/intake-reject`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "reject",
-            rejection_reason: "PROBABLY_PASS",
-            rejection_flags: data.intake_flags ?? [],
-            score: data.intake_score ?? null,
-            ai_summary_short: data.intake_opinion ?? null,
-            extracted_industry: industryVal,
-            extracted_location: locationVal,
-            extracted_price: askingPriceVal,
-            extracted_sde: sdeVal,
-          }),
-        }).catch(() => {});
-
-        setIntakeRejection({
-          dealId,
-          verdict: "PROBABLY_PASS",
-          flags: data.intake_flags ?? [],
-          score: data.intake_score ?? null,
-          opinion: data.intake_opinion ?? null,
-          industry: industryVal,
-          location: locationVal,
-          price: askingPriceVal,
-          sde: sdeVal,
-        });
-        setLoading(false);
-        return;
-      }
     } catch {
       setError("Network error. Please try again.");
       setLoading(false);
@@ -519,143 +560,27 @@ export default function CreateDealForm() {
       }
     }
 
-    router.push(`/deals/${dealId}?tab=analysis`);
-  }
-
-  // ── Keep Anyway handler ───────────────────────────────────────────────────
-  async function handleKeepAnyway() {
-    if (!intakeRejection) return;
-    setKeepingAnyway(true);
-    try {
-      await fetch(`/api/deals/${intakeRejection.dealId}/intake-reject`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "keep" }),
-      });
-    } catch {
-      // Non-fatal — navigate anyway
-    }
-    router.push(`/deals/${intakeRejection.dealId}?tab=analysis`);
+    router.push(`/deals/${dealId}?tab=workspace`);
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
-  // ── Intake rejection screen ───────────────────────────────────────────────
-  if (intakeRejection) {
+  // ── Paste mode: preview screen (before deal exists) ────────────────────────
+  if (mode === "paste" && extraction.status === "done") {
     return (
-      <div className="flex flex-col gap-5">
-        {/* Header */}
-        <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-5">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-              <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </span>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base font-semibold text-red-800 leading-snug">
-                This listing was screened out
-              </h2>
-              <p className="mt-1 text-sm text-red-700 leading-relaxed">
-                The initial assessment flagged this deal as unlikely to meet your criteria. It was not added to your deal list.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Score & opinion */}
-        {(intakeRejection.score !== null || intakeRejection.opinion) && (
-          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 flex flex-col gap-3">
-            {intakeRejection.score !== null && (
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-500 font-medium">Initial score</span>
-                <span className="text-sm font-bold text-red-600 bg-red-50 px-2.5 py-0.5 rounded-full">
-                  {intakeRejection.score.toFixed(1)}/10
-                </span>
-              </div>
-            )}
-            {intakeRejection.opinion && (
-              <p className="text-sm text-slate-600 leading-relaxed">{intakeRejection.opinion}</p>
-            )}
-          </div>
-        )}
-
-        {/* Flags */}
-        {intakeRejection.flags.length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Reasons</p>
-            <ul className="flex flex-col gap-1.5">
-              {intakeRejection.flags.map((flag, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
-                  <span className="mt-1 w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                  {flag}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Deal summary */}
-        {(intakeRejection.industry || intakeRejection.location || intakeRejection.price || intakeRejection.sde) && (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Extracted details</p>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-              {intakeRejection.industry && (
-                <>
-                  <span className="text-slate-500">Industry</span>
-                  <span className="text-slate-800 font-medium">{intakeRejection.industry}</span>
-                </>
-              )}
-              {intakeRejection.location && (
-                <>
-                  <span className="text-slate-500">Location</span>
-                  <span className="text-slate-800 font-medium">{intakeRejection.location}</span>
-                </>
-              )}
-              {intakeRejection.price && (
-                <>
-                  <span className="text-slate-500">Asking Price</span>
-                  <span className="text-slate-800 font-medium">{formatCurrency(intakeRejection.price)}</span>
-                </>
-              )}
-              {intakeRejection.sde && (
-                <>
-                  <span className="text-slate-500">SDE</span>
-                  <span className="text-slate-800 font-medium">{formatCurrency(intakeRejection.sde)}</span>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex flex-col gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleKeepAnyway}
-            disabled={keepingAnyway}
-            className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {keepingAnyway ? "Opening deal…" : "Keep anyway — open the deal"}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard")}
-            className="w-full rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
-          >
-            Dismiss — go back to dashboard
-          </button>
-        </div>
-
-        <p className="text-xs text-slate-400 text-center leading-relaxed">
-          Screened-out listings are not saved to your deal list and do not affect your statistics.
-        </p>
-      </div>
+      <CreatePreviewScreen
+        preview={extraction.preview}
+        dealName={name}
+        onDealNameChange={setName}
+        onCreateDeal={handleCreateFromPreview}
+        onDiscard={handleDiscardPreview}
+        loading={loading}
+        error={error}
+      />
     );
   }
 
-  const showReviewPanel = mode === "paste" && extraction.status === "done";
-  const showSubmit = mode === "manual" || showReviewPanel;
+  const showSubmit = mode === "manual";
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-0">
@@ -957,74 +882,118 @@ export default function CreateDealForm() {
             </div>
           </div>
 
-          {/* Industry + Location */}
-          <DealMetadataFields values={metadata} onChange={setMeta} disabled={loading} compact />
+          {/* Add more details — expandable */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowMoreDetails((v) => !v)}
+              className="inline-flex items-center gap-2 text-sm font-medium text-[#1F7A63] hover:text-[#176B55] transition-colors"
+            >
+              {showMoreDetails ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                  </svg>
+                  Hide details
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Add more details
+                </>
+              )}
+            </button>
 
-          {/* Notes */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-semibold text-slate-700">
-              Notes <span className="text-slate-400 font-normal text-xs">(optional)</span>
-            </label>
-            <textarea
-              rows={3}
-              value={manualNotes}
-              onChange={(e) => setManualNotes(e.target.value)}
-              placeholder="Any additional context, broker notes, or raw listing text…"
-              disabled={loading}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition resize-y disabled:opacity-60"
-            />
-          </div>
-
-          {/* Files */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-semibold text-slate-700">
-              Files <span className="text-slate-400 font-normal text-xs">(optional)</span>
-            </label>
-            <div className="rounded-xl border border-slate-200 bg-slate-50">
-              <div className="px-4 py-2.5 flex items-center gap-2">
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept={ALL_ACCEPT}
-                    multiple
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    onChange={(e) => { if (e.target.files?.length) stageManualFiles(Array.from(e.target.files)); e.target.value = ""; }}
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    disabled={loading}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors shadow-sm disabled:opacity-50"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                    Attach files
-                  </button>
+            {showMoreDetails && (
+              <div className="mt-4 flex flex-col gap-4 border-t border-slate-100 pt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="manual-revenue" className="text-sm font-medium text-slate-700">Revenue</label>
+                    <input id="manual-revenue" type="text" value={manualRevenue} onChange={(e) => setManualRevenue(e.target.value)} placeholder="e.g. $1.5M" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="manual-employees" className="text-sm font-medium text-slate-700">Employees (FT)</label>
+                    <input id="manual-employees" type="text" value={manualEmployeesFt} onChange={(e) => setManualEmployeesFt(e.target.value)} placeholder="e.g. 12" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60" />
+                  </div>
                 </div>
-                <p className="text-xs text-slate-400">CIM, financials, photos, audio…</p>
-              </div>
-              {manualFiles.length > 0 && (
-                <div className="border-t border-slate-200 divide-y divide-slate-100">
-                  {manualFiles.map((sf) => (
-                    <div key={sf.id} className="flex items-center gap-2 px-4 py-1.5">
-                      {fileIcon(sf.file)}
-                      <span className="flex-1 text-xs text-slate-700 truncate">{sf.preview}</span>
-                      <button
-                        type="button"
-                        onClick={() => setManualFiles((p) => p.filter((f) => f.id !== sf.id))}
-                        disabled={loading}
-                        className="text-slate-300 hover:text-red-400 transition-colors"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="manual-rent" className="text-sm font-medium text-slate-700">Monthly Rent</label>
+                    <input id="manual-rent" type="text" value={manualMonthlyRent} onChange={(e) => setManualMonthlyRent(e.target.value)} placeholder="e.g. $3,500" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="manual-year-est" className="text-sm font-medium text-slate-700">Year Established</label>
+                    <input id="manual-year-est" type="text" value={manualYearEst} onChange={(e) => setManualYearEst(e.target.value)} placeholder="e.g. 2010" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="manual-owner" className="text-sm font-medium text-slate-700">Owner Involvement</label>
+                  <select id="manual-owner" value={manualOwnerInvolvement} onChange={(e) => setManualOwnerInvolvement(e.target.value)} disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60 bg-white">
+                    <option value="">Select…</option>
+                    <option value="absentee">Absentee</option>
+                    <option value="semi_absentee">Semi-absentee</option>
+                    <option value="part_time">Part-time</option>
+                    <option value="full_time">Full-time</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="manual-industry" className="text-sm font-medium text-slate-700">Industry</label>
+                  <input id="manual-industry" type="text" value={metadata.industry} onChange={(e) => setMeta("industry", e.target.value)} placeholder="e.g. HVAC, Restaurant" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="manual-location" className="text-sm font-medium text-slate-700">Location</label>
+                  <input id="manual-location" type="text" value={manualLocation} onChange={(e) => setManualLocation(e.target.value)} placeholder="State, county, or city — e.g. Chicago, IL" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="manual-source" className="text-sm font-medium text-slate-700">Deal Source</label>
+                    <select id="manual-source" value={metadata.deal_source_category} onChange={(e) => setMeta("deal_source_category", e.target.value)} disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60 bg-white">
+                      <option value="">Select…</option>
+                      <option value="Broker Outreach">Broker</option>
+                      <option value="Marketplace Listing">BizBuySell</option>
+                      <option value="Direct Seller">Direct</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="manual-source-detail" className="text-sm font-medium text-slate-700">Source Detail</label>
+                    <input id="manual-source-detail" type="text" value={metadata.deal_source_detail} onChange={(e) => setMeta("deal_source_detail", e.target.value)} placeholder="e.g. broker name" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none disabled:opacity-60" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-slate-700">Notes</label>
+                  <textarea rows={3} value={manualNotes} onChange={(e) => setManualNotes(e.target.value)} placeholder="Any additional context, broker notes…" disabled={loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#1F7A63] focus:ring-2 focus:ring-[#C6E4DC] outline-none resize-y disabled:opacity-60" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-slate-700">Files</label>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 flex items-center gap-2">
+                    <div className="relative">
+                      <input type="file" accept={ALL_ACCEPT} multiple className="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onChange={(e) => { if (e.target.files?.length) stageManualFiles(Array.from(e.target.files)); e.target.value = ""; }} disabled={loading} />
+                      <button type="button" disabled={loading} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors disabled:opacity-50">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                        Attach files
                       </button>
                     </div>
-                  ))}
+                    <span className="text-xs text-slate-400">CIM, financials, photos, audio…</span>
+                  </div>
+                  {manualFiles.length > 0 && (
+                    <div className="border-t border-slate-100 mt-2 pt-2 space-y-1">
+                      {manualFiles.map((sf) => (
+                        <div key={sf.id} className="flex items-center gap-2">
+                          {fileIcon(sf.file)}
+                          <span className="flex-1 text-xs text-slate-700 truncate">{sf.preview}</span>
+                          <button type="button" onClick={() => setManualFiles((p) => p.filter((f) => f.id !== sf.id))} disabled={loading} className="text-slate-300 hover:text-red-400">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1114,6 +1083,154 @@ export default function CreateDealForm() {
       )}
 
     </form>
+  );
+}
+
+// ─── Create Deal Preview Screen ───────────────────────────────────────────────
+
+function CreatePreviewScreen({
+  preview,
+  dealName,
+  onDealNameChange,
+  onCreateDeal,
+  onDiscard,
+  loading,
+  error,
+}: {
+  preview: PreviewData;
+  dealName: string;
+  onDealNameChange: (v: string) => void;
+  onCreateDeal: () => void;
+  onDiscard: () => void;
+  loading: boolean;
+  error: string | null;
+}) {
+  const scoreBg = preview.dealScore === null ? "bg-slate-200" : preview.dealScore >= 8 ? "bg-[#16a34a]" : preview.dealScore >= 6 ? "bg-[#d97706]" : "bg-[#dc2626]";
+  const scoreText = preview.dealScore === null ? "text-slate-500" : preview.dealScore >= 8 ? "text-[#16a34a]" : preview.dealScore >= 6 ? "text-[#d97706]" : "text-[#dc2626]";
+  const metricColor = (status: string) => status === "good" ? "text-[#16a34a]" : status === "ok" ? "text-[#d97706]" : status === "bad" ? "text-[#dc2626]" : "text-slate-400";
+
+  return (
+    <div className="flex flex-col gap-5 max-w-[480px] mx-auto">
+      <h1 className="text-lg font-semibold text-slate-900">Review before creating</h1>
+
+      {/* Deal Name */}
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Deal name</label>
+        <input
+          type="text"
+          value={dealName}
+          onChange={(e) => onDealNameChange(e.target.value)}
+          placeholder="e.g. Home Improvement — Palm Beach County, FL"
+          disabled={loading}
+          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:outline-none focus:ring-2 focus:ring-[#C6E4DC]"
+        />
+      </div>
+
+      {/* Deal Context */}
+      <div className="flex gap-0 rounded-lg border border-slate-200 overflow-hidden">
+        <div className="flex-1 px-3 py-2 bg-slate-50 border-r border-slate-200">
+          <div className="text-[10px] uppercase text-slate-400 tracking-wider">Industry</div>
+          <div className={`text-sm font-semibold ${preview.context.industry ? "text-slate-800" : "text-slate-400 italic"}`}>
+            {preview.context.industry ?? "Not found"}
+          </div>
+        </div>
+        <div className="flex-1 px-3 py-2 bg-slate-50">
+          <div className="text-[10px] uppercase text-slate-400 tracking-wider">Location</div>
+          <div className={`text-sm font-semibold ${preview.context.location ? "text-slate-800" : "text-slate-400 italic"}`}>
+            {preview.context.location ?? "Not found"}
+          </div>
+        </div>
+      </div>
+
+      {/* Deal Score Badge */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center gap-3">
+          <span className={`inline-flex items-center justify-center w-12 h-12 rounded-lg ${scoreBg} text-white text-xl font-bold font-mono`}>
+            {preview.dealScore !== null ? preview.dealScore.toFixed(1) : "—"}
+          </span>
+          <div>
+            <div className={`text-sm font-bold ${scoreText}`}>
+              {preview.dealScoreLabel ?? (preview.dealScore === null ? "Not enough data to score" : null)}
+            </div>
+            <div className="text-xs text-slate-500">
+              {preview.metricsAvailable > 0 ? `Based on ${preview.metricsAvailable} of 6 metrics` : "Add more facts to get a score"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Metric breakdown */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Metrics</div>
+        <div className="space-y-2">
+          {preview.metrics.map((m, i) => (
+            <div key={i} className="flex items-center justify-between text-sm">
+              <span className="font-medium text-slate-700">{m.label}</span>
+              <span className={`font-mono font-semibold ${metricColor(m.status)}`}>{m.value ?? "—"}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Core facts found */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          Core facts · {preview.coreFacts.filter((f) => f.value).length} of 7 found
+        </div>
+        <div className="space-y-1.5">
+          {preview.coreFacts.map((f, i) => (
+            <div
+              key={i}
+              className={`flex justify-between items-center py-1.5 px-2 rounded border-l-2 ${f.value ? "border-slate-200 bg-white" : "border-red-200 bg-red-50/50"}`}
+            >
+              <span className="text-xs text-slate-500 uppercase">{f.label}</span>
+              <span className={`text-sm font-semibold ${f.value ? "text-slate-800" : "text-slate-400 italic"}`}>
+                {f.value ?? "Not found"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Buyer Fit (only if profile exists) */}
+      {preview.buyerFit && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className={`text-sm font-bold ${
+              preview.buyerFit.label === "Strong Fit" ? "text-[#16a34a]" :
+              preview.buyerFit.label === "Partial Fit" ? "text-[#d97706]" : "text-[#dc2626]"
+            }`}>
+              {preview.buyerFit.label}
+            </span>
+            <span className="text-xs text-slate-500">{preview.buyerFit.summary}</span>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">{error}</div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onCreateDeal}
+          disabled={loading || !dealName.trim()}
+          className="flex-1 rounded-xl bg-[#16a34a] px-4 py-3 text-sm font-semibold text-white hover:bg-[#15803d] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? "Creating…" : "Create Deal"}
+        </button>
+        <button
+          type="button"
+          onClick={onDiscard}
+          disabled={loading}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+        >
+          Discard
+        </button>
+      </div>
+    </div>
   );
 }
 

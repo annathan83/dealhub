@@ -104,24 +104,16 @@ export function computeTriageRecommendation(
     cautionFlags.push(`${ownerRaw ?? "High"} owner dependence — transition risk`);
   }
 
-  const rpeScore = getScore(kpis, "revenue_per_employee");
-  const rpeRaw = getRawValue(kpis, "revenue_per_employee");
-  if (rpeScore !== null && rpeScore >= 8) {
-    positiveFlags.push(`Efficient business (${rpeRaw ?? ""} per employee)`);
+  const sdePerEmpScore = getScore(kpis, "sde_per_employee");
+  const sdePerEmpRaw = getRawValue(kpis, "sde_per_employee");
+  if (sdePerEmpScore !== null && sdePerEmpScore >= 8) {
+    positiveFlags.push(`Efficient business (${sdePerEmpRaw ?? ""} per employee)`);
   }
 
   const rentScore = getScore(kpis, "rent_ratio");
   const rentRaw = getRawValue(kpis, "rent_ratio");
   if (rentScore !== null && rentScore <= 4) {
     cautionFlags.push(`High rent ratio (${rentRaw ?? ""}) — significant fixed-cost exposure`);
-  }
-
-  const revenueQualityScore = getScore(kpis, "revenue_quality");
-  const revenueQualityRaw = getRawValue(kpis, "revenue_quality");
-  if (revenueQualityScore !== null && revenueQualityScore <= 4) {
-    cautionFlags.push(`Revenue quality concern — ${revenueQualityRaw ?? "check concentration or recurring %"}`);
-  } else if (revenueQualityScore !== null && revenueQualityScore >= 8) {
-    positiveFlags.push(`Strong revenue quality (${revenueQualityRaw ?? ""})`);
   }
 
   if (lowCoverage) {

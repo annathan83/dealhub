@@ -182,12 +182,13 @@ async function createFolder(
 // ─── Subfolder names ──────────────────────────────────────────────────────────
 
 /**
- * The three subfolders created inside every deal folder:
- *   raw/          — original uploads and pasted text (source of truth)
- *   derived/      — AI assessment .txt files generated from raw files
- *   intelligence/ — deal-edit audit notes, change logs, internal memos
+ * Subfolders inside every deal folder:
+ *   raw/       — original uploads and pasted text (source of truth)
+ *   derived/   — AI assessment .txt files generated from raw files
+ *   intelligence/ — deal-edit audit notes, change logs
+ *   summaries/ — AI-generated deal summaries (point-in-time snapshots)
  */
-export type DealSubfolder = "raw" | "derived" | "intelligence";
+export type DealSubfolder = "raw" | "derived" | "intelligence" | "summaries";
 
 // ─── Public helpers ───────────────────────────────────────────────────────────
 
@@ -293,7 +294,7 @@ export async function ensureDealSubfolders(
   const drive = await getAuthorizedDriveClient(userId);
   const dealFolderId = await ensureDealFolder(userId, dealId, dealName, dealNumber);
 
-  const subfolderNames: DealSubfolder[] = ["raw", "derived", "intelligence"];
+  const subfolderNames: DealSubfolder[] = ["raw", "derived", "intelligence", "summaries"];
   const result = {} as Record<DealSubfolder, string>;
 
   await Promise.all(
@@ -367,6 +368,58 @@ export async function saveRawEntryToDrive(params: {
   };
 
   return metadata;
+}
+
+/** Timestamped filename for AI deal summary: MM-DD-YY_HH-MM_Deal_Summary.txt */
+function buildSummaryFileName(): string {
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(2);
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `${mm}-${dd}-${yy}_${hh}-${min}_Deal_Summary.txt`;
+}
+
+/**
+ * Save AI-generated deal summary to the deal's summaries/ subfolder.
+ */
+export async function saveSummaryToDrive(params: {
+  userId: string;
+  dealId: string;
+  dealName: string;
+  summaryContent: string;
+  dealNumber?: number;
+}): Promise<DriveFileMetadata> {
+  const { userId, dealId, dealName, summaryContent, dealNumber } = params;
+  const drive = await getAuthorizedDriveClient(userId);
+  const folderId = await getDealSubfolderId(userId, dealId, dealName, "summaries", dealNumber);
+  const fileName = buildSummaryFileName();
+
+  const res = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      mimeType: "text/plain",
+      parents: [folderId],
+    },
+    media: {
+      mimeType: "text/plain",
+      body: summaryContent,
+    },
+    fields: "id,name,mimeType,webViewLink,createdTime",
+  });
+
+  const file = res.data;
+  if (!file.id) throw new Error("Drive summary file creation returned no ID.");
+
+  return {
+    googleFileId: file.id,
+    googleFileName: file.name ?? fileName,
+    originalFileName: null,
+    mimeType: file.mimeType ?? "text/plain",
+    webViewLink: file.webViewLink ?? null,
+    createdTime: file.createdTime ?? null,
+  };
 }
 
 /**

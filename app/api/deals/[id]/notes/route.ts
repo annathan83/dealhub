@@ -1,3 +1,10 @@
+/**
+ * POST /api/deals/:id/notes
+ *
+ * Alias for adding a note to a deal. Same flow as POST /api/deals/:id/entries:
+ * body: { content: string } → save to Drive raw/, AI title, ingest, timeline "Note added".
+ */
+
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";

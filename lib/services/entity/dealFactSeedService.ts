@@ -34,6 +34,8 @@ export type DealSeedFields = {
   state?: string | null;
   county?: string | null;
   city?: string | null;
+  /** Optional facts from "Add more details" (revenue_latest, employees_ft, lease_monthly_rent, years_in_business, owner_hours_per_week, etc.) */
+  manual_facts?: Record<string, string> | null;
 };
 
 /**
@@ -74,6 +76,18 @@ export async function seedManualFactsFromDeal(
     }
     if (locationValue) {
       toSeed.push({ factKey: "location", value: locationValue });
+    }
+
+    const allowedManualKeys = new Set([
+      "revenue_latest", "employees_ft", "lease_monthly_rent", "years_in_business",
+      "owner_hours_per_week", "owner_dependence_level",
+    ]);
+    if (fields.manual_facts && typeof fields.manual_facts === "object") {
+      for (const [key, raw] of Object.entries(fields.manual_facts)) {
+        if (allowedManualKeys.has(key) && raw != null && String(raw).trim()) {
+          toSeed.push({ factKey: key, value: String(raw).trim() });
+        }
+      }
     }
 
     for (const { factKey, value } of toSeed) {

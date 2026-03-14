@@ -242,13 +242,12 @@ export type ScoringConfidence = {
  * Used to determine which fact values were actually used in scoring.
  */
 const KPI_FACT_KEYS: Record<string, string[]> = {
-  // V1 Triage — 6 KPIs (business_stability removed; size/stability → Buyer Fit)
-  price_multiple:       ["asking_price", "sde_latest", "ebitda_latest"],
-  earnings_margin:      ["revenue_latest", "sde_latest", "ebitda_latest"],
-  revenue_per_employee: ["revenue_latest", "employees_ft", "employees_pt"],
-  rent_ratio:           ["lease_monthly_rent", "revenue_latest"],
-  owner_dependence:     ["owner_hours_per_week", "owner_in_sales", "owner_in_operations", "manager_in_place"],
-  revenue_quality:      ["recurring_revenue_pct", "customer_concentration_top1_pct"],
+  price_multiple:    ["asking_price", "sde_latest", "ebitda_latest"],
+  earnings_margin:   ["revenue_latest", "sde_latest", "ebitda_latest"],
+  sde_per_employee: ["sde_latest", "ebitda_latest", "employees_ft"],
+  rent_ratio:        ["lease_monthly_rent", "revenue_latest"],
+  business_age:      ["years_in_business"],
+  owner_dependence:  ["owner_hours_per_week", "owner_in_sales", "owner_in_operations", "manager_in_place"],
 };
 
 export function computeScoringConfidence(
@@ -407,19 +406,17 @@ function scoreFactForCustomScoring(
   // For facts that are inputs to existing KPIs, run the relevant KPI scorer
   // and return its score as a proxy for this fact's quality.
   const kpiForFact: Record<string, string> = {
-    asking_price:                    "price_multiple",
-    sde_latest:                      "price_multiple",
-    ebitda_latest:                   "price_multiple",
-    revenue_latest:                  "earnings_margin",
-    lease_monthly_rent:              "rent_ratio",
-    owner_hours_per_week:            "owner_dependence",
-    owner_in_sales:                  "owner_dependence",
-    owner_in_operations:             "owner_dependence",
-    manager_in_place:                "owner_dependence",
-    recurring_revenue_pct:           "revenue_quality",
-    customer_concentration_top1_pct: "revenue_quality",
-    employees_ft:                    "revenue_per_employee",
-    employees_pt:                    "revenue_per_employee",
+    asking_price:         "price_multiple",
+    sde_latest:           "price_multiple",
+    ebitda_latest:        "price_multiple",
+    revenue_latest:       "earnings_margin",
+    lease_monthly_rent:   "rent_ratio",
+    owner_hours_per_week: "owner_dependence",
+    owner_in_sales:       "owner_dependence",
+    owner_in_operations:  "owner_dependence",
+    manager_in_place:     "owner_dependence",
+    employees_ft:         "sde_per_employee",
+    years_in_business:    "business_age",
   };
 
   const kpiKey = kpiForFact[factKey];

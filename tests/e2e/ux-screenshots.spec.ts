@@ -49,11 +49,24 @@ test.describe('UX review screenshots — all flows', () => {
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '07-deal-workspace-tab.png'), fullPage: true });
 
     await page.getByTestId('facts-tab-btn').click();
-    await expect(page.getByTestId('facts-tab')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Facts' })).toBeVisible({ timeout: 10000 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '08-deal-facts-tab.png'), fullPage: true });
 
     await page.getByTestId('analysis-tab-btn').click();
-    await expect(page.getByTestId('score-card')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Deal Score', { exact: true })).toBeVisible({ timeout: 15000 });
     await page.screenshot({ path: path.join(SCREENSHOT_DIR, '09-deal-analysis-tab.png'), fullPage: true });
+
+    // ── Settings ─────────────────────────────────────────────────────────────
+    await page.goto('/settings/integrations');
+    await expect(page).toHaveURL(/\/settings\/integrations/);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '10-settings-integrations.png'), fullPage: true });
+
+    await page.goto('/settings/buyer-profile');
+    await expect(page).toHaveURL(/\/settings\/buyer-profile/);
+    await page.waitForLoadState('networkidle');
+    await page.screenshot({ path: path.join(SCREENSHOT_DIR, '11-settings-buyer-profile.png'), fullPage: true });
+
+    // Scoring weights page removed in v1 — all metrics use simple average
   });
 });

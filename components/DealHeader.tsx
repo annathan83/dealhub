@@ -436,49 +436,29 @@ export default function DealHeader({
         {/* ── Broker contact (at top, near deal title) ─────────────────── */}
         <BrokerContactCard dealId={deal.id} initialContacts={contacts} />
 
-        {/* ── Metrics grid ────────────────────────────────────────────── */}
-        {/* Mobile: 2×2 grid. Tablet+: single 4-column row. No absolute  */}
-        {/* dividers — they break on mobile. Dividers are CSS border-r    */}
-        {/* on sm+ only, removed on the last column via last:border-r-0.  */}
+        {/* ── Compact summary row: SDE · Ask · Multiple · Score (single row inside header) ── */}
         {hasAnyMetric || score100 !== null ? (
-          <div className="border-t border-[#E5E7EB] px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-3">
-            {/* SDE */}
-            <div className="min-w-0 sm:border-r sm:border-[#E5E7EB] sm:pr-3">
-              <MetricCell label="SDE">
-                <MetricValue value={formatCurrencyCompact(deal.sde)} empty={!deal.sde} primary />
-              </MetricCell>
-            </div>
-
-            {/* Ask */}
-            <div className="min-w-0 sm:border-r sm:border-[#E5E7EB] sm:pr-3">
-              <MetricCell label="Ask">
-                <MetricValue value={formatCurrencyCompact(deal.asking_price)} empty={!deal.asking_price} />
-              </MetricCell>
-            </div>
-
-            {/* Multiple */}
-            <div className="min-w-0 sm:border-r sm:border-[#E5E7EB] sm:pr-3">
-              <MetricCell label="Multiple">
-                <MetricValue value={formatMultipleValue(deal.multiple)} empty={!deal.multiple} />
-              </MetricCell>
-            </div>
-
-            {/* Score */}
-            <div className="min-w-0">
-              <MetricCell label="Score">
-                <ScoreBadge score100={score100} />
-              </MetricCell>
-            </div>
+          <div className="border-t border-[#E5E7EB] px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">SDE</span> {formatCurrencyCompact(deal.sde)}
+            </span>
+            <span className="text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Ask</span> {formatCurrencyCompact(deal.asking_price)}
+            </span>
+            <span className="text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Multiple</span> {formatMultipleValue(deal.multiple)}
+            </span>
+            <span className="text-xs text-slate-500 flex items-center gap-1">
+              <span className="font-semibold text-slate-700">Score</span>
+              <ScoreBadge score100={score100} />
+            </span>
           </div>
         ) : (
-          <div className="border-t border-[#E5E7EB] px-4 py-2.5">
+          <div className="border-t border-[#E5E7EB] px-4 py-2">
             <button
               onClick={() => setEditOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-dashed border-[#E5E7EB] text-xs text-[#6B7280] hover:border-[#1F7A63] hover:text-[#1F7A63] transition-colors"
+              className="text-xs text-[#6B7280] hover:text-[#1F7A63] transition-colors underline underline-offset-2"
             >
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
               Add asking price &amp; SDE
             </button>
           </div>

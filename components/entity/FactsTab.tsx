@@ -38,26 +38,25 @@ type Props = {
 };
 
 // ─── Basic Facts config ───────────────────────────────────────────────────────
-// These are always pinned at the top of the Facts tab.
+// Deal context (2) + 7 core input facts. No weights in v1 (simple average).
 
 type BasicFactMeta = {
   key: string;
   label: string;
   dataType: string;
-  kpiLabel?: string;
-  weight?: number;
-  weightLabel?: string;
   placeholder?: string;
 };
 
 const BASIC_FACTS: BasicFactMeta[] = [
-  { key: "industry",          label: "Industry",          dataType: "text",     placeholder: "e.g. Childcare, HVAC, Retail" },
-  { key: "location",          label: "Location",          dataType: "text",     placeholder: "e.g. Broward County, FL" },
-  { key: "asking_price",      label: "Asking Price",      dataType: "currency", kpiLabel: "Purchase Multiple", weight: 0.30, weightLabel: "30%", placeholder: "e.g. 1200000" },
-  { key: "sde_latest",        label: "SDE",               dataType: "currency", kpiLabel: "SDE Margin",        weight: 0.20, weightLabel: "20%", placeholder: "e.g. 250000"  },
-  { key: "revenue_latest",    label: "Revenue",           dataType: "currency", kpiLabel: "Rev / Employee",    weight: 0.15, weightLabel: "15%", placeholder: "e.g. 820000"  },
-  { key: "employees_ft",      label: "Full-Time Employees", dataType: "number", kpiLabel: "Rev / Employee",    weight: 0.15, weightLabel: "15%", placeholder: "e.g. 8"       },
-  { key: "lease_monthly_rent",label: "Monthly Rent",      dataType: "currency", kpiLabel: "Rent Ratio",        weight: 0.10, weightLabel: "10%", placeholder: "e.g. 4500"    },
+  { key: "industry",           label: "Industry",           dataType: "text",     placeholder: "e.g. Childcare, HVAC, Retail" },
+  { key: "location",           label: "Location",           dataType: "text",     placeholder: "e.g. Broward County, FL" },
+  { key: "asking_price",       label: "Asking Price",       dataType: "currency", placeholder: "e.g. 1200000" },
+  { key: "revenue_latest",     label: "Revenue",           dataType: "currency", placeholder: "e.g. 820000" },
+  { key: "sde_latest",         label: "SDE",               dataType: "currency", placeholder: "e.g. 250000" },
+  { key: "employees_ft",       label: "Employees (FT)",     dataType: "number",   placeholder: "e.g. 8" },
+  { key: "lease_monthly_rent", label: "Monthly Rent",       dataType: "currency", placeholder: "e.g. 4500" },
+  { key: "years_in_business",  label: "Year Established",  dataType: "number",   placeholder: "e.g. 2010 or 15" },
+  { key: "owner_hours_per_week", label: "Owner Involvement", dataType: "text",    placeholder: "Absentee / Semi-absentee / Part-time / Full-time" },
 ];
 
 // ─── Category config ──────────────────────────────────────────────────────────
@@ -146,10 +145,9 @@ const FACT_CATEGORIES: FactCategory[] = [
 ];
 
 const DERIVED_KEYS = new Set([
-  "purchase_multiple", "sde_margin", "revenue_per_employee", "sde_per_employee",
-  "owner_dependence_level", "rent_ratio", "utilization_rate",
-  // Legacy derived key from early migrations
-  "implied_multiple",
+  "purchase_multiple", "sde_margin", "sde_per_employee", "rent_ratio",
+  "business_age", "owner_dependence",
+  "owner_dependence_level", "utilization_rate", "implied_multiple",
 ]);
 const BASIC_KEYS = new Set(BASIC_FACTS.map((f) => f.key));
 const ALL_CATEGORY_KEYS = new Set(FACT_CATEGORIES.flatMap((c) => c.factKeys));
@@ -1946,16 +1944,6 @@ export default function FactsTab({ factDefinitions, factValues, factEvidence, fi
             </div>
           )}
         </div>
-
-        {/* ── Scoring weights config ──────────────────────────────────────── */}
-        <ScoringConfigSection
-          factDefinitions={factDefinitions}
-          factValues={effectiveValues}
-          dealId={dealId}
-          initialConfig={scoringConfig ?? null}
-          onScoreUpdated={handleScoreUpdated}
-          defaultExpanded={!isMobile}
-        />
 
       </div>{/* end px-4 */}
 

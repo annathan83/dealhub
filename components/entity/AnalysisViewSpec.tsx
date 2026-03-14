@@ -9,13 +9,14 @@
  *    or empty state "Set up your Buyer Profile" when no profile.
  */
 
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import type { KpiScorecardResult, KpiScore } from "@/lib/kpi/kpiConfig";
 import type { EntityPageData } from "@/types/entity";
 import type { BuyerProfile } from "@/lib/kpi/buyerFit";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
 import { computeDerivedMetrics } from "@/lib/kpi/derivedMetricsService";
+import { buildMetricSourcesFromEntityData, type MetricSourceRef } from "@/components/entity/FactsViewSpec";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ type Props = {
   kpiScorecard: KpiScorecardResult | null;
   entityData: EntityPageData | null;
   buyerProfile: BuyerProfile | null;
+  onViewSourceInWorkspace?: (fileId: string) => void;
 };
 
 // ─── Typical ranges (spec) ─────────────────────────────────────────────────────
@@ -36,20 +38,43 @@ const TYPICAL_RANGES: Record<string, string> = {
   "Owner Dependence": "Varies",
 };
 
-/** Map scorecard KPI key to our metric label for table */
+/** Map scorecard KPI key to our metric label for table (6 metrics only) */
 const KPI_KEY_TO_LABEL: Record<string, string> = {
   price_multiple: "Purchase Multiple",
   earnings_margin: "SDE Margin",
-  revenue_per_employee: "Revenue / Employee",
   sde_per_employee: "SDE / Employee",
   rent_ratio: "Rent Ratio",
-  owner_dependence: "Owner Dependence",
   business_age: "Business Age",
+  owner_dependence: "Owner Dependence",
 };
+
+/** Metric label → metric key for source refs */
+const LABEL_TO_METRIC_KEY: Record<string, string> = {
+  "Purchase Multiple": "purchase_multiple",
+  "SDE Margin": "sde_margin",
+  "SDE / Employee": "sde_per_employee",
+  "Rent Ratio": "rent_ratio",
+  "Business Age": "business_age",
+  "Owner Dependence": "owner_dependence",
+};
+
+function formatSourceDisplayName(documentName: string): string {
+  return documentName.replace(/\.[^.]+$/, "").replace(/_/g, " ");
+}
 
 // ─── Deal Score section ───────────────────────────────────────────────────────
 
-function DealScoreSection({ scorecard, entityData }: { scorecard: KpiScorecardResult | null; entityData: EntityPageData | null }) {
+function DealScoreSection({
+  scorecard,
+  entityData,
+  metricSources,
+  onViewSource,
+}: {
+  scorecard: KpiScorecardResult | null;
+  entityData: EntityPageData | null;
+  metricSources: Record<string, MetricSourceRef[]>;
+  onViewSource?: (fileId: string) => void;
+}) {
   const score = scorecard?.overall_score ?? null;
   const kpis = scorecard?.kpis ?? [];
   const scoredCount = kpis.filter((k) => k.status !== "missing" && k.score != null).length;
@@ -97,14 +122,14 @@ function DealScoreSection({ scorecard, entityData }: { scorecard: KpiScorecardRe
       }
       const scoreColor =
         scoreVal === null ? "text-slate-400" : scoreVal >= 8 ? "text-[#16a34a]" : scoreVal >= 6 ? "text-[#d97706]" : "text-[#dc2626]";
-      return { label, value, range, scoreVal, scoreColor, needsNote };
+      const metricKey = LABEL_TO_METRIC_KEY[label] ?? "";
+      return { label, value, range, scoreVal, scoreColor, needsNote, metricKey };
     });
   }, [kpis, derived]);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       <div className="px-4 py-4 border-b border-slate-100">
-        <p className="text-[9px] uppercase text-[#94a3b8] tracking-[0.06em] mb-1">Deal Score</p>
         <div className="flex items-baseline gap-2">
           <span
             className={`inline-flex items-center justify-center min-w-[56px] px-2 py-1 rounded-lg text-2xl font-bold font-mono text-white ${scoreBg}`}
@@ -128,14 +153,43 @@ function DealScoreSection({ scorecard, entityData }: { scorecard: KpiScorecardRe
           </thead>
           <tbody>
             {tableRows.map((row) => (
-              <tr key={row.label} className="border-b border-slate-50">
-                <td className="px-4 py-2 text-[11px] font-semibold text-slate-700">{row.label}</td>
-                <td className="px-4 py-2 text-[11px] font-mono text-slate-800">{row.value}</td>
-                <td className="px-4 py-2 text-[9px] text-slate-400 font-mono">{row.range}</td>
-                <td className={`px-4 py-2 text-[11px] font-bold font-mono text-right ${row.scoreColor}`}>
-                  {row.scoreVal !== null ? row.scoreVal.toFixed(1) : "—"}
-                </td>
-              </tr>
+              <React.Fragment key={row.label}>
+                <tr className="border-b border-slate-50">
+                  <td className="px-4 py-2 text-[11px] font-semibold text-slate-700">{row.label}</td>
+                  <td className="px-4 py-2 text-[11px] font-mono text-slate-800">{row.value}</td>
+                  <td className="px-4 py-2 text-[9px] text-slate-400 font-mono">{row.range}</td>
+                  <td className={`px-4 py-2 text-[11px] font-bold font-mono text-right ${row.scoreColor}`}>
+                    {row.scoreVal !== null ? row.scoreVal.toFixed(1) : "—"}
+                  </td>
+                </tr>
+                {(metricSources[row.metricKey]?.length ?? 0) > 0 && (
+                  <tr key={`${row.label}-sources`} className="border-b border-slate-50 bg-slate-50/30">
+                    <td colSpan={4} className="px-4 py-1 pb-2">
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+                        {metricSources[row.metricKey].map((s, i) => {
+                          const hasSource = s.documentId && onViewSource;
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={hasSource ? () => onViewSource(s.documentId!) : undefined}
+                              className={`inline-flex items-center gap-1.5 text-[8px] ${hasSource ? "text-[#3b82f6] hover:underline cursor-pointer" : "text-slate-400 cursor-default"}`}
+                              title={hasSource ? `${s.label}: ${s.value ?? "—"} — ${s.documentName ?? ""}${s.page != null ? ` p.${s.page}` : ""}` : `${s.label}: missing`}
+                            >
+                              {hasSource ? (
+                                <svg className="w-2.5 h-2.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              ) : null}
+                              <span>{s.label}{s.documentName && s.page != null ? ` ${formatSourceDisplayName(s.documentName)} p.${s.page}` : ""}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -201,13 +255,13 @@ function BuyerFitSection({ buyerProfile, entityData }: { buyerProfile: BuyerProf
 
   if (!hasProfile) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-6 text-center">
-        <p className="text-sm font-medium text-slate-600">Set up your Buyer Profile to see personalized fit analysis</p>
+      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-4 py-6 text-center">
+        <p className="text-sm font-semibold text-slate-700">Set up your Buyer Profile</p>
         <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-          Buyer Fit compares this deal against your preferences — price range, industries, locations, and more.
+          Compare this deal against your preferences — price range, industries, locations, and more.
         </p>
         <Link
-          href="/settings"
+          href="/settings/buyer-profile"
           className="inline-block mt-4 px-4 py-2 rounded-lg bg-[#1F7A63] text-white text-sm font-semibold hover:bg-[#1a6854] transition-colors"
         >
           Set Up Profile
@@ -218,8 +272,20 @@ function BuyerFitSection({ buyerProfile, entityData }: { buyerProfile: BuyerProf
 
   if (!fitResult) return null;
 
-  const label = fitResult.verdict === "GOOD_FIT" ? "Strong Fit" : fitResult.verdict === "FIT" ? "Strong Fit" : fitResult.verdict === "PARTIAL_FIT" ? "Partial Fit" : "Weak Fit";
-  const badgeColor = fitResult.verdict === "GOOD_FIT" || fitResult.verdict === "FIT" ? "bg-[#16a34a] text-white" : fitResult.verdict === "PARTIAL_FIT" ? "bg-[#d97706] text-white" : "bg-[#dc2626] text-white";
+  const label =
+    fitResult.verdict === "GOOD_FIT" || fitResult.verdict === "FIT"
+      ? "Strong Fit"
+      : fitResult.verdict === "PARTIAL_FIT"
+        ? "Partial Fit"
+        : fitResult.verdict === "NOT_A_GOOD_FIT"
+          ? "No Fit"
+          : "Weak Fit";
+  const badgeColor =
+    fitResult.verdict === "GOOD_FIT" || fitResult.verdict === "FIT"
+      ? "bg-[#16a34a] text-white"
+      : fitResult.verdict === "PARTIAL_FIT"
+        ? "bg-[#d97706] text-white"
+        : "bg-[#dc2626] text-white";
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -232,8 +298,13 @@ function BuyerFitSection({ buyerProfile, entityData }: { buyerProfile: BuyerProf
       <ul className="divide-y divide-slate-50">
         {fitResult.criteria.map((c, i) => (
           <li key={i} className="flex items-start gap-3 px-4 py-2.5">
-            <span className={`shrink-0 mt-0.5 ${c.matched ? "text-[#16a34a]" : "text-[#dc2626]"}`} aria-hidden>
-              {c.matched ? "✓" : "✗"}
+            <span
+              className={`shrink-0 mt-0.5 ${
+                c.unavailable ? "text-slate-400" : c.matched ? "text-[#16a34a]" : "text-[#dc2626]"
+              }`}
+              aria-hidden
+            >
+              {c.unavailable ? "—" : c.matched ? "✓" : "✗"}
             </span>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold text-slate-700">{c.name}</p>
@@ -248,11 +319,23 @@ function BuyerFitSection({ buyerProfile, entityData }: { buyerProfile: BuyerProf
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function AnalysisViewSpec({ kpiScorecard, entityData, buyerProfile }: Props) {
+export default function AnalysisViewSpec({ kpiScorecard, entityData, buyerProfile, onViewSourceInWorkspace }: Props) {
+  const metricSources = useMemo(() => buildMetricSourcesFromEntityData(entityData), [entityData]);
   return (
     <div className="max-w-[480px] mx-auto font-sans flex flex-col gap-4 py-4">
-      <DealScoreSection scorecard={kpiScorecard} entityData={entityData} />
-      <BuyerFitSection buyerProfile={buyerProfile} entityData={entityData} />
+      <section>
+        <h2 className="text-[9px] uppercase text-[#94a3b8] tracking-[0.06em] mb-2 px-0">DEAL SCORE</h2>
+        <DealScoreSection
+          scorecard={kpiScorecard}
+          entityData={entityData}
+          metricSources={metricSources}
+          onViewSource={onViewSourceInWorkspace}
+        />
+      </section>
+      <section>
+        <h2 className="text-[9px] uppercase text-[#94a3b8] tracking-[0.06em] mb-2 px-0">BUYER FIT</h2>
+        <BuyerFitSection buyerProfile={buyerProfile} entityData={entityData} />
+      </section>
     </div>
   );
 }

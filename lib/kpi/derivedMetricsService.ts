@@ -5,12 +5,13 @@
  * These are computed values — not stored as facts themselves — and are
  * surfaced in the Facts tab and used as inputs to the KPI scoring engine.
  *
- * Derived metrics:
- *   - Purchase Multiple    = Asking Price / SDE (or EBITDA)
- *   - SDE Margin           = SDE / Revenue
- *   - Revenue per Employee = Revenue / Total Employees
- *   - SDE per Employee     = SDE / Total Employees
- *   - Years in Business    (already a fact, surfaced here for display)
+ * Derived metrics (6 scored):
+ *   - Purchase Multiple = Asking Price / SDE
+ *   - SDE Margin        = SDE / Revenue
+ *   - SDE / Employee    = SDE / Employees (FT)
+ *   - Rent Ratio        = (Monthly Rent × 12) / Revenue
+ *   - Business Age      = years_in_business (yr)
+ *   - Owner Dependence  = from Owner Involvement
  */
 
 import { parseFactValue } from "./factRegistry";
@@ -36,7 +37,6 @@ export type OwnerDependenceLevel = "Absentee" | "Semi-absentee" | "Part-time" | 
 export type DerivedMetricsResult = {
   purchase_multiple: DerivedMetric;
   sde_margin: DerivedMetric;
-  revenue_per_employee: DerivedMetric;
   sde_per_employee: DerivedMetric;
   rent_ratio: DerivedMetric;
   business_age: DerivedMetric;
@@ -118,28 +118,16 @@ export function computeDerivedMetrics(
     inputs: [sde === vals["sde_latest"] ? "sde_latest" : "ebitda_latest", "revenue_latest"],
   };
 
-  // ── Revenue per Employee ──────────────────────────────────────────────────
-  const revPerEmpVal = (revenue && totalEmp > 0) ? revenue / totalEmp : null;
-  const revenuePerEmployee: DerivedMetric = {
-    key: "revenue_per_employee",
-    label: "Revenue / Employee",
-    value: revPerEmpVal,
-    formatted: revPerEmpVal !== null ? fmtCurrency(revPerEmpVal) : "—",
-    description: "Revenue ÷ Total Employees",
-    available: !!(revenue && totalEmp > 0),
-    inputs: ["revenue_latest", "employees_ft", "employees_pt"],
-  };
-
-  // ── SDE per Employee ──────────────────────────────────────────────────────
-  const sdePerEmpVal = (sde && totalEmp > 0) ? sde / totalEmp : null;
+  // ── SDE / Employee (SDE ÷ FT only per prompt) ─────────────────────────────
+  const sdePerEmpVal = (sde && empFt > 0) ? sde / empFt : null;
   const sdePerEmployee: DerivedMetric = {
     key: "sde_per_employee",
     label: "SDE / Employee",
     value: sdePerEmpVal,
     formatted: sdePerEmpVal !== null ? fmtCurrency(sdePerEmpVal) : "—",
-    description: "SDE ÷ Total Employees",
-    available: !!(sde && totalEmp > 0),
-    inputs: [sde === vals["sde_latest"] ? "sde_latest" : "ebitda_latest", "employees_ft", "employees_pt"],
+    description: "SDE ÷ Employees (FT)",
+    available: !!(sde && empFt > 0),
+    inputs: [sde === vals["sde_latest"] ? "sde_latest" : "ebitda_latest", "employees_ft"],
   };
 
   // ── Rent Ratio ────────────────────────────────────────────────────────────
@@ -155,14 +143,14 @@ export function computeDerivedMetrics(
     inputs: ["lease_monthly_rent", "revenue_latest"],
   };
 
-  // ── Business Age (years) ────────────────────────────────────────────────────
+  // ── Business Age (Current Year − Year Established) ──────────────────────────
   const businessAgeVal = yearsInBusiness ?? null;
   const businessAge: DerivedMetric = {
     key: "business_age",
     label: "Business Age",
     value: businessAgeVal,
     formatted: businessAgeVal != null ? `${businessAgeVal} yr` : "—",
-    description: "Years in business",
+    description: "Current Year − Year Established",
     available: yearsInBusiness != null,
     inputs: ["years_in_business"],
   };
@@ -199,7 +187,6 @@ export function computeDerivedMetrics(
   return {
     purchase_multiple: purchaseMultiple,
     sde_margin: sdeMargin,
-    revenue_per_employee: revenuePerEmployee,
     sde_per_employee: sdePerEmployee,
     rent_ratio: rentRatio,
     business_age: businessAge,

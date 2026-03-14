@@ -58,10 +58,13 @@ export type TimelineItem = {
   };
 };
 
-// ─── Event grouping window (ms) ───────────────────────────────────────────────
+// ─── Event grouping windows (ms) ───────────────────────────────────────────────
 
 // Events within this window that share the same file_id are merged into one item
 const GROUP_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+// Multiple file_uploaded events within this window are shown as one "N documents uploaded" item
+const UPLOAD_CONSOLIDATION_WINDOW_MS = 60 * 1000; // 60 seconds
 
 // ─── Icon mapping ─────────────────────────────────────────────────────────────
 
@@ -112,6 +115,10 @@ function iconForEvent(event: EntityEvent, file?: EntityFile): TimelineIconType {
     case "nda_marked_signed":
     case "nda_status_updated":
       return "check";
+    case "ai_summary_generated":
+      return "analysis";
+    case "entry_added":
+      return "note";
     default:
       return "check";
   }
@@ -205,6 +212,12 @@ function titleForEvent(event: EntityEvent, file?: EntityFile): string {
       return source === "manual" || source === "override"
         ? "NDA status manually updated"
         : "NDA status updated";
+    }
+    case "ai_summary_generated":
+      return "AI Summary generated";
+    case "entry_added": {
+      const title = event.metadata_json?.entry_title as string | undefined;
+      return title ? `Note added — ${title}` : "Note added";
     }
     default:
       return name;
@@ -325,6 +338,12 @@ function summaryForEvent(event: EntityEvent, file?: EntityFile): string {
         ? "NDA manually confirmed as signed."
         : "NDA marked as signed.";
     }
+    case "ai_summary_generated":
+      return "Snapshot saved to Google Drive";
+    case "entry_added": {
+      const preview = event.metadata_json?.preview as string | undefined;
+      return preview ?? "Note or pasted text added and queued for fact extraction.";
+    }
     case "nda_status_updated": {
       const signed = event.metadata_json?.signed as boolean | undefined;
       const source = event.metadata_json?.source as string | undefined;
@@ -415,6 +434,53 @@ function summaryForGroup(events: EntityEvent[], file?: EntityFile): string {
   return summaryForEvent(events[0], file);
 }
 
+/** Title/summary for a consolidated "N documents uploaded" group */
+function titleForConsolidatedUploads(count: number): string {
+  return count === 1 ? "1 document uploaded" : `${count} documents uploaded`;
+}
+
+function summaryForConsolidatedUploads(
+  uploadEvents: EntityEvent[],
+  fileMap: Map<string, EntityFile>
+): string {
+  const names = uploadEvents
+    .map((e) => {
+      const file = e.file_id ? fileMap.get(e.file_id) : undefined;
+      return file ? displayFileName(file) : (e.metadata_json?.file_name as string) ?? "File";
+    })
+    .filter(Boolean);
+  return names.join(" · ");
+}
+
+/**
+ * Cluster file_uploaded events that fall within UPLOAD_CONSOLIDATION_WINDOW_MS.
+ * Returns arrays of events (each array has 2+ events) that should be shown as one timeline item.
+ */
+function getUploadConsolidationClusters(events: EntityEvent[]): EntityEvent[][] {
+  const uploads = events
+    .filter((e) => e.event_type === "file_uploaded")
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  if (uploads.length < 2) return [];
+
+  const clusters: EntityEvent[][] = [];
+  let current: EntityEvent[] = [uploads[0]];
+  const windowMs = UPLOAD_CONSOLIDATION_WINDOW_MS;
+
+  for (let i = 1; i < uploads.length; i++) {
+    const e = uploads[i];
+    const earliest = new Date(current[0].created_at).getTime();
+    const t = new Date(e.created_at).getTime();
+    if (t - earliest <= windowMs) {
+      current.push(e);
+    } else {
+      if (current.length >= 2) clusters.push([...current]);
+      current = [e];
+    }
+  }
+  if (current.length >= 2) clusters.push(current);
+  return clusters;
+}
+
 // ─── Main assembly function ───────────────────────────────────────────────────
 
 export function assembleTimeline(
@@ -432,22 +498,38 @@ export function assembleTimeline(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  // Group events that share the same file_id and are within GROUP_WINDOW_MS of each other
+  // Pre-compute consolidated upload clusters (multiple file_uploaded within 60s)
+  const uploadClusters = getUploadConsolidationClusters(events);
+  const consolidatedIds = new Set<string>(
+    uploadClusters.flatMap((c) => c.map((e) => e.id))
+  );
+
+  // Group events: consolidated uploads first, then same-file_id within GROUP_WINDOW_MS
   const groups: EntityEvent[][] = [];
   const used = new Set<string>();
 
   for (const event of sorted) {
     if (used.has(event.id)) continue;
 
+    // If this file_uploaded is part of a multi-upload cluster, emit one group for the cluster
+    if (event.event_type === "file_uploaded" && consolidatedIds.has(event.id)) {
+      const cluster = uploadClusters.find((c) => c.some((e) => e.id === event.id));
+      if (cluster) {
+        cluster.forEach((e) => used.add(e.id));
+        groups.push(cluster);
+      }
+      continue;
+    }
+
     // Start a new group
     const group: EntityEvent[] = [event];
     used.add(event.id);
 
-    // Only group file-related events that share the same file_id
-    if (event.file_id) {
+    // Only group file-related events that share the same file_id (and are not in a consolidated cluster)
+    if (event.file_id && !consolidatedIds.has(event.id)) {
       const eventTime = new Date(event.created_at).getTime();
       for (const other of sorted) {
-        if (used.has(other.id)) continue;
+        if (used.has(other.id) || consolidatedIds.has(other.id)) continue;
         if (other.file_id !== event.file_id) continue;
         const otherTime = new Date(other.created_at).getTime();
         if (Math.abs(eventTime - otherTime) <= GROUP_WINDOW_MS) {
@@ -465,10 +547,22 @@ export function assembleTimeline(
     const primary = group[0];
     const file = primary.file_id ? fileMap.get(primary.file_id) : undefined;
 
+    // Consolidated multi-upload group (multiple file_uploaded within 60s)
+    const isConsolidatedUpload =
+      group.length > 1 && group.every((e) => e.event_type === "file_uploaded");
+
     const isSingle = group.length === 1;
-    const title = isSingle ? titleForEvent(primary, file) : titleForGroup(group, file);
-    const summary = isSingle ? summaryForEvent(primary, file) : summaryForGroup(group, file);
-    const icon = isSingle ? iconForEvent(primary, file) : iconForGroup(group, file);
+    const title = isConsolidatedUpload
+      ? titleForConsolidatedUploads(group.length)
+      : isSingle
+        ? titleForEvent(primary, file)
+        : titleForGroup(group, file);
+    const summary = isConsolidatedUpload
+      ? summaryForConsolidatedUploads(group, fileMap)
+      : isSingle
+        ? summaryForEvent(primary, file)
+        : summaryForGroup(group, file);
+    const icon = isConsolidatedUpload ? "file" : isSingle ? iconForEvent(primary, file) : iconForGroup(group, file);
 
     // Determine click target
     let fileId: string | undefined;

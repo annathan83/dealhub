@@ -289,44 +289,46 @@ export default function QuickAddBar({ dealId, registerUploadTrigger, registerNot
         disabled={!!uploading}
       />
 
-      {/* ── Action buttons ─────────────────────────────────────────────────── */}
-      <div
-        className="flex gap-2"
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-      >
-        <ActionButton
-          label={uploading === "file" ? "Extracting…" : "Upload"}
-          iconPath="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-          onClick={() => uploadInputRef.current?.click()}
-          disabled={!!uploading}
-          variant="upload"
-          testId="upload-file-button"
-        />
-        <ActionButton
-          label="Note"
-          iconPath="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-          onClick={() => setShowNote((v) => !v)}
-          disabled={!!uploading}
-          variant="note"
-          testId="add-note-button"
-        />
-        <ActionButton
-          label="Photo"
-          iconPath="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-          onClick={() => (isMobile ? cameraInputRef.current?.click() : setShowWebcam(true))}
-          disabled={!!uploading}
-          variant="photo"
-          testId="quick-add-photo"
-        />
-        <ActionButton
-          label="Audio"
-          iconPath="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-4a4 4 0 01-8 0V9a4 4 0 018 0z"
-          onClick={() => setShowAudio(true)}
-          disabled={!!uploading}
-          variant="audio"
-          testId="quick-add-audio"
-        />
+      {/* ── Primary: Upload | Note; secondary: Photo, Audio ───────────────────── */}
+      <div className="flex flex-col gap-2" onDrop={handleDrop} onDragOver={handleDragOver}>
+        <div className="flex gap-2">
+          <ActionButton
+            label={uploading === "file" ? "Extracting…" : "Upload"}
+            iconPath="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={!!uploading}
+            variant="upload"
+            testId="upload-file-button"
+          />
+          <ActionButton
+            label="Note"
+            iconPath="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+            onClick={() => setShowNote((v) => !v)}
+            disabled={!!uploading}
+            variant="note"
+            testId="add-note-button"
+          />
+        </div>
+        <div className="flex items-center gap-3 text-xs text-slate-500">
+          <button
+            type="button"
+            onClick={() => (isMobile ? cameraInputRef.current?.click() : setShowWebcam(true))}
+            disabled={!!uploading}
+            className="inline-flex items-center gap-1 hover:text-[#1F7A63] disabled:opacity-40 transition-colors"
+            data-testid="quick-add-photo"
+          >
+            <span className="text-base" aria-hidden>📷</span> Photo
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAudio(true)}
+            disabled={!!uploading}
+            className="inline-flex items-center gap-1 hover:text-[#1F7A63] disabled:opacity-40 transition-colors"
+            data-testid="quick-add-audio"
+          >
+            <span className="text-base" aria-hidden>🎙</span> Audio
+          </button>
+        </div>
       </div>
 
       {/* ── Error banner ───────────────────────────────────────────────────── */}

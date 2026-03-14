@@ -118,6 +118,61 @@ function TabBar({
   );
 }
 
+// ─── Generate AI Summary button ───────────────────────────────────────────────
+
+function GenerateSummaryButton({ dealId }: { dealId: string }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleGenerate() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/deals/${dealId}/summary`, { method: "POST" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; summary?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Failed to generate summary.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={handleGenerate}
+        disabled={loading}
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition-colors"
+      >
+        {loading ? (
+          <>
+            <svg className="w-4 h-4 animate-spin text-[#1F7A63]" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z" />
+            </svg>
+            Generating summary…
+          </>
+        ) : (
+          <>
+            <span className="text-base" aria-hidden>✦</span>
+            Generate AI Summary
+          </>
+        )}
+      </button>
+      {error && (
+        <p className="text-xs text-red-600">{error}</p>
+      )}
+    </div>
+  );
+}
+
 // ─── New Facts Extracted Banner ───────────────────────────────────────────────
 // Shown when AI has extracted facts from an uploaded document that haven't been
 // reviewed yet. Prompts user to switch to the Facts tab to review them.
@@ -1048,14 +1103,13 @@ function MissingKeyFactsPanel({ scorecard }: { scorecard: KpiScorecardResult | n
   const missing = scorecard.kpis.filter((k) => k.status === "missing");
   if (missing.length === 0) return null;
 
-  // Map KPI keys to the facts needed
   const KPI_FACT_HINTS: Record<string, string> = {
-    price_multiple:       "asking price and SDE",
-    earnings_margin:      "revenue and SDE",
-    revenue_per_employee: "revenue and employee count",
-    rent_ratio:           "monthly rent and revenue",
-    owner_dependence:     "owner hours, manager status",
-    revenue_quality:      "recurring revenue % or customer concentration",
+    price_multiple:    "asking price and SDE",
+    earnings_margin:   "revenue and SDE",
+    sde_per_employee:  "SDE and employees (FT)",
+    rent_ratio:        "monthly rent and revenue",
+    business_age:      "year established / years in business",
+    owner_dependence:  "owner involvement",
   };
 
   return (
@@ -1215,7 +1269,7 @@ export default function DealPageTabs({
   const noteOpenRef = useRef<(() => void) | null>(null);
 
   // Badge: count of core scoring facts that are missing, unclear, or conflicting
-  const CORE_SCORING_KEYS = ["asking_price", "sde_latest", "revenue_latest", "employees_ft", "years_in_business"];
+  const CORE_SCORING_KEYS = ["asking_price", "revenue_latest", "sde_latest", "employees_ft", "lease_monthly_rent", "years_in_business", "owner_hours_per_week"];
   const factsBadge = entityData
     ? (() => {
         const valueMap = new Map(entityData.fact_values.map((v) => [v.fact_definition_id, v]));
@@ -1231,15 +1285,6 @@ export default function DealPageTabs({
   return (
     <div className="bg-white rounded-xl border border-[#E5E7EB] shadow-sm overflow-hidden">
 
-      {/* ── Quick-add actions — always visible above the tab bar ────────── */}
-      <div className="px-4 pt-4 pb-3">
-        <QuickAddBar
-          dealId={deal.id}
-          registerUploadTrigger={(fn) => { uploadTriggerRef.current = fn; }}
-          registerNoteOpen={(fn) => { noteOpenRef.current = fn; }}
-        />
-      </div>
-
       <TabBar
         active={activeTab}
         onChange={setActiveTab}
@@ -1249,6 +1294,17 @@ export default function DealPageTabs({
       {/* ── WORKSPACE TAB ───────────────────────────────────────────────── */}
       {activeTab === "workspace" && (
         <div className="px-4 py-4 flex flex-col gap-5">
+
+          {/* Action buttons: Upload, Note (primary); Photo, Audio (secondary) — only on Workspace */}
+          <div>
+            <QuickAddBar
+              dealId={deal.id}
+              registerUploadTrigger={(fn) => { uploadTriggerRef.current = fn; }}
+              registerNoteOpen={(fn) => { noteOpenRef.current = fn; }}
+            />
+          </div>
+
+          <GenerateSummaryButton dealId={deal.id} />
 
           {/* New facts banner — shown when AI extracted unreviewed facts from upload */}
           <NewFactsBanner entityData={entityData} onReviewFacts={handleReviewFacts} />
@@ -1317,6 +1373,10 @@ export default function DealPageTabs({
             kpiScorecard={kpiScorecard}
             entityData={entityData}
             buyerProfile={buyerProfile}
+            onViewSourceInWorkspace={(fileId) => {
+              setHighlightFileId(fileId);
+              setActiveTab("workspace");
+            }}
           />
         </div>
       )}

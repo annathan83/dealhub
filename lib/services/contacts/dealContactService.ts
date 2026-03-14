@@ -452,6 +452,9 @@ export async function syncContactsFromExtraction(
         .eq("user_id", userId);
     }
   }
+
+  // Keep deal.broker_name / broker_email / broker_phone in sync for search and list display
+  await syncPrimaryContactToDeal(dealId, userId);
 }
 
 /**
