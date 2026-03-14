@@ -10,6 +10,9 @@ import { computeBuyerFit } from "@/lib/kpi/buyerFit";
 import type { BuyerProfile } from "@/lib/kpi/buyerFit";
 import { getPrimaryContactsForDeals } from "@/lib/services/contacts/dealContactService";
 
+// Always fetch fresh deal list (no static cache) so newly created deals appear
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 

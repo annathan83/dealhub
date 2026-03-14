@@ -94,8 +94,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (insertError || !deal) {
+    const message = insertError?.message ?? "Failed to create deal.";
+    console.error("[createDeal] Insert failed:", message, insertError?.code ?? "", insertError?.details);
     return NextResponse.json(
-      { error: insertError?.message ?? "Failed to create deal." },
+      { error: message, code: insertError?.code ?? undefined },
       { status: 500 }
     );
   }
