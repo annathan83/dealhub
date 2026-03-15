@@ -292,7 +292,7 @@ ${text.slice(0, 8000)}
         fact_definition_id: fd.id,
         value_raw: c.extracted_value_raw,
         value_normalized_json: {},
-        status: "known" as const,
+        status: "confirmed" as const,
         confidence: c.confidence,
         current_evidence_id: null,
         value_source_type: "ai_extracted" as const,
