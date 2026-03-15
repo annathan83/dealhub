@@ -998,26 +998,6 @@ export default function CreateDealForm() {
         </div>
       )}
 
-      {/* ── Deal Name (paste mode only; manual has it at top) ───────────────── */}
-      {showSubmit && mode === "paste" && (
-        <div className="flex flex-col gap-1.5 mt-4">
-          <label htmlFor="deal-name" className="text-sm font-semibold text-slate-700">
-            Deal Name <span className="text-red-400">*</span>
-          </label>
-          <input
-            id="deal-name"
-            type="text"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Midwest HVAC Company — Chicago, IL"
-            disabled={loading}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:border-[#1F7A63] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#C6E4DC] transition disabled:opacity-60"
-            data-testid="deal-name-input"
-          />
-        </div>
-      )}
-
       {/* ── Missing required facts gate ───────────────────────────────────── */}
       {showSubmit && missingRequired.length > 0 && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
