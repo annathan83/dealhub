@@ -558,11 +558,6 @@ function EditModal({ fd, meta, val, evidence, sourceName, dealId, onClose, onSav
         <div className="flex items-start justify-between px-5 py-4 border-b border-slate-100">
           <div>
             <p className="font-semibold text-slate-800 text-base leading-tight">{fd.label}</p>
-            {meta?.kpiLabel && (
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Feeds: {meta.kpiLabel} · weight {meta.weightLabel}
-              </p>
-            )}
           </div>
           <button
             onClick={onClose}
@@ -918,7 +913,6 @@ function BasicFactCard({
       >
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{meta.label}</span>
-          {meta.weightLabel && <span className="text-[10px] text-slate-300 font-mono">{meta.weightLabel}</span>}
         </div>
         <div className={`text-2xl font-bold tabular-nums leading-tight mb-2 ${filled ? "text-slate-800" : "text-red-300"}`}>
           {filled ? formatValue(val!.value_raw, fd.data_type) : "—"}
