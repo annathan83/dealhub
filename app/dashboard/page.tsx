@@ -15,10 +15,11 @@ import { getPrimaryContactsForDeals } from "@/lib/services/contacts/dealContactS
 // Always fetch fresh deal list (no static cache) so newly created deals appear
 export const dynamic = "force-dynamic";
 
-type PageProps = { searchParams?: Promise<{ created?: string }> };
+type SearchParams = { created?: string };
+type PageProps = { searchParams?: Promise<SearchParams> };
 
 export default async function DashboardPage(props: PageProps) {
-  const searchParams = await (props.searchParams ?? Promise.resolve({}));
+  const searchParams: SearchParams = await (props.searchParams ?? Promise.resolve({}));
   const createdId = typeof searchParams.created === "string" ? searchParams.created : undefined;
 
   const supabase = await createClient();
