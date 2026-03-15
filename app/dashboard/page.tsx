@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
+import DashboardRefresher from "@/components/DashboardRefresher";
 import type { BrokerInfo } from "@/components/DealsTable";
 import type { Deal } from "@/types";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
@@ -191,6 +192,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#F8FAF9]" data-testid="dashboard-shell">
+      <DashboardRefresher />
       <AppHeader />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-safe">
