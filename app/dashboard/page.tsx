@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import AppHeader from "@/components/AppHeader";
 import DealsTable from "@/components/DealsTable";
 import DashboardRefresher from "@/components/DashboardRefresher";
+import CreatedDealBanner from "@/components/CreatedDealBanner";
 import type { BrokerInfo } from "@/components/DealsTable";
 import type { Deal } from "@/types";
 import { computeBuyerFit } from "@/lib/kpi/buyerFit";
@@ -14,7 +15,12 @@ import { getPrimaryContactsForDeals } from "@/lib/services/contacts/dealContactS
 // Always fetch fresh deal list (no static cache) so newly created deals appear
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+type PageProps = { searchParams?: Promise<{ created?: string }> };
+
+export default async function DashboardPage(props: PageProps) {
+  const searchParams = await (props.searchParams ?? Promise.resolve({}));
+  const createdId = typeof searchParams.created === "string" ? searchParams.created : undefined;
+
   const supabase = await createClient();
 
   const {
@@ -196,6 +202,9 @@ export default async function DashboardPage() {
       <AppHeader />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-safe">
+
+        {/* ── Just-created deal banner ──────────────────────────────────── */}
+        {createdId && <CreatedDealBanner dealId={createdId} />}
 
         {/* ── Google Drive onboarding banner ───────────────────────────── */}
         {!isDriveConnected && (

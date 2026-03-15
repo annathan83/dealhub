@@ -419,7 +419,8 @@ export default function CreateDealForm() {
           }
         }
       }
-      router.push(`/deals/${data.id}?tab=workspace`);
+      // Full page load so dashboard fetches fresh list (avoids client router cache)
+      window.location.href = `/dashboard?created=${data.id}`;
     } catch {
       setError("Network error. Please try again.");
       setLoading(false);
@@ -560,7 +561,8 @@ export default function CreateDealForm() {
       }
     }
 
-    router.push(`/deals/${dealId}?tab=workspace`);
+    // Full page load so dashboard fetches fresh list (avoids client router cache)
+    window.location.href = `/dashboard?created=${dealId}`;
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
